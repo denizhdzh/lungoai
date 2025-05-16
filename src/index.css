@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white dark:bg-zinc-950;
+    /* This ensures the overscroll background matches your main app background */
+    /* Add any other global body styles here if needed */
+  }
+  /* You can add other base HTML element styles here too */
+  /* html {
+    @apply h-full;
+  }
+  body {
+    @apply h-full;
+  }
+  #root {
+    @apply h-full;
+  } */
+}

@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "ugcai-f429e"
+  },
+  "targets": {
+    "ugcai-f429e": {
+      "hosting": {
+        "app": [
+          "ugcai-f429e-c02d0"
+        ],
+        "main": [
+          "ugcai-f429e"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

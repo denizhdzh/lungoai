@@ -13,6 +13,7 @@ import PricingSection from './PricingSection'; // Import the PricingSection comp
 const functions = getFunctions();
 const createStripePortalSession = httpsCallable(functions, 'createStripePortalSession');
 const generateImageDescription = httpsCallable(functions, 'generateImageDescription'); // <-- Add reference
+const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo'); // <-- ADD THIS
 
 // --- NEW: Fixed Descriptions for Library Images ---
 const libraryImageDescriptions = {
@@ -416,23 +417,47 @@ function Settings() {
   };
 
   // Generic file upload function
-  const uploadFile = async (file, path) => {
+  const uploadFile = async (file, path, desiredFileName = null) => {
     if (!file) return null;
     
-    const fileRef = ref(storage, `${path}/${Date.now()}-${file.name}`);
-    console.log(`[uploadFile] Attempting to upload to: ${fileRef.fullPath}`); // Log path
+    let finalFileName;
+
+    if (desiredFileName) {
+      // If a desiredFileName is provided, use it directly.
+      // This is crucial for product videos which expect a specific name like 'original_video.ext'
+      finalFileName = desiredFileName;
+    } else {
+      // Fallback to generated name if desiredFileName is not provided
+      // This can be used for logos, creator images, general backgrounds, etc.
+      const originalFileExtension = file.name.split('.').pop().toLowerCase();
+      let extension;
+      if (file.type.startsWith('video/')) {
+        extension = ['mp4', 'mov', 'avi', 'wmv', 'flv', 'webm'].includes(originalFileExtension) ? originalFileExtension : 'mp4';
+        finalFileName = `generic_video_${Date.now()}.${extension}`;
+      } else if (file.type.startsWith('image/')) {
+        extension = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(originalFileExtension) ? originalFileExtension : 'png';
+        finalFileName = `generic_image_${Date.now()}.${extension}`;
+      } else {
+        extension = originalFileExtension || 'bin'; // Fallback extension
+        finalFileName = `generic_file_${Date.now()}.${extension}`;
+      }
+    }
+    
+    const fileRef = ref(storage, `${path}/${finalFileName}`); 
+
+    console.log(`[uploadFile] Attempting to upload to: ${fileRef.fullPath}`);
     try {
-      console.log(`[uploadFile] Calling uploadBytes for: ${file.name}...`); // Log before uploadBytes
+      console.log(`[uploadFile] Calling uploadBytes for: ${finalFileName}...`); 
       const snapshot = await uploadBytes(fileRef, file);
-      console.log(`[uploadFile] uploadBytes SUCCESS for: ${file.name}`, snapshot); // Log SUCCESS after uploadBytes
+      console.log(`[uploadFile] uploadBytes SUCCESS for: ${finalFileName}`, snapshot); 
       
-      console.log(`[uploadFile] Calling getDownloadURL for: ${file.name}...`); // Log before getDownloadURL
+      console.log(`[uploadFile] Calling getDownloadURL for: ${finalFileName}...`); 
       const downloadURL = await getDownloadURL(fileRef);
-      console.log(`[uploadFile] getDownloadURL SUCCESS for: ${file.name}`, downloadURL); // Log SUCCESS after getDownloadURL
+      console.log(`[uploadFile] getDownloadURL SUCCESS for: ${finalFileName}`, downloadURL); 
       return downloadURL;
     } catch (error) {
-      console.error(`[uploadFile] Error during upload/getURL for ${file.name} at ${path}:`, error.code, error.message, error); // Log detailed error
-      alert(`Upload failed for ${file.name}. Check console for details. Error: ${error.message}`); // Add alert for direct user feedback
+      console.error(`[uploadFile] Error during upload/getURL for ${finalFileName} at ${path}:`, error.code, error.message, error); 
+      alert(`Upload failed for ${finalFileName}. Check console for details. Error: ${error.message}`); 
       return null; // Return null on error
     }
   };
@@ -562,8 +587,8 @@ function Settings() {
       alert('Product description is required.');
       return;
     }
-    if (trimmedDescription.length < 150) {
-      alert(`Product description must be at least 150 characters long (currently ${trimmedDescription.length}).`);
+    if (trimmedDescription.length < 50) { // <-- CHANGED FROM 150 to 50
+      alert(`Product description must be at least 50 characters long (currently ${trimmedDescription.length}).`); // Alert message will be updated manually by user if needed
       return;
     }
     // --- END DESCRIPTION CHECK ---
@@ -624,155 +649,212 @@ function Settings() {
   
   // --- NEW: Add Product Logic (Refactored) ---
   const handleAddProductLogic = async (name, description) => {
-    console.log('[handleAddProductLogic] Starting for new product...');
+    if (!user) {
+      showCustomToast('You must be logged in to add products.', 'error');
+      return;
+    }
+    if (!name.trim() || !description.trim()) {
+      showCustomToast('Product name and description are required.', 'error');
+      return;
+    }
+    if (description.trim().length < 50) {
+        showCustomToast('Product description must be at least 50 characters.', 'error');
+        return;
+    }
+
+    setIsLoading(true);
+    showCustomToast('Adding product...', 'info');
+
     let logoUrl = null;
     let mediaUrl = null;
-    let uploadError = null;
+    let mediaType = null;
+    let standardizationError = null;
+    const newProductId = doc(collection(db, 'users', user.uid, 'products')).id; // Generate new product ID
 
     try {
-      // Upload Logo (Mandatory for new product)
-      if (!productLogoFileForForm) {
-        uploadError = new Error('Logo file is required for a new product.');
-        throw uploadError;
+      if (productLogoFileForForm) {
+        const logoExtension = productLogoFileForForm.name.split('.').pop();
+        logoUrl = await uploadFile(productLogoFileForForm, `users/${user.uid}/products/${newProductId}/logo`, `product_logo_${newProductId}.${logoExtension}`);
       }
-      console.log('[handleAddProductLogic] Uploading logo...', productLogoFileForForm);
-      logoUrl = await uploadFile(productLogoFileForForm, `users/${user.uid}/products/logos`);
-      console.log('[handleAddProductLogic] Logo URL result:', logoUrl);
-      if (!logoUrl) {
-         uploadError = new Error('Logo upload failed or returned null URL.');
-         throw uploadError;
+      if (productMediaFileForForm) {
+        const mediaExtension = productMediaFileForForm.name.split('.').pop();
+        mediaUrl = await uploadFile(productMediaFileForForm, `users/${user.uid}/products/${newProductId}/media`, `original_video.${mediaExtension}`);
+        mediaType = productMediaFileForForm.type.startsWith('video/') ? 'video' : 'image';
+
+        if (mediaType === 'video' && mediaUrl) { // ADDED CHECK FOR mediaUrl
+          const storagePath = `users/${user.uid}/products/${newProductId}/media/original_video.${mediaExtension}`; 
+          console.log(`[Add Product] Video uploaded, calling manuallyStandardizeProductVideo for product ${newProductId}, path: ${storagePath}`);
+          // DO NOT AWAIT HERE - Let it run in the background
+          manuallyStandardizeProductVideo({
+            userId: user.uid,
+            productId: newProductId,
+            originalVideoPathInStorage: storagePath, // Ensure this uses storagePath
+            originalFileExtension: mediaExtension
+          }).then(result => {
+            console.log('[Add Product] manuallyStandardizeProductVideo call INITIATED (background).', result);
+          }).catch(error => {
+            console.error('[Add Product] Error INITIATING manuallyStandardizeProductVideo (background):', error);
+            // Optionally, update Firestore with this initial error, though the function itself also logs errors
+            // For now, the main product data is saved, and the function will try to update with its own status/error.
+            standardizationError = error.message; // Capture error for initial doc write if needed
+            showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+          });
+        }
       }
 
-      // Upload Media (Mandatory for new product)
-      if (!productMediaFileForForm) {
-        uploadError = new Error('Media file is required for a new product.');
-        throw uploadError;
-      }
-      console.log('[handleAddProductLogic] Uploading media...', productMediaFileForForm);
-      mediaUrl = await uploadFile(productMediaFileForForm, `users/${user.uid}/products/media`);
-      console.log('[handleAddProductLogic] Media URL result:', mediaUrl);
-      if (!mediaUrl) {
-         uploadError = new Error('Media upload failed or returned null URL.');
-         throw uploadError;
-      }
-      
       const productData = {
+        id: newProductId, // Store the auto-generated ID
         name: name,
         description: description,
-        logoUrl: logoUrl, 
-        mediaUrl: mediaUrl, 
-        mediaType: productMediaFileForForm.type.startsWith('video/') ? 'video' : 'image', 
-        createdAt: serverTimestamp(), 
+        logoUrl: logoUrl,
+        mediaUrl: mediaUrl,
+        mediaType: mediaType,
+        createdAt: serverTimestamp(),
+        userId: user.uid,
+        isVideoStandardized: false, // Initially false
+        standardizedVideoUrl: null, // Initially null
+        ...(mediaType === 'video' && standardizationError && { standardizationError: standardizationError }), // Add error if present
+        ...(mediaType === 'video' && !standardizationError && { standardizationAttemptTimestamp: serverTimestamp() }) // Add attempt timestamp if no immediate call error
       };
+
+      console.log("[handleAddProductLogic] Product data to be saved:", JSON.stringify(productData, null, 2));
+
+      await setDoc(doc(db, 'users', user.uid, 'products', newProductId), productData);
       
-      console.log('[handleAddProductLogic] Data before addDoc:', productData);
-      const docRef = await addDoc(collection(db, 'users', user.uid, 'products'), productData);
-      console.log('[handleAddProductLogic] addDoc successful, doc ID:', docRef.id);
-      
-      setProducts(prev => [...prev, { id: docRef.id, ...productData }]);
-      resetProductForm();
+      setProducts(prev => [{ ...productData, createdAt: new Date() }, ...prev].sort((a, b) => b.createdAt - a.createdAt));
       showCustomToast('Product added successfully!', 'success');
-      if (refreshLayoutData) refreshLayoutData(); // <-- CALL REFRESH
-      
+      resetProductForm();
+      setShowAddProductForm(false);
+      refreshLayoutData(); 
     } catch (error) {
-      if (uploadError) {
-          console.error(`[handleAddProductLogic] Failed during file upload step:`, uploadError.message, uploadError);
-          alert(`Failed to upload product files: ${uploadError.message}.`);
-      } else {
-          console.error('[handleAddProductLogic] Error adding product document to Firestore:', error);
-          alert(`Failed to save product data: ${error.message}.`);
-      }
+      console.error("Error adding product:", error);
+      showCustomToast(`Failed to add product: ${error.message}`, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // --- NEW: Update Product Logic ---
   const handleUpdateProductLogic = async (name, description) => {
-    if (!editingProduct) return;
-    console.log(`[handleUpdateProductLogic] Starting update for product ID: ${editingProduct.id}...`);
+    if (!user || !editingProduct) {
+      showCustomToast('No product selected for update or user not logged in.', 'error');
+      return;
+    }
+    if (!name.trim() || !description.trim()) {
+      showCustomToast('Product name and description are required.', 'error');
+      return;
+    }
+    if (description.trim().length < 50) {
+        showCustomToast('Product description must be at least 50 characters.', 'error');
+        return;
+    }
 
-    let newLogoUrl = editingProduct.logoUrl;
-    let newMediaUrl = editingProduct.mediaUrl;
+    setIsLoading(true);
+    showCustomToast('Updating product...', 'info');
+
+    const productRef = doc(db, 'users', user.uid, 'products', editingProduct.id);
+    const updatedData = {
+      name: name,
+      description: description,
+      updatedAt: serverTimestamp()
+    };
+
+    let newLogoUrl = editingProduct.logoUrl; // Keep old if not changed
+    let newMediaUrl = editingProduct.mediaUrl; // Keep old if not changed
     let newMediaType = editingProduct.mediaType;
-    let uploadError = null;
+    let standardizationError = null;
 
     try {
-      // 1. Upload new logo if provided
+      // Handle logo update
       if (productLogoFileForForm) {
-        console.log('[handleUpdateProductLogic] New logo file provided. Uploading...');
-        const uploadedLogoUrl = await uploadFile(productLogoFileForForm, `users/${user.uid}/products/logos`);
-        if (!uploadedLogoUrl) {
-          uploadError = new Error('New logo upload failed.');
-          throw uploadError;
+        // If there was an old logo, delete it
+        if (editingProduct.logoUrl) {
+          try {
+            const oldLogoRef = ref(storage, editingProduct.logoUrl);
+            await deleteObject(oldLogoRef);
+          } catch (deleteError) {
+            console.warn("Old logo deletion failed (might not exist or protected):", deleteError);
+          }
         }
-        newLogoUrl = uploadedLogoUrl;
-        console.log('[handleUpdateProductLogic] New logo uploaded:', newLogoUrl);
+        const logoExtension = productLogoFileForForm.name.split('.').pop();
+        newLogoUrl = await uploadFile(productLogoFileForForm, `users/${user.uid}/products/${editingProduct.id}/logo`, `product_logo_${editingProduct.id}.${logoExtension}`);
+        updatedData.logoUrl = newLogoUrl;
       }
 
-      // 2. Upload new media if provided
+      // Handle media update
       if (productMediaFileForForm) {
-        console.log('[handleUpdateProductLogic] New media file provided. Uploading...');
-        const uploadedMediaUrl = await uploadFile(productMediaFileForForm, `users/${user.uid}/products/media`);
-        if (!uploadedMediaUrl) {
-          uploadError = new Error('New media upload failed.');
-          throw uploadError;
+        // If there was old media, delete it
+        if (editingProduct.mediaUrl) {
+          try {
+            const oldMediaRef = ref(storage, editingProduct.mediaUrl);
+            await deleteObject(oldMediaRef);
+          } catch (deleteError) {
+            console.warn("Old media deletion failed (might not exist or protected):", deleteError);
+          }
+          // If the old media was a standardized video, attempt to delete that too
+          if (editingProduct.mediaType === 'video' && editingProduct.standardizedVideoUrl) {
+              try {
+                  // Construct the storage path for the standardized video
+                  // This assumes a fixed naming convention; adjust if your standardized video path is stored differently or derived
+                  const oldStandardizedPath = `users/${user.uid}/products/${editingProduct.id}/standardized_video.mp4`;
+                  const oldStandardizedRef = ref(storage, oldStandardizedPath);
+                  await deleteObject(oldStandardizedRef);
+                  console.log(`[Update Product] Deleted old standardized video: ${oldStandardizedPath}`);
+                  updatedData.standardizedVideoUrl = null; // Clear old standardized URL
+                  updatedData.isVideoStandardized = false; // Reset status
+              } catch (deleteStdError) {
+                  console.warn("Old standardized video deletion failed:", deleteStdError);
+              }
+          }
         }
-        newMediaUrl = uploadedMediaUrl;
+        const mediaExtension = productMediaFileForForm.name.split('.').pop();
+        // Upload the new file and get its download URL
+        newMediaUrl = await uploadFile(productMediaFileForForm, `users/${user.uid}/products/${editingProduct.id}/media`, `original_video.${mediaExtension}`);
         newMediaType = productMediaFileForForm.type.startsWith('video/') ? 'video' : 'image';
-        console.log('[handleUpdateProductLogic] New media uploaded:', newMediaUrl, 'Type:', newMediaType);
-      }
+        updatedData.mediaUrl = newMediaUrl;
+        updatedData.mediaType = newMediaType;
+        updatedData.isVideoStandardized = false; // Reset standardization status for new video
+        updatedData.standardizationError = null; // Clear any previous errors
+        updatedData.standardizationAttemptTimestamp = null; // Clear any previous attempt timestamp
 
-      // 3. Prepare data for Firestore update
-      const updatedProductData = {
-        name: name,
-        description: description,
-        logoUrl: newLogoUrl,
-        mediaUrl: newMediaUrl,
-        mediaType: newMediaType,
-        updatedAt: serverTimestamp() // Add updatedAt timestamp
-      };
-      console.log('[handleUpdateProductLogic] Data for updateDoc:', updatedProductData);
-
-      // 4. Update Firestore document
-      const productDocRef = doc(db, 'users', user.uid, 'products', editingProduct.id);
-      await updateDoc(productDocRef, updatedProductData);
-      console.log('[handleUpdateProductLogic] updateDoc successful.');
-
-      // 5. Delete old files from Storage if new ones were uploaded
-      if (productLogoFileForForm && editingProduct.logoUrl && editingProduct.logoUrl !== newLogoUrl) {
-        try {
-          const oldLogoRef = ref(storage, editingProduct.logoUrl);
-          await deleteObject(oldLogoRef);
-          console.log('[handleUpdateProductLogic] Old logo deleted from Storage:', editingProduct.logoUrl);
-        } catch (deleteError) {
-          console.warn('[handleUpdateProductLogic] Could not delete old logo from Storage:', deleteError);
+        if (newMediaType === 'video' && newMediaUrl) { // ADDED CHECK FOR newMediaUrl
+          const storagePath = `users/${user.uid}/products/${editingProduct.id}/media/original_video.${mediaExtension}`; 
+          console.log(`[Update Product] New video uploaded, calling manuallyStandardizeProductVideo for product ${editingProduct.id}, path: ${storagePath}`);
+          // DO NOT AWAIT HERE - Let it run in the background
+          manuallyStandardizeProductVideo({
+            userId: user.uid,
+            productId: editingProduct.id,
+            originalVideoPathInStorage: storagePath, // Ensure this uses storagePath
+            originalFileExtension: mediaExtension
+          }).then(result => {
+            console.log('[Update Product] manuallyStandardizeProductVideo call INITIATED (background).', result);
+          }).catch(error => {
+            console.error('[Update Product] Error INITIATING manuallyStandardizeProductVideo (background):', error);
+            standardizationError = error.message; // Capture error for initial doc write if needed
+            showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+          });
         }
       }
-      if (productMediaFileForForm && editingProduct.mediaUrl && editingProduct.mediaUrl !== newMediaUrl) {
-        try {
-          const oldMediaRef = ref(storage, editingProduct.mediaUrl);
-          await deleteObject(oldMediaRef);
-          console.log('[handleUpdateProductLogic] Old media deleted from Storage:', editingProduct.mediaUrl);
-        } catch (deleteError) {
-          console.warn('[handleUpdateProductLogic] Could not delete old media from Storage:', deleteError);
-        }
+      
+      if (newMediaType === 'video' && standardizationError) {
+          updatedData.standardizationError = standardizationError;
+      } else if (newMediaType === 'video' && !standardizationError && productMediaFileForForm) { // only add attempt timestamp if new video was uploaded and no immediate call error
+          updatedData.standardizationAttemptTimestamp = serverTimestamp();
       }
 
-      // 6. Update local state
-      setProducts(prevProducts => 
-        prevProducts.map(p => p.id === editingProduct.id ? { ...p, ...updatedProductData } : p)
-      );
-      resetProductForm();
+
+      await updateDoc(productRef, updatedData);
+      setProducts(prevProducts => prevProducts.map(p => p.id === editingProduct.id ? { ...p, ...updatedData, logoUrl: newLogoUrl, mediaUrl: newMediaUrl, mediaType: newMediaType } : p).sort((a,b) => b.createdAt - a.createdAt));
       showCustomToast('Product updated successfully!', 'success');
-      if (refreshLayoutData) refreshLayoutData(); // <-- CALL REFRESH
-
+      resetProductForm();
+      setShowAddProductForm(false);
+      setEditingProduct(null); // Exit editing mode
+      refreshLayoutData();
     } catch (error) {
-      if (uploadError) {
-          console.error(`[handleUpdateProductLogic] Failed during file upload step:`, uploadError.message, uploadError);
-          alert(`Failed to upload new product files: ${uploadError.message}.`);
-      } else {
-          console.error(`[handleUpdateProductLogic] Error updating product (ID: ${editingProduct.id}):`, error);
-          alert(`Failed to update product data: ${error.message}.`);
-      }
+      console.error("Error updating product:", error);
+      showCustomToast(`Failed to update product: ${error.message}`, 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1241,20 +1323,20 @@ function Settings() {
           </div>
           <div>
             <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
-              Description <span className="text-red-500">*</span> <span className="text-xs text-gray-400 dark:text-zinc-500">(Min 150 chars)</span>
+              Description <span className="text-red-500">*</span> <span className="text-xs text-gray-400 dark:text-zinc-500">(Min 50 chars)</span>
             </label>
             <textarea 
               value={productDescriptionForForm}
               onChange={(e) => setProductDescriptionForForm(e.target.value)}
-              placeholder="Describe the product, its benefits, target audience, key selling points... Be detailed! (Min 150 chars)"
+              placeholder="Describe the product, its benefits, target audience, key selling points... Be detailed! (Min 50 chars)"
               rows={4}
               required
-              minLength={150}
+              minLength={50} // <-- CHANGED FROM 150 to 50
               className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
             />
              {/* Character Counter with improved visual feedback */}
-            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 150 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-zinc-400'}`}>
-                {productDescriptionForForm.length} / 150 characters {productDescriptionForForm.length < 150 ? `(${150 - productDescriptionForForm.length} more needed)` : '✓'}
+            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 50 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-zinc-400'}`}>
+                {productDescriptionForForm.length} / 50 characters {productDescriptionForForm.length < 50 ? `(${50 - productDescriptionForForm.length} more needed)` : '✓'}
             </p>
           </div>
           

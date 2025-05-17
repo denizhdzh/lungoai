@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase'; // Import db
 import { getFunctions, httpsCallable } from "firebase/functions"; // Import functions SDK
@@ -862,6 +862,47 @@ function Layout() {
     }
   };
 
+  // Memoize the context value
+  const outletContextValue = useMemo(() => ({
+    dashboardRefreshKey,
+    generatingItem,
+    pageTitle,
+    pageSubtitle,
+    isDarkMode,
+    toggleDarkMode,
+    navigate,
+    creators,
+    backgrounds,
+    products,
+    user,
+    refreshLayoutData,
+    refreshDashboardGenerations
+  }), [
+    dashboardRefreshKey,
+    generatingItem, // If generatingItem is an object, its reference changing will still trigger this
+    pageTitle,
+    pageSubtitle,
+    isDarkMode,
+    // toggleDarkMode, // Assuming this is stable (useCallback)
+    // navigate, // Stable from react-router-dom
+    creators, // Array reference
+    backgrounds, // Array reference
+    products, // Array reference
+    user, // User object reference
+    // refreshLayoutData, // Assuming this is stable (useCallback)
+    // refreshDashboardGenerations // Stable (useCallback)
+    // For functions like toggleDarkMode, navigate, refreshLayoutData, refreshDashboardGenerations,
+    // if they are guaranteed stable (e.g., from useCallback with empty deps, or from libraries),
+    // they don't strictly need to be in the useMemo dep array if we trust their stability.
+    // However, including them is safer if there's any doubt. For now, let's include potentially changing objects/values.
+    // For simplicity in this first pass, including all.
+    // We need to ensure toggleDarkMode, refreshLayoutData, refreshDashboardGenerations are stable via useCallback.
+    // navigate from react-router-dom is stable.
+    toggleDarkMode, // Assuming stable due to useCallback
+    refreshLayoutData, // Assuming stable due to useCallback
+    refreshDashboardGenerations // Assuming stable due to useCallback
+  ]);
+
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 font-sans relative overflow-hidden transition-colors duration-200">
       {/* Animated background grid - Now only in Layout */}
@@ -913,31 +954,7 @@ function Layout() {
 
         {/* Render the child route's component */}
         <main className="flex-grow max-w-6xl mx-auto w-full"> {/* Remove pt-8 from main */} 
-          <Outlet context={{ 
-              dashboardRefreshKey, 
-              generatingItem, 
-              pageTitle, 
-              pageSubtitle, 
-              isDarkMode, 
-              toggleDarkMode, 
-              navigate,
-              // Add creators and backgrounds to the context
-              creators,
-              backgrounds,
-              // Also pass functions to refresh them if Dashboard needs to trigger a re-fetch,
-              // for example, after a new creator/background is added from the Dashboard.
-              // However, the save functions are called from Layout's command queue,
-              // which already calls fetchCreatorsAndBackgrounds on success.
-              // So, direct refresh functions might not be needed by Dashboard for this specific case.
-              // For now, let's just pass the data.
-              // fetchCreatorsAndBackgrounds, // Example if needed
-              // fetchProducts, // Example if needed
-              user, // Pass the user object from Layout's auth state
-              products, // Pass products as well, might be useful for Dashboard context
-              refreshLayoutData, // Pass the stable useCallback version defined earlier in Layout.jsx
-              refreshDashboardGenerations // Pass this down as Dashboard uses it.
-            }} 
-          /> 
+          <Outlet context={outletContextValue} /> 
         </main>
 
         {/* Remove User Messages Display from here */}

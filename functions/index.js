@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onRequest } = require("firebase-functions/v2/https"); // Keep for the new task handler
 const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import onSchedule
+const { onObjectFinalized } = require("firebase-functions/v2/storage"); // <<< ADDED THIS LINE
 const { logger } = require("firebase-functions");
 const { OpenAI, toFile } = require("openai");
 const admin = require("firebase-admin");
@@ -1324,24 +1325,46 @@ exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutS
 
     // --- 1.5 Fetch User Products and Select First --- 
     let selectedProduct = null;
+    let productToUseForAppending = { // NEW: Object to hold product details for appending
+        url: null,
+        type: null,
+        isStandardized: false,
+        originalUrl: null
+    };
     try {
         const productsRef = db.collection('users').doc(userId).collection('products');
         const productsSnapshot = await productsRef.limit(1).get(); // Get only the first one
         if (!productsSnapshot.empty) {
             const productDoc = productsSnapshot.docs[0];
             const productData = productDoc.data();
-            selectedProduct = {
+            selectedProduct = { // Keep selectedProduct for hook text generation context for now
                 id: productDoc.id,
                 name: productData.name || productData.product_name,
                 description: productData.description || productData.product_description,
-                mediaUrl: productData.mediaUrl,
-                mediaType: productData.mediaType || (productData.mediaUrl?.includes('.mp4') || productData.mediaUrl?.includes('.mov') ? 'video' : 'image') // Basic type inference
+                // mediaUrl, mediaType, standardizedVideoUrl, isVideoStandardized are now in productData
             };
-            if (!selectedProduct.mediaUrl) {
-                 logger.warn(`Selected product ${selectedProduct.id} for user ${userId} is missing mediaUrl. Cannot append.`);
-                 selectedProduct = null; // Treat as no product if URL is missing
+
+            const originalMediaUrl = productData.mediaUrl;
+            productToUseForAppending.originalUrl = originalMediaUrl; // Store original URL
+
+            if (productData.isVideoStandardized && productData.standardizedVideoUrl) {
+                productToUseForAppending.url = productData.standardizedVideoUrl;
+                productToUseForAppending.isStandardized = true;
+                logger.info(`Using standardized product video for appending: ${productData.standardizedVideoUrl}`);
+            } else if (originalMediaUrl) {
+                productToUseForAppending.url = originalMediaUrl; // Fallback to original if not standardized
+                productToUseForAppending.isStandardized = false;
+                logger.warn(`Product video for ${productDoc.id} is not standardized or standardized URL is missing. Falling back to original: ${originalMediaUrl}`);
+            } else {
+                logger.warn(`Selected product ${productDoc.id} for user ${userId} is missing any mediaUrl. Cannot append.`);
+                // productToUseForAppending.url will remain null
             }
-             logger.info(`Selected product ${selectedProduct?.id} for appending to video ${firestoreDocId}. Media URL: ${selectedProduct?.mediaUrl}`);
+            // Determine type based on the URL that will be used (standardized or original)
+            if (productToUseForAppending.url) {
+                 productToUseForAppending.type = productData.mediaType || (productToUseForAppending.url.includes('.mp4') || productToUseForAppending.url.includes('.mov') ? 'video' : 'image');
+            }
+
+            logger.info(`Selected product ${selectedProduct?.id} for appending to video ${firestoreDocId}. URL to use: ${productToUseForAppending.url}, Type: ${productToUseForAppending.type}, Standardized: ${productToUseForAppending.isStandardized}`);
         } else {
             logger.warn(`User ${userId} has no products defined. Cannot append product media to video ${firestoreDocId}.`);
             // Proceed without appending
@@ -1349,7 +1372,7 @@ exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutS
     } catch (error) {
         logger.error(`Error fetching products for user ${userId} in triggerVideoGenerationAndHook:`, error);
         // Proceed without appending, don't throw error for this
-        selectedProduct = null;
+        // productToUseForAppending remains with null url
     }
     // --- End Fetch User Products --- 
 
@@ -1357,11 +1380,18 @@ exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutS
     let openai; // Initialize OpenAI client
     try {
         const apiKey = process.env.OPENAI_KEY;
-        if (!apiKey) { throw new HttpsError('internal', 'OpenAI service configuration error for hook generation.'); }
+        if (!apiKey) {
+            logger.error("OpenAI API Key for hook text generation not found in environment variables (OPENAI_KEY).");
+            throw new HttpsError('internal', 'OpenAI service configuration error for hook generation.');
+        }
         openai = new OpenAI({ apiKey: apiKey });
     } catch (error) { 
         logger.error("Error initializing OpenAI for hook text generation:", error);
-        throw new HttpsError('internal', 'Failed to initialize OpenAI service for hook text.'); 
+        if (error instanceof HttpsError) { // Re-throw HttpsError if it's already one
+            throw error;
+        }
+        // Wrap other errors as HttpsError for consistent error handling by the caller
+        throw new HttpsError('internal', `Failed to initialize OpenAI service for hook text: ${error.message}`); 
     }
 
     let finalHookText = hook_text;
@@ -1461,8 +1491,11 @@ exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutS
             hookText: finalHookText, // Save the final hook
             runwayTaskId: runwayTaskId,
             pollingStartTime: startTime, 
-            productToAppendUrl: selectedProduct?.mediaUrl || null, // Save selected product URL (or null)
-            productToAppendType: selectedProduct?.mediaType || null, // Save selected product type (or null)
+            // MODIFIED: Use details from productToUseForAppending
+            productToAppendUrl: productToUseForAppending.url, 
+            productToAppendType: productToUseForAppending.type,
+            isProductToAppendStandardized: productToUseForAppending.isStandardized,
+            originalProductMediaUrl: productToUseForAppending.originalUrl, // Store original for reference/fallback
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         };
 
@@ -1470,14 +1503,13 @@ exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutS
             const userSnapshot = await transaction.get(userRef);
             const currentCredits = parseInt(userSnapshot.data()?.video_credit, 10) || 0;
             if (currentCredits <= 0) {
-                throw new HttpsError('resource-exhausted', 'Insufficient video credits during transaction.');
+                // This specific HttpsError will be caught by the main try-catch block
+                throw new HttpsError('resource-exhausted', 'Insufficient video credits during transaction in startVideoPipeline.');
             }
-            // Update the tiktok-post document with the new payload
             transaction.update(postDocRef, updatePayload);
-            // Decrement video credit
             transaction.update(userRef, { video_credit: admin.firestore.FieldValue.increment(-1) });
         });
-        logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (hook, product info) & decremented video_credit.`);
+        logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (status, hook, runwayId, product) & decremented video_credit.`);
 
         // --- Schedule the first polling task ---
         const pollTaskPayload = {
@@ -2676,11 +2708,12 @@ exports.refreshMonthlyCredits = onSchedule(
 
 // --- NEW: Video Concatenation Function (HTTP Triggered by Cloud Task) ---
 exports.performVideoConcatenation = onRequest(
-    { region: 'us-central1', timeoutSeconds: VIDEO_CONCAT_TIMEOUT_SECONDS, memory: '2GiB' }, // Gen 2, increased memory and timeout
+    { region: 'us-central1', timeoutSeconds: VIDEO_CONCAT_TIMEOUT_SECONDS, memory: '2GiB' }, 
     async (request, response) => {
         const ffmpeg = require('fluent-ffmpeg');
         const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
         ffmpeg.setFfmpegPath(ffmpegPath);
+        const fsPromises = require('fs').promises; 
 
         logger.info("performVideoConcatenation request received:", request.body);
 
@@ -2688,64 +2721,61 @@ exports.performVideoConcatenation = onRequest(
             userId,
             firestoreDocId,
             runwayVideoUrl,
-            productMediaUrl,
-            productMediaType
+            productToAppendUrl, 
+            productToAppendType, 
         } = request.body;
 
         if (!userId || !firestoreDocId || !runwayVideoUrl) {
-            logger.error("Missing required parameters for video concatenation (userId, firestoreDocId, or runwayVideoUrl).", request.body);
+            logger.error("Missing required parameters for video concatenation.", request.body);
             response.status(400).send("Bad Request: Missing userId, firestoreDocId, or runwayVideoUrl.");
             return;
         }
 
         const postDocRef = db.collection('users').doc(userId).collection('tiktok-posts').doc(firestoreDocId);
         const tempDir = path.join('/tmp', `concat_${firestoreDocId}_${Date.now()}`);
-        let finalOutputVideoPath; // To store the path of the video to be uploaded
+        
+        let currentVideoPath; 
+        let finalVideoToUploadPath; 
+        let filesToCleanup = [];
+        let postDataForLogging = {}; // Defined to be accessible in catch/finally
 
         try {
-            logger.info(`Starting processing for doc ${firestoreDocId}. Runway Video: ${runwayVideoUrl}`);
+            logger.info(`Starting video processing for doc ${firestoreDocId}. Runway Video URL: ${runwayVideoUrl}`);
             await postDocRef.update({
                 status: 'processing_concatenation',
+                concatenationDetails: 'Starting concatenation process...',
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            await fs.mkdir(tempDir, { recursive: true });
+            await fsPromises.mkdir(tempDir, { recursive: true });
             logger.info(`Created temp directory: ${tempDir}`);
 
-            // --- 1. Fetch Hook Text ---
             const postSnapshot = await postDocRef.get();
             if (!postSnapshot.exists) {
                 throw new Error(`Firestore document ${firestoreDocId} not found.`);
             }
-            const hookText = postSnapshot.data()?.hookText;
+            postDataForLogging = postSnapshot.data(); // Assign data for potential use in catch block
+            const hookText = postDataForLogging?.hookText;
+
             if (!hookText) {
                 logger.warn(`No hookText found for doc ${firestoreDocId}. Proceeding without text overlay.`);
             } else {
                 logger.info(`Hook text for doc ${firestoreDocId}: "${hookText}"`);
             }
 
-            // --- 2. Download Original Runway Video ---
             const originalRunwayVideoPath = path.join(tempDir, 'runway_video_original.mp4');
+            filesToCleanup.push(originalRunwayVideoPath);
             logger.info(`Downloading Runway video from ${runwayVideoUrl} to ${originalRunwayVideoPath}`);
-            const runwayResponseStream = await axios({ url: runwayVideoUrl, responseType: 'stream' });
-            await new Promise((resolve, reject) => {
-                runwayResponseStream.data.pipe(require('fs').createWriteStream(originalRunwayVideoPath))
-                    .on('finish', resolve)
-                    .on('error', reject);
-            });
-            logger.info("Runway video downloaded.");
+            await downloadFile(runwayVideoUrl, originalRunwayVideoPath);
+            logger.info("Runway video downloaded successfully.");
+            currentVideoPath = originalRunwayVideoPath;
 
-            // --- Add Hook Text Overlay ---
-            // const hookText = postSnapshot.data()?.hookText; // REMOVED redundant declaration, fetched earlier
-            let videoPathToProcess = originalRunwayVideoPath; // Start with original runway video path
-            const runwayVideoWithTextPath = path.join(tempDir, `runway_text_${firestoreDocId}.mp4`); // Path for text overlay output
-
-            if (hookText) { // Use the hookText fetched earlier
-              logger.info(`Adding hook text: "${hookText}"`);
-              try {
-                // --- NEW: Smartly split text into lines without breaking words (approx 30 chars) ---
-                let processedHookText = '';
-                if (hookText) {
+            if (hookText && hookText.trim() !== '') {
+                const runwayVideoWithTextPath = path.join(tempDir, `runway_with_text.mp4`);
+                filesToCleanup.push(runwayVideoWithTextPath);
+                logger.info(`Attempting to add hook text: "${hookText}" to ${currentVideoPath}`);
+                
+                let processedHookTextForDrawtext = '';
                     const words = hookText.split(' ');
                     let currentLine = '';
                     for (const word of words) {
@@ -2754,239 +2784,236 @@ exports.performVideoConcatenation = onRequest(
                         } else if ((currentLine + ' ' + word).length <= 30) {
                             currentLine += ' ' + word;
                         } else {
-                            processedHookText += currentLine + '\n';
+                        processedHookTextForDrawtext += currentLine + '\n'; 
                             currentLine = word;
                         }
                     }
-                    processedHookText += currentLine; // Add the last line
-                    if (processedHookText.endsWith('\n')) { // Remove trailing newline if any
-                        processedHookText = processedHookText.slice(0, -2);
-                    }
-                }
-                // --- END NEW ---
+                processedHookTextForDrawtext += currentLine;
+                
+                // More robust escaping for FFmpeg drawtext filter
+                const escapedHookText = processedHookTextForDrawtext
+                                        .replace(/\\/g, '\\\\')      // 1. Escape backslashes first
+                                        .replace(/'/g, "\\'\\\'")    // 2. Escape single quotes (e.g., text='isn\'\'t it')
+                                        .replace(/%/g, '\\%')        // 3. Escape percent signs
+                                        .replace(/:/g, '\\:')        // 4. Escape colons
+                                        .replace(/\n/g, '\\\\N');    // 5. Convert \n to FFmpeg\'s \\N for newlines in drawtext
 
-                await new Promise((resolve, reject) => {
-                  // Corrected escaping for text that now includes \n:
-                  const escapedHookText = processedHookText
-                        .replace(/\\/g, '\\\\') // Escape actual backslashes first
-                        .replace(/%/g, '%%')
-                        .replace(/'/g, "\\\'")
-                        .replace(/:/g, '\\:');
-                        // REMOVED: .replace(/\n/g, '\\\\N');
-
-                  ffmpeg(originalRunwayVideoPath) // Input is the original downloaded video
+                try {
+                    await new Promise((resolve, reject) => {
+                        ffmpeg(currentVideoPath)
                     .videoFilter(
-                      `drawtext=text='${escapedHookText}':fontfile='/usr/share/fonts/truetype/msttcorefonts/Arial.ttf':fontcolor=white:fontsize=45:borderw=2:bordercolor=black@0.8:x=(w-text_w)/2:y=(h-text_h)/2`
+                                `drawtext=text='${escapedHookText}':fontfile=/usr/share/fonts/truetype/msttcorefonts/Arial.ttf:fontcolor=white:fontsize=45:borderw=2:bordercolor=black@0.8:x=(w-text_w)/2:y=(h*0.75-text_h/2)`
                     )
                     .outputOptions([
-                      "-preset", // Use a faster preset for text overlay
-                      "ultrafast",
-                      "-crf",    // Maintain reasonable quality
-                      "23",
-                      "-c:a",    // Copy the original audio stream
-                      "copy"
-                    ])
-                    .on('start', commandLine => logger.info('ffmpeg drawtext started:', commandLine))
+                                '-c:v', 'libx264',
+                                '-preset', 'medium',
+                                '-crf', '23',
+                                '-c:a', 'aac',
+                                '-b:a', '192k',
+                                '-ar', '48000'
+                            ])
+                            .on('start', commandLine => logger.info('FFmpeg drawtext started:', commandLine))
                     .on("error", (err, stdout, stderr) => {
-                      logger.error("Error adding hook text:", err.message);
-                      logger.error('ffmpeg stdout (drawtext):', stdout);
-                      logger.error('ffmpeg stderr (drawtext):', stderr);
-                      // Don't reject immediately, maybe proceed without text?
-                      // For now, let's reject to see the error clearly.
-                      reject(new Error(`ffmpeg hook text error: ${err.message}`));
+                                logger.error("Error adding hook text:", err.message, {stdout, stderr});
+                                reject(new Error(`FFmpeg hook text error: ${err.message}`));
                     })
                     .on("end", () => {
-                      logger.info("Hook text added successfully.");
-                      videoPathToProcess = runwayVideoWithTextPath; // Use the text overlay video for next steps
+                                logger.info("Hook text added successfully to video.");
+                                currentVideoPath = runwayVideoWithTextPath;
                       resolve();
                     })
-                    .save(runwayVideoWithTextPath); // Save to the new path
+                            .save(runwayVideoWithTextPath);
                 });
+                    await postDocRef.update({ concatenationDetails: 'Hook text added.'});
               } catch (textError) {
-                  logger.error("Failed to add hook text, proceeding without it.", textError);
-                  // If adding text fails, we log it but continue with the original runway video path
-                  videoPathToProcess = originalRunwayVideoPath;
-                  // We don't add runwayVideoWithTextPath to cleanup if it failed to create
+                    logger.error("Failed to add hook text, proceeding with video as is.", textError);
+                    await postDocRef.update({ concatenationDetails: 'Hook text addition failed, proceeding without it.'});
               }
             } else {
-              logger.info("No hook text found, skipping text overlay.");
-              // videoPathToProcess remains originalRunwayVideoPath
-            }
-            // --- End Hook Text Overlay ---
-
-            // Determine the input path for standardization: if hook was added, use that, otherwise original.
-            // const runwayInputForStandardization = hookText ? runwayVideoWithHookPath : originalRunwayVideoPath; // This line is incorrect, videoPathToProcess holds the correct path
-            const runwayInputForStandardization = videoPathToProcess; // CORRECT: Use the path determined by the hook text logic
-
-            let finalVideoPath = ""; // Path of the video to be uploaded
-            // Initial cleanup includes original runway and potentially the text version
-            let needsCleanup = [originalRunwayVideoPath];
-            if (hookText && videoPathToProcess === runwayVideoWithTextPath) {
-                // Only add the text video path if it was successfully created and is being used
-                needsCleanup.push(runwayVideoWithTextPath);
+                logger.info("No hook text found or hook text is empty, skipping text overlay.");
+                await postDocRef.update({ concatenationDetails: 'No hook text provided.'});
             }
 
-            // --- 4. Standardize the (potentially hook-texted) Runway Video ---
-            const standardizedRunwayVideoPath = path.join(tempDir, 'runway_video_standardized.mp4');
-            logger.info(`Standardizing (hooked) Runway video: ${runwayInputForStandardization} to ${standardizedRunwayVideoPath}`);
+            const standardizedRunwayVideoPath = path.join(tempDir, 'runway_standardized.mp4');
+            filesToCleanup.push(standardizedRunwayVideoPath);
+            logger.info(`Standardizing Runway video from ${currentVideoPath} to ${standardizedRunwayVideoPath}`);
+            
             await new Promise((resolve, reject) => {
-                ffmpeg(runwayInputForStandardization) // Use video with hook if available
-                    .fps(25)
-                    .videoFilters('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black')
-                    // .outputOptions(['-pix_fmt yuv420p']) // Removed -an, assuming audio is kept from runwayVideoWithHookPath
-                    .outputOptions(['-pix_fmt yuv420p', '-an']) // Mute this standardized video
-                    .on('start', commandLine => logger.info('ffmpeg standardization (Runway) started:', commandLine))
-                    .on('end', () => { logger.info('(Hooked) Runway video standardized.'); resolve(); })
+                ffmpeg(currentVideoPath)
+                    .outputOptions([
+                        '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1',
+                        '-r', '30',
+                        '-c:v', 'libx264',
+                        '-preset', 'medium',
+                        '-crf', '23',
+                        '-c:a', 'aac',
+                        '-b:a', '192k',
+                        '-ar', '48000',
+                        '-pix_fmt', 'yuv420p'
+                    ])
+                    .on('start', commandLine => logger.info('FFmpeg standardization (Runway) started:', commandLine))
+                    .on('end', () => { logger.info('Runway video standardized successfully.'); resolve(); })
                     .on('error', (err, stdout, stderr) => {
-                        logger.error('ffmpeg error (standardizing Runway video):', err.message);
-                        logger.error('ffmpeg stdout (Runway std):', stdout);
-                        logger.error('ffmpeg stderr (Runway std):', stderr);
-                        reject(err);
+                        logger.error('Error standardizing Runway video:', err.message, {stdout, stderr});
+                        reject(new Error(`Failed to standardize Runway video: ${err.message}`));
                     })
                     .save(standardizedRunwayVideoPath);
             });
+            currentVideoPath = standardizedRunwayVideoPath;
+            finalVideoToUploadPath = currentVideoPath;
+            await postDocRef.update({ concatenationDetails: 'Runway video standardized.'});
 
-            if (!productMediaUrl || productMediaType === 'image') {
-                // Case 1: No product video, or product is an image.
-                // Final video IS the standardized (hooked) Runway video.
-                if (!productMediaUrl) {
-                    logger.info(`No product media URL provided for doc ${firestoreDocId}. Using standardized (hooked) Runway video as final.`);
-                } else { // productMediaType === 'image'
-                    logger.info(`Product media for doc ${firestoreDocId} is an image. Concatenation skipped. Using standardized (hooked) Runway video as final.`);
-                }
-                finalOutputVideoPath = standardizedRunwayVideoPath; // The final video is the standardized one with hook
-                await postDocRef.update({ // Update status details
-                    finalVideoDetails: hookText ? "Used standardized Runway video with hook text; product was image or not provided." : "Used standardized Runway video; no hook text, product was image or not provided.",
-                });
-
-            } else {
-                // Case 2: Product media IS a video. Attempt standardization and concatenation.
-                logger.info(`Product media for doc ${firestoreDocId} is a video. Proceeding with its standardization and concatenation. Product Video: ${productMediaUrl}`);
-                const productVideoPath = path.join(tempDir, 'product_video_original.mp4');
-                const standardizedProductVideoPath = path.join(tempDir, 'product_video_standardized.mp4');
-                const concatenatedVideoPath = path.join(tempDir, 'final_video_concatenated.mp4');
-                needsCleanup.push(productVideoPath, standardizedProductVideoPath, concatenatedVideoPath); // Add product paths to cleanup
+            if (productToAppendUrl && productToAppendType === 'video') {
+                logger.info(`Product media is a video: ${productToAppendUrl}. Attempting standardization and concatenation.`);
+                const originalProductVideoPath = path.join(tempDir, `product_original.${productToAppendUrl.split('.').pop().split('?')[0] || 'mp4'}`);
+                const standardizedProductVideoPath = path.join(tempDir, 'product_standardized.mp4');
+                const concatenatedVideoPath = path.join(tempDir, 'final_concatenated.mp4');
+                filesToCleanup.push(originalProductVideoPath, standardizedProductVideoPath, concatenatedVideoPath);
 
                 try {
-                    // Download product video
-                    logger.info(`Downloading product video from ${productMediaUrl} to ${productVideoPath}`);
-                    const productResponseStream = await axios({ url: productMediaUrl, responseType: 'stream' });
-                    await new Promise((resolve, reject) => {
-                        productResponseStream.data.pipe(require('fs').createWriteStream(productVideoPath))
-                    .on('finish', resolve)
-                    .on('error', reject);
-            });
+                    logger.info(`Downloading product video from ${productToAppendUrl} to ${originalProductVideoPath}`);
+                    await downloadFile(productToAppendUrl, originalProductVideoPath);
                     logger.info("Product video downloaded.");
+                    await postDocRef.update({ concatenationDetails: 'Runway video standardized. Product video downloaded.'});
 
-                    // Standardize product video
-                    logger.info(`Standardizing product video: ${productVideoPath} to ${standardizedProductVideoPath}`);
+                    logger.info(`Standardizing product video: ${originalProductVideoPath} to ${standardizedProductVideoPath}`);
                 await new Promise((resolve, reject) => {
-                        ffmpeg(productVideoPath)
-                            .fps(25)
-                        .videoFilters('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black')
-                        // .outputOptions(['-pix_fmt yuv420p'])
-                        .outputOptions(['-pix_fmt yuv420p', '-an']) // Mute this standardized video
-                            .on('start', commandLine => logger.info('ffmpeg standardization (Product) started:', commandLine))
-                            .on('end', () => { logger.info('Product video standardized.'); resolve(); })
+                        ffmpeg(originalProductVideoPath)
+                            .outputOptions([
+                                '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1',
+                                '-r', '30',
+                                '-c:v', 'libx264',
+                                '-preset', 'medium',
+                                '-crf', '23',
+                                '-c:a', 'aac',
+                                '-b:a', '192k',
+                                '-ar', '48000',
+                                '-pix_fmt', 'yuv420p'
+                            ])
+                            .on('start', commandLine => logger.info('FFmpeg standardization (Product) started:', commandLine))
+                            .on('end', () => { logger.info('Product video standardized successfully.'); resolve(); })
                             .on('error', (err, stdout, stderr) => {
-                                logger.error('ffmpeg error (standardizing product video):', err.message);
-                                logger.error('ffmpeg stdout (Product std):', stdout);
-                                logger.error('ffmpeg stderr (Product std):', stderr);
-                                reject(err);
+                                logger.error('Error standardizing product video:', err.message, {stdout, stderr});
+                                reject(new Error(`Failed to standardize product video: ${err.message}`));
                             })
                             .save(standardizedProductVideoPath);
                     });
+                    await postDocRef.update({ concatenationDetails: 'Runway & Product videos standardized.'});
 
-                    // Concatenate standardized (hooked) Runway video + standardized Product video
                     logger.info(`Concatenating ${standardizedRunwayVideoPath} and ${standardizedProductVideoPath} into ${concatenatedVideoPath}`);
+                    const concatListPath = path.join(tempDir, 'concat_list.txt');
+                    filesToCleanup.push(concatListPath);
+                    const contentForListFile = `file '${standardizedRunwayVideoPath.replace(/\\/g, '/')}'\nfile '${standardizedProductVideoPath.replace(/\\/g, '/')}'`;
+                    await fsPromises.writeFile(concatListPath, contentForListFile);
+                    
             await new Promise((resolve, reject) => {
                 ffmpeg()
-                            .input(standardizedRunwayVideoPath) // Standardized (hooked) Runway
-                            .input(standardizedProductVideoPath) // Standardized Product
-                            .outputOptions('-an') // Mute the final concatenated video
-                            .on('start', commandLine => logger.info('ffmpeg concatenation started:', commandLine))
-                    .on('end', () => { logger.info('Concatenation finished.'); resolve(); })
+                            .input(concatListPath)
+                            .inputOptions(['-f', 'concat', '-safe', '0'])
+                            .outputOptions(['-c', 'copy'])
+                            .on('start', commandLine => logger.info('FFmpeg concatenation (-c copy) started:', commandLine))
+                            .on('end', () => { logger.info('Videos concatenated successfully with -c copy.'); resolve(); })
                             .on('error', (err, stdout, stderr) => {
-                                logger.error('ffmpeg error (concatenation):', err.message);
-                                logger.error('ffmpeg stdout (concat):', stdout);
-                                logger.error('ffmpeg stderr (concat):', stderr);
-                                reject(err);
+                                logger.error('Error during video concatenation (-c copy):', err.message, {stdout, stderr});
+                                logger.info('Retrying concatenation with full re-encode...');
+                                ffmpeg()
+                                    .input(standardizedRunwayVideoPath)
+                                    .input(standardizedProductVideoPath)
+                                    .complexFilter('[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[outv][outa]')
+                                    .outputOptions([
+                                        '-map', '[outv]', 
+                                        '-map', '[outa]',
+                                        '-r', '30',
+                                        '-c:v', 'libx264',
+                                        '-preset', 'medium',
+                                        '-crf', '23',
+                                        '-c:a', 'aac',
+                                        '-b:a', '192k',
+                                        '-ar', '48000',
+                                        '-pix_fmt', 'yuv420p'
+                                    ])
+                                    .on('start', cmd => logger.info('FFmpeg re-encode concatenation started:', cmd))
+                                    .on('end', () => { logger.info('Videos concatenated successfully with re-encode.'); resolve(); })
+                                    .on('error', (reEncodeErr, reEncodeStdout, reEncodeStderr) => {
+                                        logger.error('Error during video concatenation (re-encode):', reEncodeErr.message, {reEncodeStdout, reEncodeStderr});
+                                        reject(new Error(`Failed to concatenate videos even with re-encode: ${reEncodeErr.message}`));
+                                    })
+                                    .save(concatenatedVideoPath);
                             })
-                            .mergeToFile(concatenatedVideoPath, tempDir);
+                            .save(concatenatedVideoPath);
                     });
+                    finalVideoToUploadPath = concatenatedVideoPath;
+                    await postDocRef.update({ concatenationDetails: 'Runway & Product videos standardized and concatenated.'});
 
-                    // Concatenation successful, this is the final path
-                    finalOutputVideoPath = concatenatedVideoPath;
+                } catch (productProcessingError) {
+                    logger.error(`Error processing product video or during concatenation for doc ${firestoreDocId}:`, productProcessingError);
                     await postDocRef.update({
-                        finalVideoDetails: hookText ? "Concatenated Runway video (with hook) with product video." : "Concatenated Runway video (no hook) with product video.",
+                        concatenationDetails: `Product video processing/concatenation failed: ${productProcessingError.message}. Using Runway video only.`,
+                        concatenationError: `Product video error: ${productProcessingError.message}`
                     });
-
-                } catch (concatError) {
-                    logger.error(`Error during product video processing or concatenation for doc ${firestoreDocId}:`, concatError);
-                    // CONCATENATION FAILED! Fall back to using only the standardized Runway video.
-                    logger.warn(`Falling back to using only the standardized Runway video for doc ${firestoreDocId} due to concatenation error.`);
-                    finalOutputVideoPath = standardizedRunwayVideoPath; // Fallback path
-                    await postDocRef.update({
-                        status: 'completed_concat_failed', // Indicate partial success
-                        concatenationError: `Concatenation/Product Processing Error: ${concatError.message}. Used Runway video only.`,
-                        finalVideoDetails: hookText ? "Used standardized Runway video with hook text; concatenation failed." : "Used standardized Runway video; no hook text, concatenation failed.",
-                    });
-                    // No need to throw, we handled the error by falling back.
+                    logger.warn(`Falling back to using only the standardized Runway video for doc ${firestoreDocId}.`);
                 }
+            } else if (productToAppendUrl && productToAppendType === 'image') {
+                logger.warn(`Product media for doc ${firestoreDocId} is an image. Image overlay not yet implemented. Using (hooked) standardized Runway video as final.`);
+                await postDocRef.update({ concatenationDetails: 'Product is image, using Runway video.'});
+            } else {
+                logger.info(`No product video to append for doc ${firestoreDocId}. Using (hooked) standardized Runway video as final.`);
+                await postDocRef.update({ concatenationDetails: 'No product video, using Runway video.'});
             }
 
-            // --- Upload final video to Storage ---
-            const destinationFileName = `final_videos/${userId}/${firestoreDocId}_${hookText ? 'hooked' : 'processed'}_${Date.now()}.mp4`;
-            logger.info(`Uploading final video from ${finalOutputVideoPath} to Storage: ${destinationFileName}`);
+            const finalVideoStoragePath = `users/${userId}/generated_videos/${firestoreDocId}_final_${Date.now()}.mp4`;
+            logger.info(`Uploading final video from ${finalVideoToUploadPath} to Storage: ${finalVideoStoragePath}`);
             
-            if (!finalOutputVideoPath || !(await fs.stat(finalOutputVideoPath).catch(() => false))) {
-                 throw new Error(`Final output video path is invalid or file does not exist: ${finalOutputVideoPath}`);
+            if (!finalVideoToUploadPath || !(await fsPromises.stat(finalVideoToUploadPath).catch(() => false))) {
+                 logger.error(`Final output video path is invalid or file does not exist: ${finalVideoToUploadPath}. Current video path was: ${currentVideoPath}`);
+                 throw new Error(`Final video file is missing before upload: ${finalVideoToUploadPath}`);
             }
 
-            const [file] = await bucket.upload(finalOutputVideoPath, {
-                destination: destinationFileName,
+            const [uploadedFile] = await bucket.upload(finalVideoToUploadPath, {
+                destination: finalVideoStoragePath,
                 metadata: { contentType: 'video/mp4' },
-                public: true
+                public: true,
             });
-            const publicUrl = file.publicUrl();
-            logger.info(`Final video uploaded. Public URL: ${publicUrl}`);
+            const finalPublicUrl = uploadedFile.publicUrl();
+            logger.info(`Final video uploaded successfully. URL: ${finalPublicUrl}`);
 
-            // --- Update Firestore --- 
             await postDocRef.update({
                 status: 'completed',
-                videoUrl: publicUrl, // This is the URL of the video with hook and/or concatenation
+                finalVideoUrl: finalPublicUrl,
+                concatenationDetails: 'Video processing completed successfully.',
+                error: null,
                 concatenationError: null,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            logger.info(`Firestore doc ${firestoreDocId} updated to completed. Final URL: ${publicUrl}`);
-
-            response.status(200).send("Video processing successful.");
+            logger.info(`Firestore document ${firestoreDocId} updated to status 'completed' with finalVideoUrl.`);
+            response.status(200).send("Video processing completed successfully.");
 
         } catch (error) {
-            logger.error(`Error in performVideoConcatenation for doc ${firestoreDocId}:`, error);
+            logger.error(`Critical error in performVideoConcatenation for doc ${firestoreDocId}:`, error.message, error.stack);
             try {
                 await postDocRef.update({
-                    status: 'concatenation_failed', // or more general 'processing_failed'
-                    concatenationError: error.message || 'Unknown error during video processing steps',
+                    status: 'concatenation_failed',
+                    error: `Concatenation process error: ${error.message}`,
+                    concatenationDetails: `Failed at: ${postDataForLogging?.concatenationDetails || 'unknown step'}. Error: ${error.message}`,
+                    finalVideoUrl: null,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             } catch (dbUpdateError) {
-                logger.error(`Failed to update Firestore with failed status for doc ${firestoreDocId}:`, dbUpdateError);
+                logger.error(`Failed to update Firestore with critical failed status for doc ${firestoreDocId}:`, dbUpdateError);
             }
             response.status(500).send(`Internal Server Error during video processing: ${error.message}`);
         } finally {
-            try {
-                if (await fs.stat(tempDir).catch(() => false)) {
-                await fs.rm(tempDir, { recursive: true, force: true });
-                logger.info(`Cleaned up temp directory: ${tempDir}`);
+            if (tempDir) {
+                logger.info(`Cleaning up temporary files in: ${tempDir}`);
+                for (const filePath of filesToCleanup) {
+                    await fsPromises.rm(filePath, { force: true, recursive: false }).catch(err => logger.warn(`Error cleaning up temp file ${filePath}:`, err.message));
                 }
-            } catch (cleanupError) {
-                logger.error(`Error cleaning up temp directory ${tempDir}:`, cleanupError);
+                await fsPromises.rm(tempDir, { recursive: true, force: true }).catch(err => logger.error(`Error cleaning up temp dir ${tempDir}:`, err.message));
+                logger.info("Temp directory cleanup finished.");
             }
         }
     }
 );
-
 // --- NEW: performImageGenerationTask Function (HTTP Triggered by Cloud Task) ---
 exports.performImageGenerationTask = onRequest(
     { region: 'us-central1', timeoutSeconds: IMAGE_GEN_TIMEOUT_SECONDS, memory: '2GiB' }, // Use new timeout
@@ -3310,28 +3337,56 @@ exports.startVideoPipeline = onRequest(
 
             // --- 1. Fetch User Products (Logic from original triggerVideoGenerationAndHook) ---
             let selectedProduct = null;
+            let productToUseForAppending = { // NEW: Object to hold product details for appending
+                url: null,
+                type: null,
+                isStandardized: false,
+                originalUrl: null
+            };
             try {
                 const productsRef = db.collection('users').doc(userId).collection('products');
-                const productsSnapshot = await productsRef.limit(1).get();
+                const productsSnapshot = await productsRef.limit(1).get(); // Get only the first one
                 if (!productsSnapshot.empty) {
                     const productDoc = productsSnapshot.docs[0];
-                    const productDataFromDb = productDoc.data(); 
-                    selectedProduct = {
+                    const productData = productDoc.data();
+                    selectedProduct = { // Keep selectedProduct for hook text generation context for now
                         id: productDoc.id,
-                        name: productDataFromDb.name || productDataFromDb.product_name,
-                        description: productDataFromDb.description || productDataFromDb.product_description,
-                        mediaUrl: productDataFromDb.mediaUrl,
-                        mediaType: productDataFromDb.mediaType || (productDataFromDb.mediaUrl?.includes('.mp4') || productDataFromDb.mediaUrl?.includes('.mov') ? 'video' : 'image')
+                        name: productData.name || productData.product_name,
+                        description: productData.description || productData.product_description,
+                        // mediaUrl, mediaType, standardizedVideoUrl, isVideoStandardized are now in productData
                     };
-                    if (!selectedProduct.mediaUrl) {
-                        logger.warn(`Selected product ${selectedProduct.id} for user ${userId} is missing mediaUrl.`);
-                        selectedProduct = null;
+
+                    const originalMediaUrl = productData.mediaUrl;
+                    productToUseForAppending.originalUrl = originalMediaUrl; // Store original URL
+
+                    if (productData.isVideoStandardized && productData.standardizedVideoUrl) {
+                        productToUseForAppending.url = productData.standardizedVideoUrl;
+                        productToUseForAppending.isStandardized = true;
+                        logger.info(`Using standardized product video for appending: ${productData.standardizedVideoUrl}`);
+                    } else if (originalMediaUrl) {
+                        productToUseForAppending.url = originalMediaUrl; // Fallback to original if not standardized
+                        productToUseForAppending.isStandardized = false;
+                        logger.warn(`Product video for ${productDoc.id} is not standardized or standardized URL is missing. Falling back to original: ${originalMediaUrl}`);
+                    } else {
+                        logger.warn(`Selected product ${productDoc.id} for user ${userId} is missing any mediaUrl. Cannot append.`);
+                        // productToUseForAppending.url will remain null
                     }
+                    // Determine type based on the URL that will be used (standardized or original)
+                    if (productToUseForAppending.url) {
+                         productToUseForAppending.type = productData.mediaType || (productToUseForAppending.url.includes('.mp4') || productToUseForAppending.url.includes('.mov') ? 'video' : 'image');
+                    }
+
+                    logger.info(`Selected product ${selectedProduct?.id} for appending to video ${firestoreDocId}. URL to use: ${productToUseForAppending.url}, Type: ${productToUseForAppending.type}, Standardized: ${productToUseForAppending.isStandardized}`);
+                } else {
+                    logger.warn(`User ${userId} has no products defined. Cannot append product media to video ${firestoreDocId}.`);
+                    // Proceed without appending
                 }
-            } catch (productError) {
-                logger.error(`Error fetching products for user ${userId} in startVideoPipeline:`, productError);
-                selectedProduct = null; // Proceed without product if error
+            } catch (error) {
+                logger.error(`Error fetching products for user ${userId} in startVideoPipeline:`, error);
+                // Proceed without appending, don't throw error for this
+                // productToUseForAppending remains with null url
             }
+            // --- End Fetch User Products --- 
 
             // --- 2. Generate Hook Text (Logic from original triggerVideoGenerationAndHook) ---
             let openai;
@@ -3415,8 +3470,11 @@ Generate the hook text now. Output ONLY the text itself, no quotes or labels.`;
                 hookText: finalHookText, 
                 runwayTaskId: runwayTaskId, 
                 pollingStartTime: startTime,
-                productToAppendUrl: selectedProduct?.mediaUrl || null, 
-                productToAppendType: selectedProduct?.mediaType || null,
+                // MODIFIED: Use details from productToUseForAppending
+                productToAppendUrl: productToUseForAppending.url, 
+                productToAppendType: productToUseForAppending.type,
+                isProductToAppendStandardized: productToUseForAppending.isStandardized,
+                originalProductMediaUrl: productToUseForAppending.originalUrl, // Store original for reference/fallback
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             };
             
@@ -3502,4 +3560,131 @@ async function downloadFile(url, destPath) {
         });
     });
 }
+
+// --- NEW: Cloud Function to Standardize Product Video (onCall) ---
+exports.manuallyStandardizeProductVideo = onCall({
+    cpu: 2,
+    memory: '2GiB',
+    timeoutSeconds: 540,
+    region: 'us-central1', // Keep region for the function itself
+}, async (request) => { // MODIFIED: (data, context) -> (request)
+    const ffmpeg = require('fluent-ffmpeg');
+    const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    const os = require('os');
+    const fsPromises = require('fs').promises;
+    const path = require('path');
+
+    // Validate auth context
+    if (!request.auth) { // MODIFIED: context.auth -> request.auth
+        logger.error('Authentication required for manuallyStandardizeProductVideo.');
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const callingUserId = request.auth.uid; // MODIFIED: context.auth.uid -> request.auth.uid
+
+    // Validate input data
+    const { userId, productId, originalVideoPathInStorage, originalFileExtension } = request.data; // MODIFIED: data -> request.data
+    if (!userId || !productId || !originalVideoPathInStorage || !originalFileExtension) {
+        logger.error('Missing required data for manuallyStandardizeProductVideo:', { userId, productId, originalVideoPathInStorage, originalFileExtension });
+        throw new HttpsError('invalid-argument', 'Required data (userId, productId, originalVideoPathInStorage, originalFileExtension) is missing.');
+    }
+    
+    // Security check: Ensure the calling user matches the userId in the data, or implement admin override if needed.
+    // For now, we'll assume the calling user IS the target user.
+    if (callingUserId !== userId) {
+        logger.error(`User ID mismatch: Caller ${callingUserId} attempting to process video for ${userId}.`);
+        throw new HttpsError('permission-denied', 'You do not have permission to process this video.');
+    }
+    
+    const filePath = originalVideoPathInStorage; // Use the path from data
+
+    logger.info(`manuallyStandardizeProductVideo: Request for UserID=${userId}, ProductID=${productId}, File=${filePath}`);
+
+    // No resourceState or metageneration checks needed for onCall
+
+    // No need to match with regex, path is provided directly
+    // No need to check contentType here, assume it's a video if this function is called
+
+    const tempDir = path.join(os.tmpdir(), `standardize_${userId}_${productId}_${Date.now()}`);
+    const originalVideoTempPath = path.join(tempDir, `original.${originalFileExtension}`); // Use provided extension
+    const standardizedVideoTempPath = path.join(tempDir, 'standardized.mp4');
+    const productDocRef = db.collection('users').doc(userId).collection('products').doc(productId);
+
+    try {
+        await fsPromises.mkdir(tempDir, { recursive: true });
+        const sourceFile = bucket.file(filePath); // bucket is admin.storage().bucket()
+        
+        // Check if file exists before attempting download
+        const [exists] = await sourceFile.exists();
+        if (!exists) {
+            logger.error(`Original video file does not exist at path: ${filePath} for product ${productId}`);
+            await productDocRef.set({
+                isVideoStandardized: false,
+                standardizationError: `Original video not found at ${filePath}.`,
+                standardizationAttemptTimestamp: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            throw new HttpsError('not-found', `Original video file not found: ${filePath}`);
+        }
+        
+        await sourceFile.download({ destination: originalVideoTempPath });
+        logger.info(`Downloaded ${filePath} to ${originalVideoTempPath}.`);
+
+        await new Promise((resolve, reject) => {
+            ffmpeg(originalVideoTempPath)
+                .fps(25)
+                .videoFilters('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black')
+                .outputOptions(['-pix_fmt yuv420p', '-an']) // Mute
+                .on('start', cmd => logger.info(`FFmpeg (product ${productId}) started: ${cmd}`))
+                .on('end', resolve)
+                .on('error', (err, stdout, stderr) => {
+                    logger.error(`FFmpeg error (product ${productId}):`, { msg: err.message, stdout, stderr });
+                    reject(err);
+                })
+                .save(standardizedVideoTempPath);
+        });
+        logger.info(`Product video ${productId} standardized to ${standardizedVideoTempPath}.`);
+
+        const standardizedStoragePath = `users/${userId}/products/${productId}/standardized_video.mp4`;
+        const [uploadedFile] = await bucket.upload(standardizedVideoTempPath, {
+            destination: standardizedStoragePath,
+            metadata: { contentType: 'video/mp4', customMetadata: { originalPath: filePath } },
+            public: true
+        });
+        const standardizedPublicUrl = uploadedFile.publicUrl();
+        logger.info(`Uploaded standardized ${productId} to ${standardizedStoragePath}. URL: ${standardizedPublicUrl}`);
+
+        await productDocRef.set({
+            standardizedVideoUrl: standardizedPublicUrl,
+            isVideoStandardized: true,
+            standardizationTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+            standardizationError: null,
+            originalVideoPath: filePath // Store original path for reference
+        }, { merge: true });
+        logger.info(`Firestore updated for product ${productId} with standardized URL.`);
+        return null;
+
+    } catch (error) {
+        logger.error(`Error in manuallyStandardizeProductVideo for ${filePath}:`, error);
+        try {
+            await productDocRef.set({
+                isVideoStandardized: false,
+                standardizationError: String(error.message || error),
+                standardizationAttemptTimestamp: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (dbError) {
+            logger.error(`Failed to log error to Firestore for product ${productId}:`, dbError);
+        }
+        return null;
+    } finally {
+        try {
+            if (await fsPromises.stat(tempDir).catch(() => false)) {
+                await fsPromises.rm(tempDir, { recursive: true, force: true });
+                logger.info(`Cleaned up temp dir: ${tempDir}`);
+            }
+        } catch (cleanupError) {
+            logger.error(`Error cleaning up temp dir ${tempDir}:`, cleanupError);
+        }
+    }
+});
+// --- END NEW Cloud Function ---
 

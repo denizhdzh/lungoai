@@ -1384,9 +1384,10 @@ function Dashboard() {
             id: docSnapshot.id,
             ...data, // Spread existing data like videoUrl, etc.
             timestamp,
-            type: 'video' // Explicitly set type for rendering
+            type: 'video', // Explicitly set type for rendering
+            videoUrl: data.finalVideoUrl || null // Use finalVideoUrl, fallback to null if not present
           };
-        }).filter(post => post.videoUrl && typeof post.videoUrl === 'string' && post.videoUrl.trim() !== ''); // ADDED: Filter out posts without a valid videoUrl
+        }).filter(post => post.videoUrl && typeof post.videoUrl === 'string' && post.videoUrl.trim() !== ''); // Filter out posts without a valid videoUrl
 
         // 5. Combine, Sort, and Limit
         const combinedItems = [...processedGenerations, ...processedTiktokPosts];

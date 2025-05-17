@@ -439,21 +439,27 @@ function Layout() {
             const isBackgroundAssetSelected = assetMentionForCommand && assetMentionForCommand.type === 'background';
             const hasTopic = command.parameters && command.parameters.topic;
 
-            // If the command is not specific enough (no selected background asset to drive content AND no topic provided)
-            if (!isBackgroundAssetSelected && !hasTopic) {
+            // If the command is not specific enough (no selected background asset to drive content AND no topic provided AND no products to use)
+            if (!isBackgroundAssetSelected && !hasTopic && !hasProducts) {
               proceed = false; // Mark to stop processing and show a message
-              if (!hasProducts && !hasBackgrounds) {
-                validationMessage = "To create a slideshow, please add Products (in Settings > Products) and Backgrounds (in Settings > Backgrounds).";
-              } else if (!hasProducts) { // Backgrounds exist, products do not
-                validationMessage = "For a product-based slideshow, add a Product (Settings > Products). To use your existing Backgrounds for this slideshow, please specify a topic.";
-              } else if (!hasBackgrounds) { // Products exist, backgrounds do not
-                validationMessage = "To use custom images in the slideshow, add a Background (Settings > Backgrounds). To make a slideshow from your Products, please specify a topic.";
-              } else { // Both products and backgrounds exist, but command is still ambiguous
-                validationMessage = "Please specify a topic for the slideshow, or select a Background asset to use. (You have Products and Backgrounds in Settings)";
+              // The messages below are now more specific to the case where *all* are missing.
+              // If only topic/background is missing but products exist, proceed = true.
+              if (!hasProducts && !hasBackgrounds) { // This condition remains, but proceed is false only if hasTopic is also false
+                validationMessage = "To create a slideshow, please add Products (in Settings > Products) and Backgrounds (in Settings > Backgrounds), or specify a topic.";
+              } else if (!hasProducts) { // Backgrounds exist, products do not, topic is missing
+                validationMessage = "For a product-based slideshow, add a Product (Settings > Products). To use your existing Backgrounds for this slideshow, please specify a topic or select a background asset.";
+              } else if (!hasBackgrounds && !isBackgroundAssetSelected) { // Products exist, backgrounds do not, topic is missing, no background asset selected
+                validationMessage = "To use custom images in the slideshow, add a Background (Settings > Backgrounds) or select one. With only products, please specify a topic if you don't want a product-focused slideshow.";
+              } else { // Products and backgrounds exist, but still ambiguous (no topic, no selected background)
+                // This message implies products exist, so if we reach here and !hasTopic && !isBackgroundAssetSelected,
+                // the new logic should allow proceeding if hasProducts is true.
+                // So this specific 'else' might need adjustment or removal if proceeding with product is the default.
+                // For now, let's refine the message for the truly ambiguous case where all guiding inputs are missing.
+                validationMessage = "Please specify a topic for the slideshow, select a Background asset to use, or ensure you have Products added (in Settings > Products) for a product-based slideshow.";
               }
             }
-            // If isBackgroundAssetSelected is true, or hasTopic is true, 
-            // the command is considered specific enough from the frontend's asset/topic perspective.
+            // If isBackgroundAssetSelected is true, or hasTopic is true, or hasProducts is true (implicit for product-driven slideshow)
+            // the command is considered specific enough from the frontend's asset/topic/product perspective.
             // `proceed` remains true unless set false by credit check or the block above.
           }
         }
@@ -843,15 +849,6 @@ function Layout() {
     }
   }, [userMessages]);
   // --- End effect to scroll messages to bottom ---
-
-  // --- Effect to Navigate to Dashboard on Generation Start --- (Existing, should still work)
-  useEffect(() => {
-    if (generatingItem && location.pathname !== '/') {
-      // console.log('Generation started on another page, navigating to Dashboard...');
-      navigate('/');
-    }
-  }, [generatingItem, location.pathname, navigate]);
-  // --- End Navigation Effect ---
 
   // --- AI Guide Button Click Handler (defined after previousLocationRef) ---
   const handleGuideClick = () => {

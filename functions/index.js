@@ -594,19 +594,30 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
         // Sundress/minidress/gown examples removed as they are full outfits
     ];
 
-    const maleTops = [
-        "well-fitting plain white crew-neck t-shirt", "classic black v-neck t-shirt",
-        "light blue button-down shirt (unbuttoned top button)", "grey Henley shirt with sleeves rolled up",
-        "fitted dark grey polo shirt", "simple black tank top (showing athletic arms)",
-        "open casual flannel shirt over a plain t-shirt", "comfortable knit sweater",
-        "stylish bomber jacket over a t-shirt", "modern athletic zip-up hoodie"
+    // --- NEW: Combined Male Clothing Examples ---
+    const maleClothingExamples = [
+        "in a well-fitting plain white crew-neck t-shirt and dark wash jeans",
+        "in a classic black v-neck t-shirt and chino pants",
+        "in a light blue button-down shirt (top button undone) and beige shorts",
+        "in a grey Henley shirt with sleeves rolled up and dark jeans",
+        "in a fitted dark grey polo shirt and comfortable trousers",
+        "in a simple black tank top (showing athletic arms) and casual shorts",
+        "in an open casual flannel shirt (red and black plaid) over a plain white t-shirt and ripped black jeans",
+        "in a comfortable charcoal knit sweater and dark chino pants",
+        "in a stylish black bomber jacket over a grey t-shirt and slim-fit black jeans",
+        "in a modern athletic zip-up hoodie (navy blue) and grey jogger pants",
+        "in a tailored light grey linen shirt (casually untucked) and white cuffed shorts",
+        "in a black turtleneck sweater and smart grey wool trousers",
+        "in a denim jacket over a striped t-shirt and black jeans",
+        "in a relaxed-fit olive green utility shirt and cargo pants",
+        "in a cream-colored cable-knit cardigan over a chambray shirt and brown corduroy pants",
+        "in a fitted black leather jacket, white graphic tee, and dark distressed jeans",
+        "in a modern navy blue Harrington jacket, a simple white long-sleeve top, and stone-colored chinos",
+        "in a light-wash denim shirt (worn open) over a black muscle-fit tank top and black skinny jeans",
+        "in a burgundy short-sleeve button-up shirt with a subtle print and tailored navy shorts",
+        "in an oversized neutral-toned hoodie, slightly distressed light-wash jeans, and clean white sneakers (implied)"
     ];
-    const maleBottoms = [
-        "dark wash jeans", "chino pants", "beige shorts", "dark jeans",
-        "comfortable trousers", "casual shorts (appropriate for setting)", "jeans",
-        "dark pants", "jogger pants"
-    ];
-    // --- END REVISED CLOTHING LISTS ---
+    // --- END NEW ---    
 
     const settingExamples = [
         // Realistic, visually appealing environments with influencer-style clarity
@@ -675,7 +686,7 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
     if (clothing) { // User provided clothing takes precedence
         finalClothing = clothing;
     } else if (subjectTerm === 'man') {
-        finalClothing = maleTops[Math.floor(Math.random() * maleTops.length)] + " and " + maleBottoms[Math.floor(Math.random() * maleBottoms.length)];
+        finalClothing = maleClothingExamples[Math.floor(Math.random() * maleClothingExamples.length)];
     } else { // Default to female or person if unspecified
         // MODIFIED: Select from femaleClothingExamples directly
         finalClothing = femaleClothingExamples[Math.floor(Math.random() * femaleClothingExamples.length)];
@@ -746,53 +757,89 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
     } // Add more cases for other settings as needed
     // --- END: Background Detailing Logic ---
 
+    // --- Define missing prompt variables ---
+    const backgroundInstructions = "Ensure the background is detailed, makes sense for the scene, and is in sharp focus."; // Example default
+    const hairDetails = "Hair should be realistic, with natural flow and texture, fitting the described subject."; // Example default
+    // --- END Define missing prompt variables ---
+
     const instructionPrompt = `
-    Generate a highly detailed, concise, and effective prompt for an AI image generator (gpt-image-1) to create a specific type of image.
+    Generate a highly detailed, concise, and effective prompt for an AI image generator (e.g., DALL-E 3) to create a specific type of image.
 
-    Objective: Create a high-quality, realistic photograph capturing a modern influencer aesthetic, shot from a **closer, more intimate natural selfie perspective** (phone not visible, arm should appear relaxed and not fully extended, suggesting the phone is held comfortably closer to the body). The entire image, including the background and all its elements, MUST be in sharp focus. Strictly avoid any depth of field effects, bokeh, or background blur.
+    Objective: Create a photorealistic, high-quality image emulating a **natural, spontaneous selfie taken with a modern smartphone (e.g., iPhone, Android)**.
+    The shot should be a **closer, more intimate perspective** (phone not visible, arm relaxed as if holding a phone closer).
+    The ENTIRE image, including the background and all its elements, MUST be in **sharp focus**. Strictly avoid any depth of field effects, bokeh, or artificial background blur.
 
-    Core Subject: Base the image entirely on this description: "${subject_description}". 
-    Ensure the subject clearly appears as a ${subjectTerm}. 
-    ${age && parseInt(age, 10) >= 18 ? `The subject should appear to be approximately ${parseInt(age, 10)} years old.` : ''}
-    Create a conventionally attractive face. Enhance the base description by naturally incorporating details like: ${featureEmphasisString}.
-    Incorporate highly detailed and realistic skin texture, including visible pores, fine lines, slight asymmetries, and natural imperfections like occasional minor blemishes or moles (if appropriate for the character and not distracting). Emphasize natural skin oils/sheen rather than a matte finish. Ensure realistic and varied eye reflections, avoiding perfectly symmetrical or unnatural catchlights. // Realism details (updated from realismDetails variable)
-    ${makeupInstruction} // Apply makeup instruction based on gender
-    Hair should appear healthy, well-styled (could be slightly tousled or styled), and realistic, with natural flyaways and texture.
-    Enhance with subtle realistic details like natural skin texture, hair strands, eye reflections, unless specified otherwise.
-    
-    Body Shape: ${bodyShapePromptSegment} Ensure the overall description is SFW.
+    Core Subject (DO NOT CHANGE THESE ASPECTS):
+    - Base the person entirely on this description: "${subject_description}".
+    - Ensure the subject clearly appears as a ${subjectTerm}.
+    - ${age && parseInt(age, 10) >= 18 ? `The subject should appear to be approximately ${parseInt(age, 10)} years old.` : ''}
+    - Create a conventionally attractive face. Enhance the base description by naturally incorporating details like: ${featureEmphasisString}.
+    - ${realismDetails} // Skin and realism details for the person.
+    - ${makeupInstruction} // Makeup instruction based on gender.
+    - Body Shape: ${bodyShapePromptSegment} // Body shape description. Ensure the overall description is SFW.
+    - Accessories: Minimal and subtle accessories are acceptable if they complement the style (e.g., simple necklace, delicate bracelet, understated rings). Avoid large, distracting jewelry, sunglasses, or hats unless explicitly part of subject/clothing descriptions.
 
-    Accessories: **Minimal and subtle accessories like a simple necklace, a delicate bracelet, or a few understated rings are acceptable if they complement the overall modern and natural style. Avoid large, distracting, or excessive jewelry. Also avoid sunglasses and hats unless they are explicitly part of the \`subject_description\` or \`clothing_description\` parameters.** Focus on the core subject and clothing.
-    
-    Required Elements (Use provided values):
-    1.  Clothing: The subject is wearing: "${finalClothing}". Describe the fit (e.g., 'well-fitting', 'slightly oversized'), fabric, color (dont make same thing for top and bottom), and subtle details. Clothing should align with a modern, trendy style. Ensure clothing is appropriate for the setting: "${finalSetting}". Describe any subtle cleavage appropriately if relevant to the neckline.
-    2.  Setting: The user-specified setting (provided as \`finalSetting\`) is paramount and MUST NOT be changed or ignored in favor of other examples or common settings. The scene MUST be exactly: "${finalSetting}". Describe this specific setting effectively. ${backgroundEnhancement} The setting should complement the subject and overall aesthetic. It is CRITICAL that the entire scene, especially the background, is rendered in sharp, crisp focus. Absolutely NO background blur (bokeh) or depth of field effects are permitted. The background should feel authentic and lived-in, not overly pristine, staged, or artificially perfect. Include subtle signs of normal use or slight, natural disarray if appropriate for the setting (e.g., a slightly creased cushion on a cafe chair, a few stray leaves on a park bench, minor scuffs on a wall). Avoid unnaturally clean or empty spaces unless specifically part of the setting\'s description.
-    3.  Camera & Lens: The shot is taken with a high-quality digital camera system known for sharp, detailed images across the entire frame. // REMOVED Canon EOS R5, 85mm lens, f/1.4 aperture
-    4.  Lighting: Describe lighting that is **highly specific and natural to the provided setting ("${finalSetting}")**. For instance, if the setting is a car during the day, describe sunlight streaming through windows, casting distinct highlights and shadows on the interior and subject. If it's a cozy room at night, describe warm lamplight or soft ambient light from specific sources. The lighting MUST realistically illuminate both the subject and the background, creating a cohesive and believable scene. Detail the direction, quality (e.g., soft, harsh, diffused), and color temperature of the main light sources appropriate for "${finalSetting}". Avoid generic studio lighting unless the setting itself IS a photo studio. The chosen lighting should visibly affect the subject, including their clothing (revealing texture) and skin (e.g., creating natural highlights and shadows).
-    5.  Color & Grading: cinematic color grading, warm tones, soft contrast, subtle film grain. Colors should appear natural and not overly saturated.
-    6.  Composition & Pose: Portrait orientation. The composition and framing should be natural and contextually appropriate for the setting ("${finalSetting}") and the selfie perspective.
-        *   If the subject is in a confined space like a **car**, the framing MUST be a **chest-up or close-up portrait focusing on the face and upper torso only**. Use a slightly lower camera angle typical of a relaxed car selfie. **Crucially, DO NOT attempt to show the subject's lap, legs, shorts, or pants.** The composition should feel tight and intimate, as if taken naturally by someone holding a phone in a seated car position. The arm holding the (unseen) phone should appear relaxed and close to the body.
-        *   If the subject is **seated at a table or standing**, a composition from the waist up or a head and shoulders frame shot from roughly eye-level or slightly above could be natural.
-        *   Prioritize a natural and unforced pose. The subject should have the gaze "${finalGaze}" and expression "${finalExpression}". Ensure the head does not appear disproportionately large due to an overly close or wide-angle effect unless that's a specific artistic choice for a typical selfie. The framing should feel intentional and aesthetically pleasing for an influencer-style shot.
-    7.  Overall Style: The image MUST have the style: \"${finalStyle}\". Emphasize realistic details, natural or complementary lighting. **Ensure sharp focus throughout the entire image, explicitly including the background.** Strictly avoid *any* artificial background blur, bokeh, or shallow depth-of-field effects, unless the user's 'style' parameter explicitly requests it (e.g., 'style: portrait with blurred background'). Aim for a high-quality camera look (like a high-end smartphone used for the implied selfie perspective).
+    Required Elements (These aspects SHOULD BE DETAILED and VARIED by you, the AI, based on user inputs and realism goals):
+    1.  Clothing (Person Aspect - Keep current logic, describe fit/fabric/color/style): The subject is wearing: "${finalClothing}". Describe fit (e.g., 'well-fitting', 'slightly oversized'), fabric, color, and subtle details. Clothing should align with a modern, trendy style appropriate for the setting: "${finalSetting}". Describe cleavage appropriately if relevant to neckline.
 
-    Safety Compliance: PRIORITIZE generating Safe-For-Work (SFW) content that strictly adheres to OpenAI's safety policies. Avoid any suggestive, overly revealing, or borderline content. Ensure the final prompt is clearly SFW.
+    2.  Setting (ENVIRONMENT - Detail this extensively):
+        *   The user-specified setting is: "${finalSetting}". This is PARAMOUNT.
+        *   Describe this specific setting with rich, naturalistic details. ${backgroundInstructions}
+        *   The setting must complement the subject and overall aesthetic.
+        *   CRITICAL: The entire scene, especially the background, MUST be rendered in sharp, crisp focus, showing distinct textures and edge sharpness.
+        *   The background should feel authentic, "lived-in," and not overly pristine or staged. Include subtle signs of normal use or slight, natural disarray appropriate for the setting (e.g., a slightly creased cushion, a few stray leaves, minor scuffs on a wall).
+
+    3.  Lighting (ENVIRONMENT - Detail this extensively and make it DYNAMIC):
+        *   Describe lighting that is **highly specific, natural, and dynamic to the provided setting ("${finalSetting}")**.
+        *   For example:
+            *   If outdoors with foliage: "Face partially illuminated through broken shadows cast by foliage above. Sunlight filters through leaves, creating sharp, irregular dappled shadow patterns across face and hair."
+            *   If indoors near window: "Soft, directional window light illuminating one side of the face, with gentle falloff into shadow on the other."
+            *   If urban at night: "Mixed lighting from street lamps and shop windows, creating areas of warm and cool light with visible highlights and reflections."
+        *   The lighting MUST realistically illuminate both subject and background, creating a cohesive scene.
+        *   Detail the direction, quality (e.g., soft, harsh, diffused, dappled), and color temperature of light sources appropriate for "${finalSetting}".
+        *   The lighting should visibly affect the subject: skin (natural highlights/shadows, e.g., rembrandt lighting if applicable) and clothing (revealing texture).
+
+    4.  Smartphone Camera & Lens Emulation (TECHNICAL DETAILS - Incorporate these):
+        *   The image should exhibit characteristics of a high-quality modern smartphone photo (e.g., iPhone, Android).
+        *   Include "soft lens characteristics": slight chromatic aberration around high-contrast edges (especially in the background).
+        *   Specify a "natural, often warm color balance" typical of smartphone processing.
+        *   Describe "natural contrast roll-off" in both shadows and highlights, avoiding overly crushed blacks or blown-out whites.
+        *   Incorporate "minor, subtle digital compression artifacts" and "a very slight, fine-grained sensor noise pattern" in darker areas to give an organic digital texture. These should be almost imperceptible but add to realism.
+
+    5.  Color & Grading (AESTHETIC):
+        *   Aim for cinematic color grading, potentially warm tones, soft natural contrast, and a very subtle film grain if it enhances the "real photo" feel without looking like an explicit filter. Colors should appear natural and not overly saturated.
+
+    6.  Composition & Pose (SELFIE DETAILS - Make this feel spontaneous):
+        *   Portrait orientation.
+        *   Composition and framing should be natural, contextually appropriate for "${finalSetting}", and embody a **spontaneous selfie feel**.
+        *   Encourage "imperfect framing" and "subtle signs of handheld stability" (e.g., a very slight, natural tilt or off-center composition).
+        *   Camera angle can vary: "slightly below eye level," "eye-level," or "slightly above," typical of how one might naturally take a selfie.
+        *   If in a confined space like a **car**: framing MUST be chest-up or close-up on face/upper torso. NO lap/legs/shorts/pants. Use a slightly lower camera angle. Arm holding (unseen) phone should be relaxed and close.
+        *   If **seated/standing**: waist-up or head-and-shoulders frame from a natural selfie angle.
+        *   Prioritize a natural, unforced pose. Subject's gaze: "${finalGaze}". Expression: "${finalExpression}".
+        *   Ensure head doesn't appear disproportionately large due to an overly close/wide-angle effect unless it's a specific artistic choice for a typical selfie. Framing should feel intentional yet casual.
+
+    7.  Overall Style (AESTHETIC - Combine all elements):
+        *   The image MUST have the style: "${finalStyle}".
+        *   Emphasize photorealistic details, natural and dynamic lighting specific to the scene.
+        *   **Reiterate: Sharp focus throughout the entire image (subject and background).**
+        *   The final image should resemble a spontaneous, high-quality, real-life selfie taken on a modern smartphone during a casual moment, rich in environmental and lighting detail.
+
+    Safety Compliance: PRIORITIZE SFW content adhering to OpenAI's safety policies. Avoid suggestive or borderline content.
 
     Output Requirements:
-    - Combine all elements into a single, coherent paragraph.
-    - The output MUST be ONLY the generated prompt string, with no introductory text, explanations, or labels.
-    - Focus on descriptive keywords and photorealistic details suitable for gpt-image-1.
-    - Ensure the prompt is safe for work.
+    - Combine ALL elements into a single, coherent paragraph for the image generator.
+    - Output MUST be ONLY the generated prompt string (no intros, labels).
+    - Focus on descriptive keywords, photorealistic details.
+    - Ensure prompt is SFW.
 
-    Example Output Format (Illustrative - Body description varies):
-    "Photo, selfie perspective (phone not visible): A [age, ${subjectTerm}, ethnicity, attractive face with ${featureEmphasisString}, realistic skin texture with natural imperfections, styled yet natural hair, ${subjectTerm === 'man' ? 'no makeup' : 'natural glam makeup'}, minimal subtle jewelry like a simple necklace or rings may be present if natural for the style] with a [body description based on logic above], striking a natural and unforced pose. The framing is [AI-described composition, e.g., 'a slightly low-angle car selfie from the chest up, focusing tightly on her face and upper torso' or 'a waist-up shot as she stands near the window'], ensuring a natural head-to-body ratio. Gaze is ${finalGaze} with a ${finalExpression}. They are wearing a trendy [detailed clothing description: ${finalClothing}] appropriate for the setting and gender. The background is exactly [detailed setting description: ${finalSetting}] rendered in sharp, crisp focus throughout, showing authentic, lived-in details. The scene is illuminated by [AI-described lighting specific to the setting, e.g., 'bright, slightly hazy afternoon sunlight filtering through the cafe window, creating soft highlights on her face and the table'], creating a cohesive and natural ambiance. Dynamic composition, high-quality realistic photograph, fashion focus, with a \'found photo\' feel."
-
-    // Note: The example output above still uses the variable ${finalGaze}, which is now hardcoded to 'looking directly at the camera lens'.
+    Example of a Desired Output Structure (This is to guide YOUR structure, the AI generating the prompt. Content will vary based on inputs):
+    "Photorealistic close-up selfie, modern smartphone photo emulation: A [age, ${subjectTerm}, ethnicity, attractive face with ${featureEmphasisString}, realistic skin with natural imperfections & pores, ${subjectTerm === 'man' ? 'no makeup' : 'natural everyday makeup'}, ${hairDetails}] with a [body description from ${bodyShapePromptSegment}], striking a natural, unforced pose. The framing is [e.g., 'slightly off-center, chest-up, with a subtle handheld tilt, from a slightly low camera angle typical of a relaxed car selfie' or 'eye-level, waist-up, with imperfect but intentional framing']. Gaze is ${finalGaze} with a ${finalExpression}. They are wearing a trendy [detailed clothing description: ${finalClothing}] appropriate for the setting and gender. The background is exactly [extremely detailed setting description based on ${finalSetting} and ${backgroundInstructions}, e.g., 'sun-dappled green foliage filling the frame, every leaf in sharp focus showing distinct texture and highlights from filtered sunlight'], rendered in crisp focus throughout, showing authentic, lived-in details. The scene is illuminated by [highly specific and dynamic lighting description, e.g., 'bright, natural sunlight filtering through leaves, casting sharp, irregular dappled shadow patterns across her face, hair, and parts of the background, creating strong contrasts and highlights']. The image exhibits soft lens characteristics of a smartphone: slight chromatic aberration on high-contrast background edges, a warm color balance, natural contrast roll-off. Subtle digital textures like minor compression artifacts and very faint sensor noise are present in shadows. Overall style: ${finalStyle}, spontaneous real-life selfie look."
 
     Generate the prompt now based on the provided details.
 `;
 
-    logger.info("Generating detailed prompt for influencer style with GPT-4o:", instructionPrompt);
+    logger.info("Generating detailed prompt for influencer style with GPT-4o (V2 - Enhanced Selfie Realism):", instructionPrompt); // Added V2 to log
 
     try {
         const completion = await openaiInstance.chat.completions.create({
@@ -3688,3 +3735,270 @@ exports.manuallyStandardizeProductVideo = onCall({
 });
 // --- END NEW Cloud Function ---
 
+// --- NEW: TikTok OAuth Integration Functions ---
+
+// NEW: Function to generate the TikTok OAuth Authorization URL
+exports.getTikTokAuthUrl = onCall({ region: 'us-central1' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("getTikTokAuthUrl: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    if (!request.data) {
+        logger.error("getTikTokAuthUrl: request.data is null or undefined. Client must send 'redirectUri' and 'state'.");
+        throw new HttpsError('invalid-argument', 'Request data is missing. Please ensure "redirectUri" and "state" are provided in the call.');
+    }
+
+    const { redirectUri, state } = request.data;
+
+    if (!redirectUri) {
+        throw new HttpsError('invalid-argument', 'Missing "redirectUri" in the request. This must match your TikTok app configuration.');
+    }
+    if (!state) {
+        throw new HttpsError('invalid-argument', 'Missing "state" parameter for security.');
+    }
+
+    const tiktokClientKey = process.env.TIKTOK_CLIENT_KEY;
+    if (!tiktokClientKey) {
+        logger.error("TikTok API client key not configured (TIKTOK_CLIENT_KEY).");
+        throw new HttpsError('internal', 'TikTok API integration is not configured correctly on the server.');
+    }
+
+    // --- PKCE Support ---
+    // const crypto = require('crypto');
+    // Generate a random code verifier (at least 43 characters, max 128)
+    // const codeVerifier = crypto.randomBytes(32).toString('hex'); // Generates a 64-char hex string
+    // Create code challenge using SHA256 then hex encode (as per TikTok docs provided)
+    // const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('hex');
+    // const codeChallengeMethod = 'S256';
+    // --- End PKCE Support ---
+
+    const TIKTOK_AUTH_BASE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
+    
+    const scopes = [
+        'user.info.basic',
+        'user.info.profile', // ADDED
+        'user.info.stats',   // ADDED
+        'video.list',
+        'video.publish',
+        'video.upload'
+                 // ADDED
+        // Add other scopes like 'video.publish', 'video.upload' if needed in the future
+        // Ensure they are enabled in your TikTok App settings.
+    ];
+
+    const params = new URLSearchParams({
+        client_key: tiktokClientKey,
+        scope: scopes.join(','),
+        response_type: 'code',
+        redirect_uri: redirectUri,
+        state: state,
+        // code_challenge: codeChallenge, // PKCE REMOVED
+        // code_challenge_method: codeChallengeMethod // PKCE REMOVED
+    });
+
+    const authorizationUrl = `${TIKTOK_AUTH_BASE_URL}?${params.toString()}`;
+
+    logger.info(`Generated TikTok Auth URL for user ${userId}. State: ${state}`);
+    // Return only the URL and state, codeVerifier is no longer needed for Web flow
+    return { authorizationUrl, state }; // REMOVED codeVerifier
+});
+
+async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, not exported
+    const TIKTOK_USER_INFO_ENDPOINT = 'https://open.tiktokapis.com/v2/user/info/';
+    const requestedFields = ["open_id", "union_id", "avatar_url", "display_name", "is_verified", "follower_count", "following_count", "likes_count", "video_count"];
+
+    try {
+        logger.info(`Fetching TikTok user info for open_id: ${openId} with fields: ${requestedFields.join(',')}`);
+        const response = await axios.post(TIKTOK_USER_INFO_ENDPOINT,
+            { fields: requestedFields }, 
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json', 
+                }
+            }
+        );
+
+        const userDataContainer = response.data; 
+
+        if (userDataContainer.error && userDataContainer.error.code !== "ok") { // TikTok uses "ok" for success code in user info
+            logger.error(`Error fetching TikTok user info. Code: ${userDataContainer.error.code}, Msg: ${userDataContainer.error.message}`, userDataContainer.error);
+            throw new Error(`TikTok API error fetching user info: ${userDataContainer.error.message} (Code: ${userDataContainer.error.code})`);
+        }
+
+        if (!userDataContainer.data || !userDataContainer.data.user) {
+            logger.error('TikTok user info response missing data.user field.', userDataContainer);
+            throw new Error('Received incomplete user info data from TikTok.');
+        }
+
+        logger.info('Successfully fetched TikTok user info:', userDataContainer.data.user);
+        return userDataContainer.data.user;
+
+    } catch (error) {
+        logger.error(`Error in fetchTikTokUserInfo for open_id ${openId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+        if (axios.isAxiosError(error) && error.response && error.response.data) {
+            const tiktokErrorContainer = error.response.data;
+            const tiktokError = tiktokErrorContainer.error || tiktokErrorContainer;
+            let errMsg = tiktokError.message || tiktokError.description || tiktokError.error_description || JSON.stringify(tiktokError);
+            if (tiktokError.code || tiktokError.error_code) errMsg = `(Code: ${tiktokError.code || tiktokError.error_code}) ${errMsg}`;
+            throw new Error(`TikTok API error (user info): ${errMsg}`);
+        }
+        throw error;
+    }
+}
+
+exports.exchangeTikTokAuthCode = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("exchangeTikTokAuthCode: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    // --- MODIFIED: codeVerifier NO LONGER EXPECTED from client ---
+    const { authorizationCode, redirectUri, state: returnedState /*, codeVerifier */ } = request.data; 
+    // logger.info(`[TikTok Token Exchange] Received state: ${returnedState}, Code Verifier (first 10 chars): ${codeVerifier ? codeVerifier.substring(0,10) : 'MISSING'}...`);
+    logger.info(`[TikTok Token Exchange] Received state: ${returnedState} for web flow.`);
+
+
+    if (!authorizationCode) {
+        throw new HttpsError('invalid-argument', 'Missing "authorizationCode" in the request.');
+    }
+    if (!redirectUri) {
+        throw new HttpsError('invalid-argument', 'Missing "redirectUri" in the request. This must match the URI registered in your TikTok app settings.');
+    }
+    // --- REMOVED: Check for codeVerifier ---
+    // if (!codeVerifier) {
+    //     logger.error("[TikTok Token Exchange] codeVerifier is missing from the client request.");
+    //     throw new HttpsError('invalid-argument', 'Missing "codeVerifier" in the request. This is required for PKCE.');
+    // }
+    // --- END REMOVED ---
+
+    const tiktokClientKey = process.env.TIKTOK_CLIENT_KEY;
+    const tiktokClientSecret = process.env.TIKTOK_CLIENT_SECRET;
+
+    if (!tiktokClientKey || !tiktokClientSecret) {
+        logger.error("TikTok API client key or secret not configured (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET).");
+        throw new HttpsError('internal', 'TikTok API integration is not configured correctly on the server. Please contact support.');
+    }
+
+    const TIKTOK_TOKEN_ENDPOINT = 'https://open.tiktokapis.com/v2/oauth/token/';
+
+    try {
+        logger.info(`User ${userId} attempting to exchange TikTok authorization code: ${authorizationCode.substring(0,10)}... with redirect URI: ${redirectUri}`);
+        
+        const params = new URLSearchParams({
+            client_key: tiktokClientKey,
+            client_secret: tiktokClientSecret,
+            code: authorizationCode,
+            grant_type: 'authorization_code',
+            redirect_uri: redirectUri,
+            // code_verifier: codeVerifier // --- REMOVED: code_verifier no longer sent for Web flow ---
+        });
+
+        const tokenResponse = await axios.post(TIKTOK_TOKEN_ENDPOINT, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        });
+
+        const tokenData = tokenResponse.data;
+
+        if (tokenData.error && tokenData.error !== "ok") { // Check for error field and non-"ok" value for token endpoint
+            logger.error(`TikTok token exchange failed. Error: ${tokenData.error}, Desc: ${tokenData.error_description || tokenData.log_id}`, tokenData);
+            throw new HttpsError('internal', `Failed to exchange TikTok code: ${tokenData.error_description || tokenData.error || 'TikTok API error'}`);
+        }
+        if (tokenData.error_code && tokenData.error_code !== 0 ) { // Legacy check, though newer API might use error field primarily
+            logger.error(`TikTok token exchange failed directly from API. Code: ${tokenData.error_code}, Desc: ${tokenData.description || tokenData.error_description}`, tokenData);
+            throw new HttpsError('internal', `Failed to exchange TikTok code: ${tokenData.description || tokenData.error_description || 'TikTok API error'}`);
+        }
+        if (!tokenData.access_token || !tokenData.open_id) { 
+             logger.error(`TikTok token exchange response missing critical data (access_token or open_id).`, tokenData);
+             throw new HttpsError('internal', 'Received incomplete token data from TikTok.');
+        }
+        logger.info(`TikTok token exchange successful for user ${userId}. Open ID: ${tokenData.open_id}, Access Token: ${tokenData.access_token.substring(0,10)}...`);
+
+        let tiktokUserInfo = null;
+        let userDisplayName = null;
+        let userAvatarUrl = null;
+        try {
+            if (tokenData.scope && tokenData.scope.includes('user.info.basic')) {
+                const userInfo = await fetchTikTokUserInfo(tokenData.access_token, tokenData.open_id);
+                if (userInfo) {
+                    tiktokUserInfo = userInfo;
+                    userDisplayName = userInfo.display_name;
+                    userAvatarUrl = userInfo.avatar_url;
+                    logger.info(`Fetched TikTok user info for ${userId}: DisplayName - ${userDisplayName}`);
+                }
+            } else {
+                logger.info(`Skipping TikTok user info fetch for user ${userId} as 'user.info.basic' scope might be missing. Scopes: ${tokenData.scope}`);
+            }
+        } catch (userInfoError) {
+            logger.warn(`Could not fetch TikTok user info for user ${userId} after token exchange: ${userInfoError.message}. Proceeding without it.`);
+        }
+
+        // Store under a more generic name, as it's one integration per user for TikTok for now.
+        const userTiktokRef = db.collection('users').doc(userId).collection('integrations').doc('tiktok');
+
+        const dataToStore = {
+            openId: tokenData.open_id,
+            accessToken: tokenData.access_token,
+            refreshToken: tokenData.refresh_token,
+            scope: tokenData.scope,
+            // TikTok V2 provides expires_in in seconds
+            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (tokenData.expires_in * 1000)), 
+            // TikTok V2 provides refresh_expires_in in seconds
+            refreshExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (tokenData.refresh_expires_in * 1000)),
+            tokenType: tokenData.token_type,
+            retrievedAt: admin.firestore.FieldValue.serverTimestamp(), // Renamed from lastUpdated for clarity
+            provider: 'tiktok', // Added a provider field
+            ...(userDisplayName && { displayName: userDisplayName }),
+            ...(userAvatarUrl && { avatarUrl: userAvatarUrl }),
+            ...(tiktokUserInfo && { rawUserProfile: tiktokUserInfo }) // Storing the full raw profile
+        };
+
+        // Update the main user document with summary info if useful
+        const userDocRef = db.collection('users').doc(userId);
+        const userUpdateData = {
+            tiktokIntegration: {
+                openId: tokenData.open_id,
+                displayName: userDisplayName,
+                avatarUrl: userAvatarUrl,
+                connectedAt: admin.firestore.FieldValue.serverTimestamp()
+            }
+        };
+
+        const batch = db.batch();
+        batch.set(userTiktokRef, dataToStore, { merge: true });
+        batch.set(userDocRef, userUpdateData, { merge: true });
+        await batch.commit();
+
+        logger.info(`Successfully stored TikTok tokens and info for user ${userId}, open_id: ${tokenData.open_id}. Updated user doc summary.`);
+
+        return {
+            success: true,
+            message: "TikTok account linked successfully.",
+            data: { 
+                openId: tokenData.open_id,
+                scope: tokenData.scope,
+                displayName: userDisplayName,
+                avatarUrl: userAvatarUrl
+            }
+        };
+
+    } catch (error) {
+        logger.error(`Error during TikTok auth code exchange process for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+        if (axios.isAxiosError(error) && error.response && error.response.data) {
+            const tiktokError = error.response.data;
+            let errMsg = tiktokError.description || tiktokError.error_description || tiktokError.message || JSON.stringify(tiktokError);
+            if (tiktokError.error_code) errMsg = `(Code: ${tiktokError.error_code}) ${errMsg}`;
+            throw new HttpsError('internal', `TikTok API error: ${errMsg}`);
+        }
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', `An unexpected error occurred during TikTok linking: ${error.message}`);
+    }
+});
+// --- END TikTok OAuth Integration Functions ---

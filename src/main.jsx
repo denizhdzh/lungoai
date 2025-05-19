@@ -16,6 +16,7 @@ import PricingSection from './components/PricingSection.jsx';
 import Generation from './pages/Generation.jsx';
 import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
 
 // --- IMMEDIATE THEME CHECK (Before React Renders) ---
 if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -151,6 +152,9 @@ function AppRouter() {
           )
         }
       />
+
+      {/* --- NEW TIKTOK CALLBACK ROUTE --- */}
+      <Route path="/auth/tiktok/callback" element={<TikTokAuthCallback />} />
 
       {/* Protected Routes using Layout (Pass userData now) */}
       <Route 

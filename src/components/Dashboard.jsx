@@ -664,7 +664,7 @@ function GenerationCard({ generation, onOpenDeleteModal, isDarkMode, onScheduleS
 
   return (
     <div 
-      className="relative rounded-xl overflow-hidden border border-gray-100 dark:border-zinc-800 group shadow-sm hover:shadow-md transition-all duration-300 bg-gray-50 dark:bg-zinc-800"
+      className="relative rounded-sm overflow-hidden border border-gray-100 dark:border-zinc-800 group shadow-sm hover:shadow-md transition-all duration-300 bg-gray-50 dark:bg-zinc-800"
       style={{ paddingTop: '177.77%' }} // 9:16 aspect ratio
     >
       {/* Background Image Area */} 
@@ -1229,6 +1229,10 @@ function Dashboard() {
   // Remove isChatInputVisible state
   // Remove navigate hook
 
+  // --- NEW: State for active tab ---
+  const [activeTab, setActiveTab] = useState('tiktok_content'); // 'tiktok_content' or 'images'
+  // --- END NEW ---
+
   // State for credits - Threshold will be fetched from Firebase
   const [imageCredits, setImageCredits] = useState({ used: 0, total: defaultCreditValues.images }); 
   const [videoCredits, setVideoCredits] = useState({ used: 0, total: defaultCreditValues.videos }); 
@@ -1321,6 +1325,18 @@ function Dashboard() {
     // setSuccessModalMessage(''); // Clear message when explicitly closed or on timeout
   };
   // --- END NEW: Success Modal Handlers ---
+
+  // --- Filtered Generations based on activeTab ---
+  const filteredGenerations = generations.filter(gen => {
+    if (activeTab === 'tiktok_content') {
+      return gen.type === 'video' || gen.type === 'slideshow';
+    }
+    if (activeTab === 'images') {
+      return gen.type === 'image';
+    }
+    return true; // Should not happen if activeTab is one of the two
+  });
+  // --- END Filtered Generations ---
 
   // --- Fetch Generations, Credit Thresholds, and Subscription Data --- 
   useEffect(() => {
@@ -1985,10 +2001,36 @@ function Dashboard() {
       {/* Recent generations (Keep as is) */}
           <section className="mb-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-medium text-black dark:text-zinc-100">Recent Generations</h2>
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Recent Generations</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Overview of your latest creations.</p>
+              </div>
+              {/* --- NEW: Tab Buttons --- */}
+              <div className="flex space-x-1 bg-gray-200 dark:bg-zinc-700 p-1 rounded-lg">
+                <button
+                  onClick={() => setActiveTab('tiktok_content')}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors
+                              ${activeTab === 'tiktok_content'
+                                ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow'
+                                : 'text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-600'}`}
+                >
+                  TikTok Contents
+                </button>
+                <button
+                  onClick={() => setActiveTab('images')}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors
+                              ${activeTab === 'images'
+                                ? 'bg-white dark:bg-zinc-900 text-black dark:text-white shadow'
+                                : 'text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-600'}`}
+                >
+                  Images
+                </button>
+              </div>
+              {/* --- END NEW: Tab Buttons --- */}
             </div>
-            
-            {isLoadingGenerations && generations.length === 0 && !generatingItem ? (
+
+            {/* Generation Feed / Cards */}
+            {isLoadingGenerations && generations.length === 0 ? (
               <div className="w-full h-48 rounded-xl border border-gray-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm flex items-center justify-center">
                 <div className="animate-pulse flex space-x-4">
                   <div className="flex-1 space-y-4 py-1">
@@ -2006,13 +2048,13 @@ function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-0.5">
                   {/* Loading Card for item being generated - UPDATED CONDITION */}
                   {isGenerationActive(generatingItem) && (
                       <LoadingGenerationCard itemType={generatingItem.type} />
                   )}
                   {/* MODIFIED: Render existing generations using the new component */}
-                  {generations.map((gen) => (
+                  {filteredGenerations.map((gen) => (
                     <GenerationCard 
                       key={gen.id} 
                       generation={gen} 
@@ -2126,6 +2168,24 @@ function Dashboard() {
         </div>
       )}
       {/* --- END NEW: Success Notification Modal --- */}
+
+      {/* No Generations Message */}
+      {!isLoadingGenerations && filteredGenerations.length === 0 && !generatingItem && (
+        <div className="text-center py-12">
+          <img src={isDarkMode ? "/assets/images/empty-generations-dark.png" : "/assets/images/empty-generations-light.png"} alt="No Generations" className="mx-auto mb-6 h-40" />
+          <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            {activeTab === 'tiktok_content' ? 'No TikTok Content Yet' : 'No Images Yet'}
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {activeTab === 'tiktok_content'
+              ? "Looks like you haven't created any TikTok videos or slideshows."
+              : "Looks like you haven't generated any images."}
+            <br />
+            Use the generator to create something amazing!
+          </p>
+        </div>
+      )}
+      {/* --- END No Generations Message --- */}
 
     </div>
   );

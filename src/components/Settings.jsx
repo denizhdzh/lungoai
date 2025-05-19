@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db, storage } from '../firebase';
-import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy } from "@firebase/firestore";
+import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy, onSnapshot } from "@firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage";
 import { updateProfile, signOut, deleteUser } from "firebase/auth";
 import { useNavigate, useOutletContext } from 'react-router-dom'; // Import useNavigate & useOutletContext
@@ -14,6 +14,7 @@ const functions = getFunctions();
 const createStripePortalSession = httpsCallable(functions, 'createStripePortalSession');
 const generateImageDescription = httpsCallable(functions, 'generateImageDescription'); // <-- Add reference
 const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo'); // <-- ADD THIS
+const getTikTokAuthUrl = httpsCallable(functions, 'getTikTokAuthUrl'); // <-- ADD THIS FOR TIKTOK
 
 // --- NEW: Fixed Descriptions for Library Images ---
 const libraryImageDescriptions = {
@@ -70,7 +71,7 @@ function Settings() {
   
   // TikTok accounts state
   const [tiktokAccounts, setTiktokAccounts] = useState([]);
-  const [newTiktokAccount, setNewTiktokAccount] = useState({ username: '', followers: '', niche: '' });
+  const [isLoadingTikTok, setIsLoadingTikTok] = useState(false); // NEW For loading TikTok operations
   
   // UGC Creators state
   const [creators, setCreators] = useState([]);
@@ -163,57 +164,34 @@ function Settings() {
     });
   };
 
-  // Fetch user data from Firestore (firstName, lastName, photoURL)
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user) {
-        // Clear fields if no user
-        setFirstName('');
-        setLastName('');
-        setPhotoURL('');
-        setPreviewURL(null); // Also clear preview URL if user logs out
-        return;
-      }
+  // --- NEW: Generic Firestore Data Fetcher ---
+  const fetchUserData = async (collectionName, setData, orderByField = null, orderByDirection = 'desc') => {
+    if (!user) {
+      setData([]); // Clear data if no user
+      return () => {}; // Return a no-op unsubscribe function
+    }
+    
+    console.log(`[fetchUserData] Fetching ${collectionName} for user ${user.uid}`); // Added logger
+    let q = query(collection(db, 'users', user.uid, collectionName));
+    if (orderByField) {
+      q = query(q, orderBy(orderByField, orderByDirection));
+    }
 
-      // Optimistically set name from auth, and photo to placeholder
-      if (user.displayName) {
-        const nameParts = user.displayName.trim().split(' ');
-        setFirstName(nameParts[0] || '');
-        setLastName(nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
-      } else {
-        setFirstName('');
-        setLastName('');
-      }
-      setPhotoURL(''); // Default to empty, ensuring placeholder is initially considered
-      setPreviewURL(null); // Ensure no lingering preview from a previous state
-
-      try {
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          // Override with Firestore data if available for name
-          setFirstName(userData.firstName || firstName); // Keep optimistic if Firestore is empty
-          setLastName(userData.lastName || lastName);   // Keep optimistic if Firestore is empty
-          // CRITICAL: Use Firestore's photoURL directly. If it's null/undefined, photoURL state becomes that, which evaluates to falsy.
-          // If userData.photoURL is an empty string, it also becomes falsy.
-          // This means if Firestore has no valid photoURL, we rely on the || '' in setPhotoURL or the final || '/pp-placeholder.jpeg'
-          setPhotoURL(userData.photoURL || ''); // If Firestore has a URL, use it; otherwise, empty string.
-        } else {
-          // User document doesn't exist in Firestore. Name is already set from auth (if available).
-          // photoURL remains '', so placeholder is shown.
-          console.log('User document does not exist in Firestore. Using auth name (if any), placeholder for photo.');
-        }
-      } catch (error) {
-        console.error("Error fetching user data from Firestore:", error);
-        // In case of error, name from auth (if any) is kept.
-        // photoURL remains '', so placeholder is shown.
-      }
-    };
-
-    fetchUserData();
-  }, [user]); // Removed firstName, lastName from deps to avoid loops with optimistic set
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const items = [];
+      querySnapshot.forEach((doc) => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      setData(items);
+      console.log(`[fetchUserData] Fetched ${items.length} items for ${collectionName}`); // Added logger
+    }, (error) => {
+      console.error(`Error fetching ${collectionName} data: `, error);
+      showCustomToast(`Error fetching ${collectionName}: ${error.message}`, 'error');
+      setData([]); // Clear data on error
+    });
+    return unsubscribe; // Return the unsubscribe function for cleanup
+  };
+  // --- END NEW: Generic Firestore Data Fetcher ---
 
   // --- NEW: Define Fetch User Subscription Data Function --- 
   const fetchSubscriptionData = async () => {
@@ -252,59 +230,93 @@ function Settings() {
 
   // Fetch data based on active tab
   useEffect(() => {
-    if (!user) return;
-    
-    const fetchUserData = async (collectionName, setter) => {
-      const q = query(collection(db, 'users', user.uid, collectionName));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setter(data);
-      // Specifically for backgrounds, store the URLs for quick lookup
-      if (collectionName === 'backgrounds') {
-          setUserBackgroundUrls(new Set(data.map(bg => bg.imageUrl)));
-      }
-      return data; // Return data for background check
-    };
-
     const fetchData = async () => {
       setIsLoading(true);
       // Reset library state when tab changes
       setShowLibrary(false);
       setLibraryImages([]);
       setSelectedLibraryImages([]);
+      // NEW: Reset TikTok form when tab changes or data is fetched
+      // setShowAddTiktokAccountForm(false); // REMOVED
+      // setNewTiktokAccount({ username: '' }); // REMOVED
       try {
-        switch(activeTab) {
-          // No data fetch needed for 'user' or 'plan' tabs yet
-          case 'products': await fetchUserData('products', setProducts); break;
-          case 'tiktok': await fetchUserData('tiktokAccounts', setTiktokAccounts); break;
-          case 'creators': await fetchUserData('creators', setCreators); break;
-          case 'backgrounds': 
-              await fetchUserData('backgrounds', setBackgrounds); 
-              // Don't auto-fetch library here, fetch on demand
-              break;
-          // case 'requests': await fetchUserData('requests', setRequests); break; // Replaced by featureRequests
-          case 'featureRequests': await fetchFeatureRequests(); break; // Fetch features when tab is active
+        if (user) {
+          if (activeTab === 'products') {
+            await fetchUserData('products', setProducts, "createdAt", "desc");
+          } else if (activeTab === 'tiktok') {
+            // TikTok uses its own listener setup in another useEffect
+            // await fetchTikTokAccounts(); // This is handled by its own useEffect
+          } else if (activeTab === 'creators') {
+            await fetchUserData('creators', setCreators, "createdAt", "desc");
+          } else if (activeTab === 'backgrounds') {
+            await fetchUserData('backgrounds', (data) => {
+              setBackgrounds(data);
+              setUserBackgroundUrls(new Set(data.map(bg => bg.imageUrl)));
+            }, "createdAt", "desc");
+          } else if (activeTab === 'featureRequests') {
+            // No initial fetch needed here as it's handled by fetchFeatureRequests
+          } else if (activeTab === 'plan') {
+            await fetchSubscriptionData(); // Fetch subscription data when plan tab is active
+          }
+          // User tab data is fetched in its own useEffect
         }
       } catch (error) {
-        console.error(`Error fetching ${activeTab} data:`, error);
+        console.error("Error fetching data:", error);
+        showCustomToast(`Error fetching ${activeTab} data: ${error.message}`, "error");
       } finally {
         setIsLoading(false);
       }
     };
     
-    // Modified fetch logic
-    if (activeTab === 'plan') {
-       // Fetch subscription data when plan tab is active (or maybe always on mount?)
-       fetchSubscriptionData(); 
-       setIsLoading(false); // No other data needed for this tab yet
-    } else if (activeTab !== 'user') { // Avoid refetching for user tab
-        fetchData(); // Fetch data for other tabs (products, creators, etc.)
-    } else {
-        // If it's the user tab, ensure loading is false and clear subscription state if needed
-        setIsLoading(false); 
-        // Decide if you want to keep subscription data loaded even on user tab, or clear it:
-        // setUserSubscription(null);
+    fetchData();
+  }, [activeTab, user]); // Removed fetchUserData from dependencies as it's stable
+
+  // --- NEW: Fetch TikTok Accounts ---
+  const fetchTikTokAccounts = async () => {
+    if (!user) {
+      setTiktokAccounts([]);
+      return;
     }
+    setIsLoadingTikTok(true);
+    try {
+      const q = query(collection(db, 'users', user.uid, 'tiktokAccounts'), orderBy("retrieved_at", "desc"));
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const accounts = [];
+        querySnapshot.forEach((doc) => {
+          accounts.push({ id: doc.id, ...doc.data() });
+        });
+        setTiktokAccounts(accounts);
+        setIsLoadingTikTok(false);
+      }, (error) => {
+        console.error("Error fetching TikTok accounts: ", error);
+        showCustomToast("Error fetching TikTok accounts.", "error");
+        setTiktokAccounts([]);
+        setIsLoadingTikTok(false);
+      });
+      return unsubscribe; // Return the unsubscribe function to be called on cleanup
+    } catch (error) {
+      console.error("Error setting up TikTok accounts listener: ", error);
+      showCustomToast("Error setting up TikTok accounts listener.", "error");
+      setTiktokAccounts([]);
+      setIsLoadingTikTok(false);
+    }
+  };
+  
+  // Effect for fetching TikTok accounts when the tab is active or user changes
+  // This ensures the listener is active when needed and cleaned up otherwise
+  useEffect(() => {
+    let unsubscribe = () => {};
+    if (user && activeTab === 'tiktok') {
+      const setupListener = async () => {
+        unsubscribe = await fetchTikTokAccounts();
+      };
+      setupListener();
+    }
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [user, activeTab]);
 
   // Fetch Feature Requests and User Votes
@@ -701,24 +713,24 @@ function Settings() {
           });
         }
       }
-
+      
       const productData = {
         id: newProductId, // Store the auto-generated ID
         name: name,
         description: description,
-        logoUrl: logoUrl,
-        mediaUrl: mediaUrl,
+        logoUrl: logoUrl, 
+        mediaUrl: mediaUrl, 
         mediaType: mediaType,
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp(), 
         userId: user.uid,
         isVideoStandardized: false, // Initially false
         standardizedVideoUrl: null, // Initially null
         ...(mediaType === 'video' && standardizationError && { standardizationError: standardizationError }), // Add error if present
         ...(mediaType === 'video' && !standardizationError && { standardizationAttemptTimestamp: serverTimestamp() }) // Add attempt timestamp if no immediate call error
       };
-
+      
       console.log("[handleAddProductLogic] Product data to be saved:", JSON.stringify(productData, null, 2));
-
+      
       await setDoc(doc(db, 'users', user.uid, 'products', newProductId), productData);
       
       setProducts(prev => [{ ...productData, createdAt: new Date() }, ...prev].sort((a, b) => b.createdAt - a.createdAt));
@@ -754,8 +766,8 @@ function Settings() {
 
     const productRef = doc(db, 'users', user.uid, 'products', editingProduct.id);
     const updatedData = {
-      name: name,
-      description: description,
+        name: name,
+        description: description,
       updatedAt: serverTimestamp()
     };
 
@@ -769,10 +781,10 @@ function Settings() {
       if (productLogoFileForForm) {
         // If there was an old logo, delete it
         if (editingProduct.logoUrl) {
-          try {
-            const oldLogoRef = ref(storage, editingProduct.logoUrl);
-            await deleteObject(oldLogoRef);
-          } catch (deleteError) {
+        try {
+          const oldLogoRef = ref(storage, editingProduct.logoUrl);
+          await deleteObject(oldLogoRef);
+        } catch (deleteError) {
             console.warn("Old logo deletion failed (might not exist or protected):", deleteError);
           }
         }
@@ -785,10 +797,10 @@ function Settings() {
       if (productMediaFileForForm) {
         // If there was old media, delete it
         if (editingProduct.mediaUrl) {
-          try {
-            const oldMediaRef = ref(storage, editingProduct.mediaUrl);
-            await deleteObject(oldMediaRef);
-          } catch (deleteError) {
+        try {
+          const oldMediaRef = ref(storage, editingProduct.mediaUrl);
+          await deleteObject(oldMediaRef);
+        } catch (deleteError) {
             console.warn("Old media deletion failed (might not exist or protected):", deleteError);
           }
           // If the old media was a standardized video, attempt to delete that too
@@ -1501,58 +1513,86 @@ function Settings() {
   );
 
   const renderTikTokTab = () => (
-    <div className="w-full opacity-50 pointer-events-none"> {/* Add container, dim, and disable interactions */}
-      <div className="px-6 lg:px-0 space-y-6"> {/* Add padding and spacing */}
-        {/* Header consistent with User tab */}
-         <div className="text-left"> 
-            <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
-                TikTok Accounts
-              </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
-                Connect and manage your TikTok accounts (Coming Soon)
-              </span>
-            </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl mb-8">
-              Link your TikTok profiles to enable direct posting and analytics features in the future.
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">TikTok Accounts</h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Connect your TikTok accounts to enable direct posting and other features.
             </p>
         </div>
 
-      {/* Action Button - Moved below header */}
-      <div className="flex justify-end border-b border-gray-100 dark:border-zinc-800 pb-4">
-        {/* Ensured this button clearly looks disabled */}
+      <div className="mt-6">
         <button 
-          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 rounded-lg cursor-not-allowed" 
-          disabled
+          onClick={handleConnectTikTokAccount}
+          disabled={isLoadingTikTok}
+          className="inline-flex items-center justify-center rounded-md border border-transparent bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-800"
         >
-          <Plus size={16} />
-          Add Account (Soon)
+          {isLoadingTikTok && activeTab === 'tiktok' ? (
+            <CircleNotch size={20} className="animate-spin mr-2" />
+          ) : (
+            <TiktokLogo size={20} className="mr-2" />
+          )}
+          Connect New TikTok Account
         </button>
       </div>
       
-      {isLoading && activeTab === 'tiktok' ? ( 
-        <div className="flex justify-center py-8 text-gray-500 dark:text-zinc-400">
-           <div className="flex items-center gap-2">
-             <CircleNotch size={18} className="animate-spin"/> Loading TikTok Accounts...
+      {isLoadingTikTok && tiktokAccounts.length === 0 && (
+        <div className="flex justify-center items-center py-10">
+          <CircleNotch size={32} className="animate-spin text-sky-500" />
+          <p className="ml-3 text-gray-600 dark:text-gray-400">Loading connected accounts...</p>
           </div>
-        </div>
-      ) : (
-        <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg">
-          <TiktokLogo size={40} className="text-gray-400 dark:text-zinc-600 mb-4" />
-          <p className="text-gray-500 dark:text-zinc-400 mb-4">No TikTok accounts added yet</p>
-          {/* Ensured this button also clearly looks disabled */}
-          <button 
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 rounded-lg cursor-not-allowed" 
-            disabled
-          >
-            <Plus size={16} />
-            Add Your First Account (Soon)
-          </button>
-           <p className="text-xs text-gray-400 dark:text-zinc-500 mt-3">(Feature coming soon)</p>
+      )}
+
+      {!isLoadingTikTok && tiktokAccounts.length === 0 && (
+        <div className="mt-6 text-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-8">
+          <TiktokLogo size={48} className="mx-auto text-gray-400 dark:text-gray-500" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No TikTok Accounts Connected</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Click the button above to connect your first TikTok account.</p>
         </div>
       )}
-      </div> {/* Close padding container */}
+
+      {tiktokAccounts.length > 0 && (
+        <div className="mt-6 flow-root">
+          <ul role="list" className="-my-5 divide-y divide-gray-200 dark:divide-gray-700">
+            {tiktokAccounts.map((account) => (
+              <li key={account.id} className="py-5">
+                <div className="flex items-center space-x-4">
+                  <div className="flex-shrink-0">
+                    {account.user_info?.avatar_url ? (
+                      <img className="h-10 w-10 rounded-full" src={account.user_info.avatar_url} alt={account.user_info.display_name || 'TikTok Avatar'} />
+                    ) : (
+                      <UserCircle size={40} className="text-gray-400 dark:text-gray-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate dark:text-gray-100">
+                      {account.user_info?.display_name || account.id}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate dark:text-gray-400">
+                      Open ID: {account.open_id}
+                    </p>
+                     {account.expires_at && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          Access valid until: {new Date(account.expires_at.seconds * 1000).toLocaleDateString()}
+                        </p>
+                      )}
+                  </div>
+                  <div>
+          <button 
+                      onClick={() => handleDeleteTiktokAccount(account.id, account.user_info?.display_name)}
+                      disabled={isLoadingTikTok}
+                      className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-500 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-800"
+          >
+                      <Trash size={16} className="mr-1.5" />
+                      Disconnect
+          </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 
@@ -2381,6 +2421,76 @@ function Settings() {
     toastTimeoutRef.current = setTimeout(() => {
       setShowToast(false);
     }, 3000);
+  };
+
+  // --- Handle Add TikTok Account --- // REWRITTEN FOR OAUTH
+  const handleConnectTikTokAccount = async () => {
+    if (!user) {
+      showCustomToast("You must be logged in to connect a TikTok account.", "error");
+      return;
+    }
+    setIsLoadingTikTok(true);
+    try {
+      const clientState = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      const redirectUri = "https://app.lungoai.com/auth/tiktok/callback"; 
+      
+      console.log(`[TikTok OAuth] Initiating with redirectUri: ${redirectUri}, state: ${clientState}`);
+
+      // Call the backend function to get the auth URL
+      // codeVerifier is no longer returned or used for Web OAuth flow
+      const result = await getTikTokAuthUrl({ redirectUri, state: clientState }); 
+      
+      // Destructure state from result.data (authorizationUrl and returnedState)
+      // codeVerifier is removed.
+      const { authorizationUrl, state: returnedState } = result.data; 
+
+      if (authorizationUrl && returnedState) { // Check for authorizationUrl and returnedState
+        // Store the state and code verifier (if any) in sessionStorage to verify on callback
+        localStorage.setItem('tiktok_oauth_state', returnedState); // CHANGED to localStorage
+        // sessionStorage.setItem('tiktok_code_verifier', codeVerifier); // No longer needed
+        
+        console.log(`[TikTok OAuth] Received auth URL: ${authorizationUrl}`);
+        console.log(`[TikTok OAuth] Stored state in localStorage: ${returnedState}`);
+        // console.log(`[TikTok OAuth] Stored codeVerifier (first 10): ${codeVerifier.substring(0,10)}...`); // No longer needed
+        
+        window.location.href = authorizationUrl; // Redirect user to TikTok
+      } else {
+        // Update error message to reflect missing authorizationUrl or state
+        throw new Error("Could not retrieve TikTok authorization URL or state from backend."); 
+      }
+    } catch (error) {
+      console.error("Error initiating TikTok OAuth:", error);
+      showCustomToast(`Error connecting TikTok: ${error.message || 'Unknown error'}`, "error");
+    } finally {
+      setIsLoadingTikTok(false);
+    }
+  };
+
+  // --- Handle Delete TikTok Account ---
+  const handleDeleteTiktokAccount = async (accountId, accountUsername) => {
+    if (!user || !accountId) {
+      showCustomToast("User or Account ID missing.", "error");
+      return;
+    }
+    // Using window.confirm for simplicity, replace with a custom modal if preferred
+    const confirmDelete = window.confirm(`Are you sure you want to disconnect the TikTok account: ${accountUsername || accountId}?`);
+    if (!confirmDelete) {
+      return;
+    }
+
+    setIsLoadingTikTok(true);
+    try {
+      const accountRef = doc(db, 'users', user.uid, 'tiktokAccounts', accountId);
+      await deleteDoc(accountRef);
+      showCustomToast(`TikTok account ${accountUsername || accountId} disconnected successfully.`, "success");
+      // setTiktokAccounts(prev => prev.filter(acc => acc.id !== accountId)); // State updates via listener
+    } catch (error) {
+      console.error("Error deleting TikTok account:", error);
+      showCustomToast(`Error disconnecting TikTok account: ${error.message}`, "error");
+    } finally {
+      setIsLoadingTikTok(false);
+    }
   };
 
   // Main component return - Notion-style with sidebar

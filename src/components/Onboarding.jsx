@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc } from "@firebase/firestore"; // Import Firestore functions
+import { updateProfile } from "firebase/auth"; // <-- ADD THIS IMPORT
 import { auth, db } from '../firebase'; // Import auth and db
 import PricingSection from './PricingSection'; // Import PricingSection
 
@@ -124,6 +125,19 @@ function Onboarding({ setOnboardingComplete }) {
       }, { merge: true }); // Use merge: true to avoid overwriting existing user data if any
 
       console.log('Onboarding data saved successfully with default photoURL!');
+      
+      // ALSO UPDATE THE AUTH USER PROFILE
+      if (auth.currentUser) { // Ensure user is still current
+        try {
+          await updateProfile(auth.currentUser, {
+            photoURL: defaultPhotoURL
+          });
+          console.log('Firebase Auth user profile photoURL updated successfully!');
+        } catch (authError) {
+          console.error("Error updating Firebase Auth user profile photoURL:", authError);
+          // Optionally, inform the user that their display picture might not update immediately
+        }
+      }
       
       // Call the function passed from AppRouter to update the local state/localStorage
       setOnboardingComplete(); 

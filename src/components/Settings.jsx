@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db, storage } from '../firebase';
-import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy, onSnapshot } from "@firebase/firestore";
+import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy, onSnapshot, where } from "@firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage";
 import { updateProfile, signOut, deleteUser } from "firebase/auth";
 import { useNavigate, useOutletContext } from 'react-router-dom'; // Import useNavigate & useOutletContext
@@ -15,6 +15,7 @@ const createStripePortalSession = httpsCallable(functions, 'createStripePortalSe
 const generateImageDescription = httpsCallable(functions, 'generateImageDescription'); // <-- Add reference
 const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo'); // <-- ADD THIS
 const getTikTokAuthUrl = httpsCallable(functions, 'getTikTokAuthUrl'); // <-- ADD THIS FOR TIKTOK
+const updateTikTokUserDetails = httpsCallable(functions, 'updateTikTokUserDetails'); // <<< ADD THIS LINE
 
 // --- NEW: Fixed Descriptions for Library Images ---
 const libraryImageDescriptions = {
@@ -70,6 +71,7 @@ function Settings() {
   const [currentMediaTypeInForm, setCurrentMediaTypeInForm] = useState('image'); // To render video or image for current media
   
   // TikTok accounts state
+  // const [tiktokAccounts, setTiktokAccounts] = useState([]); // OLD: Expecting an array
   const [tiktokAccounts, setTiktokAccounts] = useState([]);
   const [isLoadingTikTok, setIsLoadingTikTok] = useState(false); // NEW For loading TikTok operations
   
@@ -126,6 +128,10 @@ function Settings() {
   const [isFetchingSubscription, setIsFetchingSubscription] = useState(false);
   const [isPortalLoading, setIsPortalLoading] = useState(false); // Loading state for portal button
   const [portalError, setPortalError] = useState(null); // Error state for portal button
+
+  // --- NEW: Add state for showing confirmation modal for TikTok account deletion ---
+  const [showDeleteTikTokConfirmModal, setShowDeleteTikTokConfirmModal] = useState(false);
+  const [tikTokAccountToDelete, setTikTokAccountToDelete] = useState(null); // { id, name }
 
   // Tab configuration - Added Plan & Billing, updated icons
   const tabs = [
@@ -255,6 +261,7 @@ function Settings() {
             }, "createdAt", "desc");
           } else if (activeTab === 'featureRequests') {
             // No initial fetch needed here as it's handled by fetchFeatureRequests
+            await fetchFeatureRequests(); // Fetch features when tab is active
           } else if (activeTab === 'plan') {
             await fetchSubscriptionData(); // Fetch subscription data when plan tab is active
           }
@@ -272,52 +279,53 @@ function Settings() {
   }, [activeTab, user]); // Removed fetchUserData from dependencies as it's stable
 
   // --- NEW: Fetch TikTok Accounts ---
-  const fetchTikTokAccounts = async () => {
-    if (!user) {
+  useEffect(() => {
+    if (activeTab !== 'tiktok' || !user) {
+      // If the tab is not 'tiktok', or no user, ensure to clean up any previous listener
+      // and clear the accounts data.
+      if (typeof window.unsubscribeTikTok === 'function') {
+        window.unsubscribeTikTok();
+        window.unsubscribeTikTok = null; // Clear the global reference
+      }
       setTiktokAccounts([]);
       return;
     }
+
     setIsLoadingTikTok(true);
-    try {
-      const q = query(collection(db, 'users', user.uid, 'tiktokAccounts'), orderBy("retrieved_at", "desc"));
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const accounts = [];
-        querySnapshot.forEach((doc) => {
-          accounts.push({ id: doc.id, ...doc.data() });
-        });
-        setTiktokAccounts(accounts);
-        setIsLoadingTikTok(false);
-      }, (error) => {
-        console.error("Error fetching TikTok accounts: ", error);
-        showCustomToast("Error fetching TikTok accounts.", "error");
-        setTiktokAccounts([]);
-        setIsLoadingTikTok(false);
+    // Query for all TikTok integrations
+    const q = query(collection(db, 'users', user.uid, 'integrations'), where('type', '==', 'tiktok'));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const accounts = [];
+      querySnapshot.forEach((doc) => {
+        accounts.push({ id: doc.id, ...doc.data() });
       });
-      return unsubscribe; // Return the unsubscribe function to be called on cleanup
-    } catch (error) {
-      console.error("Error setting up TikTok accounts listener: ", error);
-      showCustomToast("Error setting up TikTok accounts listener.", "error");
+      setTiktokAccounts(accounts);
+      setIsLoadingTikTok(false);
+      if (accounts.length > 0) {
+        console.log("[Settings - TikTok] Fetched TikTok integrations:", accounts);
+      } else {
+        console.log("[Settings - TikTok] No TikTok integrations found for this user.");
+      }
+    }, (error) => {
+      console.error("[Settings - TikTok] Error fetching TikTok integrations: ", error);
+      showCustomToast("Error fetching TikTok accounts.", "error");
       setTiktokAccounts([]);
       setIsLoadingTikTok(false);
-    }
-  };
-  
-  // Effect for fetching TikTok accounts when the tab is active or user changes
-  // This ensures the listener is active when needed and cleaned up otherwise
-  useEffect(() => {
-    let unsubscribe = () => {};
-    if (user && activeTab === 'tiktok') {
-      const setupListener = async () => {
-        unsubscribe = await fetchTikTokAccounts();
-      };
-      setupListener();
-    }
+    });
+
+    // Store the unsubscribe function on a global or ref to call it on cleanup or when tab changes
+    window.unsubscribeTikTok = unsubscribe;
+
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
+      if (typeof window.unsubscribeTikTok === 'function') {
+        window.unsubscribeTikTok();
+        window.unsubscribeTikTok = null;
       }
     };
-  }, [user, activeTab]);
+  }, [activeTab, user]); // Re-run when activeTab or user changes
+
+  // --- END NEW/REVISED TIKTOK ACCOUNT FETCHING LOGIC ---
 
   // Fetch Feature Requests and User Votes
   const fetchFeatureRequests = async () => {
@@ -1513,88 +1521,138 @@ function Settings() {
   );
 
   const renderTikTokTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">TikTok Accounts</h3>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Connect your TikTok accounts to enable direct posting and other features.
-            </p>
-        </div>
-
-      <div className="mt-6">
-        <button 
-          onClick={handleConnectTikTokAccount}
-          disabled={isLoadingTikTok}
-          className="inline-flex items-center justify-center rounded-md border border-transparent bg-sky-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-800"
-        >
-          {isLoadingTikTok && activeTab === 'tiktok' ? (
-            <CircleNotch size={20} className="animate-spin mr-2" />
-          ) : (
-            <TiktokLogo size={20} className="mr-2" />
-          )}
-          Connect New TikTok Account
-        </button>
-      </div>
-      
-      {isLoadingTikTok && tiktokAccounts.length === 0 && (
-        <div className="flex justify-center items-center py-10">
-          <CircleNotch size={32} className="animate-spin text-sky-500" />
-          <p className="ml-3 text-gray-600 dark:text-gray-400">Loading connected accounts...</p>
+    <div className="w-full"> {/* ADDED for consistency */}
+      <div className="px-6 lg:px-0 space-y-6"> {/* MODIFIED for consistency, kept space-y-6 */}
+        {/* NEW HEADER SECTION */}
+        <div className="text-left mb-8">
+          <div className="flex items-center mb-4">
+            <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              TikTok Accounts
+            </span>
+            <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
+            <span className="text-sm text-gray-500 dark:text-zinc-400">
+              Manage your TikTok account integrations
+            </span>
           </div>
-      )}
-
-      {!isLoadingTikTok && tiktokAccounts.length === 0 && (
-        <div className="mt-6 text-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-8">
-          <TiktokLogo size={48} className="mx-auto text-gray-400 dark:text-gray-500" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No TikTok Accounts Connected</h3>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Click the button above to connect your first TikTok account.</p>
+          <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
+             Connect one or more TikTok accounts to enable posting features. <span className="font-semibold text-zinc-900 dark:text-white">(Coming Soon)</span>
+          </p>
         </div>
-      )}
+        {/* END NEW HEADER SECTION */}
 
-      {tiktokAccounts.length > 0 && (
-        <div className="mt-6 flow-root">
-          <ul role="list" className="-my-5 divide-y divide-gray-200 dark:divide-gray-700">
-            {tiktokAccounts.map((account) => (
-              <li key={account.id} className="py-5">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    {account.user_info?.avatar_url ? (
-                      <img className="h-10 w-10 rounded-full" src={account.user_info.avatar_url} alt={account.user_info.display_name || 'TikTok Avatar'} />
-                    ) : (
-                      <UserCircle size={40} className="text-gray-400 dark:text-gray-500" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate dark:text-gray-100">
-                      {account.user_info?.display_name || account.id}
-                    </p>
-                    <p className="text-sm text-gray-500 truncate dark:text-gray-400">
-                      Open ID: {account.open_id}
-                    </p>
-                     {account.expires_at && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500">
-                          Access valid until: {new Date(account.expires_at.seconds * 1000).toLocaleDateString()}
-                        </p>
-                      )}
-                  </div>
-                  <div>
+        {/* Original content starts here, the first div containing h3 and p is now replaced by the new header. */}
+        {/* The button section should directly follow */}
+        <div className="mt-4 flex justify-start">
           <button 
-                      onClick={() => handleDeleteTiktokAccount(account.id, account.user_info?.display_name)}
-                      disabled={isLoadingTikTok}
-                      className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-500 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-800"
+            onClick={handleConnectTikTokAccount} // This will now call the disabled version
+            disabled={true} // MODIFIED: Always disabled
+            className="inline-flex items-center justify-center rounded-md border-0 bg-gray-900 dark:bg-white px-4 py-2 text-sm font-medium text-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50"
           >
-                      <Trash size={16} className="mr-1.5" />
-                      Disconnect
+            {/* MODIFIED: Removed isLoadingTikTok check for icon, button always disabled */}
+            <TiktokLogo size={20} className="mr-2" />
+            Connect New TikTok Account <span className="ml-1.5 text-xs opacity-80">(Soon)</span> {/* ADDED Soon text */}
           </button>
+        </div>
+        
+        {isLoadingTikTok && tiktokAccounts.length === 0 && (
+          <div className="flex justify-center items-center py-10">
+            <CircleNotch size={24} className="animate-spin text-gray-500 dark:text-gray-400 mr-3" />
+            <p className="text-gray-600 dark:text-gray-400">Loading connected accounts...</p>
+          </div>
+        )}
+
+        {!isLoadingTikTok && tiktokAccounts.length === 0 && (
+          <div className="mt-6 text-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-200 dark:border-zinc-700 rounded-lg p-8">
+            <TiktokLogo size={40} className="mx-auto text-gray-400 dark:text-gray-500" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No TikTok Accounts Connected</h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Direct posting to TikTok is coming soon. Check back later!</p> {/* MODIFIED Message */}
+          </div>
+        )}
+
+        {tiktokAccounts.length > 0 && !isLoadingTikTok && (
+          <div className="mt-6 space-y-4">
+            {tiktokAccounts.map(account => (
+              <div key={account.id} className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-lg overflow-hidden opacity-70 pointer-events-none"> {/* ADDED opacity and pointer-events */}
+                <div className="px-4 py-4 sm:px-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      {account.user_info?.avatar_url ? (
+                        <img className="h-12 w-12 rounded-full mr-3" src={account.user_info.avatar_url} alt="Avatar" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mr-3">
+                          <UserCircle size={24} className="text-gray-400 dark:text-gray-500" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="text-base font-medium text-gray-900 dark:text-white">
+                          {account.user_info?.display_name || 'TikTok Account'}
+                          {account.user_info === null && <span className="ml-2 text-xs text-yellow-500">(Sync pending...)</span>}
+                        </h3>
+                        
+                        <div className="flex space-x-4 mt-1">
+                          {account.user_info?.follower_count !== undefined && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {account.user_info.follower_count.toLocaleString()} followers
+                            </p>
+                          )}
+                          {account.user_info?.video_count !== undefined && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {account.user_info.video_count.toLocaleString()} videos
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleSyncTikTokDetails(account.id)} // This will now call the disabled version
+                        disabled={true} // MODIFIED: Always disabled
+                        className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-200 dark:border-zinc-700 rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                      >
+                        <ClockCounterClockwise size={16} className="mr-1.5" />
+                        Sync
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteTikTokAccountClick(account.id, account.user_info?.display_name || 'this account')} // This will now call the disabled version
+                        disabled={true} // MODIFIED: Always disabled
+                        className="inline-flex items-center px-3 py-1.5 text-sm border border-transparent rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                      >
+                        <Trash size={16} className="mr-1.5" />
+                        Disconnect
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
-        </div>
-      )}
+          </div>
+        )}
+      </div> {/* Close padding container */}
     </div>
   );
+
+  // --- NEW: Handler to Sync TikTok User Details (Disabled Version) ---
+  const handleSyncTikTokDetails = async (integrationId) => {
+    // DISABLED
+    showCustomToast("TikTok account syncing is temporarily disabled.", "info");
+    return;
+  };
+
+  // --- MODIFIED: Handle Delete Individual TikTok Account with Confirmation (Disabled Version) ---
+  const handleDeleteTikTokAccountClick = (integrationId, accountName) => {
+    // DISABLED
+    showCustomToast("Disconnecting TikTok accounts is temporarily disabled.", "info");
+    return;
+  };
+
+  // --- Confirm Delete TikTok Account (Disabled Version) ---
+  const confirmDeleteTikTokAccount = async () => {
+    // DISABLED
+    showCustomToast("Disconnecting TikTok accounts is temporarily disabled.", "info");
+    if (showDeleteTikTokConfirmModal) setShowDeleteTikTokConfirmModal(false);
+    if (tikTokAccountToDelete) setTikTokAccountToDelete(null);
+    return;
+  };
 
   // --- Modified Creators Tab ---
   const renderCreatorsTab = () => (
@@ -2423,75 +2481,24 @@ function Settings() {
     }, 3000);
   };
 
-  // --- Handle Add TikTok Account --- // REWRITTEN FOR OAUTH
+  // --- Handle Add TikTok Account --- // REWRITTEN FOR OAUTH (Disabled Version)
   const handleConnectTikTokAccount = async () => {
-    if (!user) {
-      showCustomToast("You must be logged in to connect a TikTok account.", "error");
-      return;
-    }
-    setIsLoadingTikTok(true);
-    try {
-      const clientState = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      const redirectUri = "https://app.lungoai.com/auth/tiktok/callback"; 
-      
-      console.log(`[TikTok OAuth] Initiating with redirectUri: ${redirectUri}, state: ${clientState}`);
-
-      // Call the backend function to get the auth URL
-      // codeVerifier is no longer returned or used for Web OAuth flow
-      const result = await getTikTokAuthUrl({ redirectUri, state: clientState }); 
-      
-      // Destructure state from result.data (authorizationUrl and returnedState)
-      // codeVerifier is removed.
-      const { authorizationUrl, state: returnedState } = result.data; 
-
-      if (authorizationUrl && returnedState) { // Check for authorizationUrl and returnedState
-        // Store the state and code verifier (if any) in sessionStorage to verify on callback
-        localStorage.setItem('tiktok_oauth_state', returnedState); // CHANGED to localStorage
-        // sessionStorage.setItem('tiktok_code_verifier', codeVerifier); // No longer needed
-        
-        console.log(`[TikTok OAuth] Received auth URL: ${authorizationUrl}`);
-        console.log(`[TikTok OAuth] Stored state in localStorage: ${returnedState}`);
-        // console.log(`[TikTok OAuth] Stored codeVerifier (first 10): ${codeVerifier.substring(0,10)}...`); // No longer needed
-        
-        window.location.href = authorizationUrl; // Redirect user to TikTok
-      } else {
-        // Update error message to reflect missing authorizationUrl or state
-        throw new Error("Could not retrieve TikTok authorization URL or state from backend."); 
-      }
-    } catch (error) {
-      console.error("Error initiating TikTok OAuth:", error);
-      showCustomToast(`Error connecting TikTok: ${error.message || 'Unknown error'}`, "error");
-    } finally {
-      setIsLoadingTikTok(false);
-    }
+    // DISABLED
+    showCustomToast("Connecting new TikTok accounts is temporarily disabled.", "info");
+    return;
   };
 
-  // --- Handle Delete TikTok Account ---
-  const handleDeleteTiktokAccount = async (accountId, accountUsername) => {
-    if (!user || !accountId) {
-      showCustomToast("User or Account ID missing.", "error");
-      return;
-    }
-    // Using window.confirm for simplicity, replace with a custom modal if preferred
-    const confirmDelete = window.confirm(`Are you sure you want to disconnect the TikTok account: ${accountUsername || accountId}?`);
-    if (!confirmDelete) {
-      return;
-    }
-
-    setIsLoadingTikTok(true);
-    try {
-      const accountRef = doc(db, 'users', user.uid, 'tiktokAccounts', accountId);
-      await deleteDoc(accountRef);
-      showCustomToast(`TikTok account ${accountUsername || accountId} disconnected successfully.`, "success");
-      // setTiktokAccounts(prev => prev.filter(acc => acc.id !== accountId)); // State updates via listener
-    } catch (error) {
-      console.error("Error deleting TikTok account:", error);
-      showCustomToast(`Error disconnecting TikTok account: ${error.message}`, "error");
-    } finally {
-      setIsLoadingTikTok(false);
-    }
+  // --- Handle Delete TikTok Account (This one might be a general delete, ensure it's also disabled or removed if not used elsewhere) ---
+  // Assuming this was handleDeleteTikTokAccounts (plural) and is now fully covered by the individual disabled ones or not needed.
+  // If it was a different function, it should also be disabled if it pertains to TikTok.
+  // For now, I will comment it out to avoid conflicts if it's a duplicate or no longer relevant.
+  /*
+  const handleDeleteTikTokAccounts = async (accountIds) => { 
+    // DISABLED
+    showCustomToast("Disconnecting TikTok accounts is temporarily disabled.", "info");
+    return;
   };
+  */
 
   // Main component return - Notion-style with sidebar
   return (
@@ -2707,6 +2714,35 @@ function Settings() {
         </div>
       )}
 
+      {/* Delete TikTok Account Confirmation Modal */}
+      {showDeleteTikTokConfirmModal && tikTokAccountToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Confirm Disconnect (Disabled)</h3> {/* MODIFIED */}
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+               Disconnecting TikTok accounts (<strong className="font-semibold">{tikTokAccountToDelete.name || tikTokAccountToDelete.id}</strong>) is temporarily disabled.
+            </p>
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteTikTokConfirmModal(false);
+                  setTikTokAccountToDelete(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:focus:ring-offset-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteTikTokAccount} // This will now show a toast and do nothing
+                disabled // MODIFIED: Button itself disabled too
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-zinc-800 disabled:opacity-50"
+              >
+                Disconnect Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

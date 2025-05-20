@@ -401,6 +401,21 @@ function Layout() {
     // The command should use the asset that *was* selected at the time of submit.
 
     try {
+      // --- BEGIN NEW: GENERAL PLAN CHECK BEFORE AI CALL ---
+      if (user && user.uid) {
+        const userDocForPlanCheck = await getDoc(doc(db, 'users', user.uid));
+        const firestoreUser = userDocForPlanCheck.exists() ? userDocForPlanCheck.data() : {};
+        const isActiveSubscriber = firestoreUser.subscriptionStatus === 'active' || firestoreUser.subscriptionStatus === 'trialing';
+
+        if (!isActiveSubscriber) {
+          setUserMessages(prev => prev.filter(msg => msg !== processingMessage)); // Remove processing message
+          setUserMessages(prev => [...prev, "An active subscription is needed to generate videos, images, slideshows, and more with Lungo AI. Upgrade your plan to start creating!"]);
+          setInputValue(''); // Clear input
+          return; // Stop before calling parseUserCommand
+        }
+      }
+      // --- END NEW: GENERAL PLAN CHECK BEFORE AI CALL ---
+
       const parseUserCommand = httpsCallable(functions, 'parseUserCommand');
       // console.log(`Calling parseUserCommand with text: "${finalCommandText}", and asset:`, assetMentionForCommand);
       const result = await parseUserCommand({ 
@@ -461,6 +476,15 @@ function Layout() {
             // If isBackgroundAssetSelected is true, or hasTopic is true, or hasProducts is true (implicit for product-driven slideshow)
             // the command is considered specific enough from the frontend's asset/topic/product perspective.
             // `proceed` remains true unless set false by credit check or the block above.
+          }
+        } else if (
+            (command.commandCode >= 200 && command.commandCode < 300) || // Image Generation
+            (command.commandCode >= 400 && command.commandCode < 500)    // Image Editing
+        ) {
+          const imageCreditsAvailable = firestoreUser.image_credit || 0;
+          if (imageCreditsAvailable <= 0) {
+            proceed = false;
+            validationMessage = "Oops! It looks like you're out of Image Credits. Please upgrade your plan.";
           }
         }
       }

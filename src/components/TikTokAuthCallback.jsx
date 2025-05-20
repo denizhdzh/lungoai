@@ -2,74 +2,95 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { CircleNotch } from '@phosphor-icons/react';
+import { functions } from '../firebase'; // Ensure this path is correct
 
 // Assume your firebase config is initialized elsewhere and functions are available
-const functions = getFunctions();
 const exchangeTikTokAuthCode = httpsCallable(functions, 'exchangeTikTokAuthCode');
+const updateTikTokUserDetails = httpsCallable(functions, 'updateTikTokUserDetails');
+
+// --- NEW: Define REDIRECT_URI consistently ---
+const REDIRECT_URI = 'https://app.lungoai.com/auth/tiktok/callback';
 
 function TikTokAuthCallback() {
-  const [message, setMessage] = useState('Processing TikTok authentication...');
+  const [message, setMessage] = useState('Authenticating with TikTok...');
   const [error, setError] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
     const processAuth = async () => {
-      const searchParams = new URLSearchParams(location.search);
-      const code = searchParams.get('code');
-      const returnedState = searchParams.get('state');
+      // --- NEW: Logging actual URL search params ---
+      const rawSearch = window.location.search;
+      console.log("[TikTokAuthCallback] Raw location.search:", rawSearch);
+      // --- END NEW ---
 
-      const originalState = localStorage.getItem('tiktok_oauth_state');
-      console.log('[TikTokAuthCallback] Returned state from URL:', returnedState);
-      console.log('[TikTokAuthCallback] Original state from localStorage:', originalState);
-      // const codeVerifier = sessionStorage.getItem('tiktok_code_verifier'); // No longer needed for Web flow
+      const params = new URLSearchParams(location.search);
+      const code = params.get('code');
+      const returnedStateFromTikTok = params.get('state');
 
-      // Clear them immediately after retrieval
-      localStorage.removeItem('tiktok_oauth_state');
-      // sessionStorage.removeItem('tiktok_code_verifier'); // No longer needed
+      // --- NEW: Logging parsed values ---
+      console.log("[TikTokAuthCallback] Extracted code:", code);
+      console.log("[TikTokAuthCallback] Extracted state (returnedStateFromTikTok):", returnedStateFromTikTok);
+      // --- END NEW ---
 
-      if (!code || !returnedState) {
-        setError('Missing authorization code or state from TikTok.');
-        setMessage('Authentication failed.');
-        setTimeout(() => navigate('/settings', { state: { tiktokAuthError: 'Missing code or state.' } }), 3000);
+      const originalState = localStorage.getItem('tiktok_auth_state');
+      // --- NEW: Logging original state from localStorage ---
+      console.log("[TikTokAuthCallback] Original state from localStorage:", originalState);
+      // --- END NEW ---
+      localStorage.removeItem('tiktok_auth_state'); // Clean up state
+
+      if (!code) {
+        setError('Authentication failed: No authorization code returned from TikTok.');
+        setTimeout(() => navigate('/settings?tab=tiktok'), 5000);
         return;
       }
 
-      if (returnedState !== originalState) {
-        setError('Invalid state parameter. Possible CSRF attack.');
-        setMessage('Authentication failed due to state mismatch.');
-        setTimeout(() => navigate('/settings', { state: { tiktokAuthError: 'State mismatch.' } }), 3000);
+      if (returnedStateFromTikTok !== originalState) {
+        // --- MODIFIED: More detailed error logging ---
+        const errorMessage = `Authentication failed due to state mismatch. Returned: '${returnedStateFromTikTok}', Expected: '${originalState}'.`;
+        console.error("[TikTokAuthCallback] State mismatch:", errorMessage);
+        setError(errorMessage);
+        // --- END MODIFIED ---
+        setTimeout(() => navigate('/settings?tab=tiktok'), 5000);
         return;
       }
-
-      // The redirectUri here MUST EXACTLY MATCH the one used to generate the auth URL
-      // AND the one registered in your TikTok app settings.
-      const redirectUri = `${window.location.origin}/auth/tiktok/callback`;
 
       try {
-        setMessage('Exchanging authorization code for access token...');
-        // For Web flow, codeVerifier is not sent
-        const result = await exchangeTikTokAuthCode({
+        setMessage('Exchanging authorization code for token...');
+        const exchangeResult = await exchangeTikTokAuthCode({
           authorizationCode: code,
-          redirectUri: redirectUri,
-          state: returnedState,
-          // codeVerifier: codeVerifier // No longer sent
+          redirectUri: REDIRECT_URI,
         });
 
-        if (result.data.success) {
-          setMessage('TikTok account linked successfully! Redirecting...');
-          // Navigate to settings, perhaps with a success message in state
-          setTimeout(() => navigate('/settings', { state: { tiktokAuthSuccess: 'TikTok account linked!' } }), 2000);
+        if (exchangeResult.data.success && exchangeResult.data.integrationId) {
+          setMessage(exchangeResult.data.message || 'TikTok account linked. Fetching profile details...');
+          const integrationId = exchangeResult.data.integrationId;
+          
+          try {
+            // Now call updateTikTokUserDetails with the new integrationId
+            setMessage(`Fetching TikTok profile for integration ID: ${integrationId}...`);
+            const userDetailsResult = await updateTikTokUserDetails({ integrationId });
+
+            if (userDetailsResult.data.success) {
+              setMessage(userDetailsResult.data.message || 'TikTok profile details synced! Redirecting...');
+            } else {
+              // Even if user details fetch fails, the account is linked. Log error and proceed.
+              console.error("Error syncing TikTok user details post-link:", userDetailsResult.data.message);
+              setError(`Account linked, but failed to sync profile: ${userDetailsResult.data.message}. You can sync manually from Settings.`);
+              // setMessage will be overwritten by setError, but that's fine.
+            }
+          } catch (detailsError) {
+            console.error("Error calling updateTikTokUserDetails:", detailsError);
+            setError(`Account linked, but an error occurred fetching profile: ${detailsError.message}. You can sync manually from Settings.`);
+          }
         } else {
-          throw new Error(result.data.message || 'Failed to link TikTok account.');
+          setError(exchangeResult.data.message || 'Failed to link TikTok account. Missing integration ID.');
         }
-      } catch (err) {
-        console.error('Error exchanging TikTok auth code:', err);
-        const errorMessage = err.message || 'An unknown error occurred during TikTok authentication.';
-        setError(errorMessage);
-        setMessage(`Error: ${errorMessage}`);
-        setTimeout(() => navigate('/settings', { state: { tiktokAuthError: errorMessage } }), 5000);
+      } catch (e) {
+        console.error("Error exchanging TikTok auth code:", e);
+        setError(`Error during token exchange: ${e.message || 'Unknown error'}`);
       }
+      setTimeout(() => navigate('/settings?tab=tiktok'), 5000); // Redirect back to settings
     };
 
     processAuth();

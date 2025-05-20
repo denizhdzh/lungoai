@@ -2169,23 +2169,7 @@ function Dashboard() {
       )}
       {/* --- END NEW: Success Notification Modal --- */}
 
-      {/* No Generations Message */}
-      {!isLoadingGenerations && filteredGenerations.length === 0 && !generatingItem && (
-        <div className="text-center py-12">
-          <img src={isDarkMode ? "/assets/images/empty-generations-dark.png" : "/assets/images/empty-generations-light.png"} alt="No Generations" className="mx-auto mb-6 h-40" />
-          <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {activeTab === 'tiktok_content' ? 'No TikTok Content Yet' : 'No Images Yet'}
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {activeTab === 'tiktok_content'
-              ? "Looks like you haven't created any TikTok videos or slideshows."
-              : "Looks like you haven't generated any images."}
-            <br />
-            Use the generator to create something amazing!
-          </p>
-        </div>
-      )}
-      {/* --- END No Generations Message --- */}
+
 
     </div>
   );

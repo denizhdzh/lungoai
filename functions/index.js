@@ -3123,30 +3123,29 @@ exports.performImageGenerationTask = onRequest(
                 // **** Scenario B: baseImageUrl provided - Use openai.images.edit ****
                 logger.info(`[Task ${firestoreDocId}] BaseImageUrl: ${baseImageUrl}. Attempting image edit for clothes/background.`);
 
-                let imageBufferFromUrl;
-                try {
-                    const downloadResponse = await axios.get(baseImageUrl, { responseType: 'arraybuffer' });
-                    imageBufferFromUrl = Buffer.from(downloadResponse.data);
-                    logger.info(`[Task ${firestoreDocId}] Downloaded baseImageUrl (${baseImageUrl}). Size: ${imageBufferFromUrl.length} bytes.`);
-                } catch (downloadError) {
-                    logger.error(`[Task ${firestoreDocId}] Failed to download baseImageUrl (${baseImageUrl}):`, downloadError.message);
-                    throw new Error(`Failed to download baseImage for editing: ${downloadError.message}`);
-                }
-
-                // Use the original imageBufferFromUrl and explicitly set the type for OpenAI
-                const imageForEdit = await toFile(
-                    imageBufferFromUrl, 
-                    'source_image.png', // Filename can still be useful for OpenAI
-                    { type: 'image/png' }  // <<< EXPLICITLY SETTING CONTENT TYPE
-                );
-                logger.info('Prepared downloaded image for SDK, explicitly setting type to image/png.');
-
-                // Construct the prompt for images.edit
-                let editPrompt = "The person in this image. ";
-
-                const genderForClothing = generationParams.gender ? generationParams.gender.toLowerCase() : 'woman';
-
-                // ---- COPIED LISTS ----
+                // --- NEW: Define arrays needed for random selection during edit ---
+                const maleClothingExamples = [
+                    "in a well-fitting plain white crew-neck t-shirt and dark wash jeans",
+                    "in a classic black v-neck t-shirt and chino pants",
+                    "in a light blue button-down shirt (top button undone) and beige shorts",
+                    "in a grey Henley shirt with sleeves rolled up and dark jeans",
+                    "in a fitted dark grey polo shirt and comfortable trousers",
+                    "in a simple black tank top (showing athletic arms) and casual shorts",
+                    "in an open casual flannel shirt (red and black plaid) over a plain white t-shirt and ripped black jeans",
+                    "in a comfortable charcoal knit sweater and dark chino pants",
+                    "in a stylish black bomber jacket over a grey t-shirt and slim-fit black jeans",
+                    "in a modern athletic zip-up hoodie (navy blue) and grey jogger pants",
+                    "in a tailored light grey linen shirt (casually untucked) and white cuffed shorts",
+                    "in a black turtleneck sweater and smart grey wool trousers",
+                    "in a denim jacket over a striped t-shirt and black jeans",
+                    "in a relaxed-fit olive green utility shirt and cargo pants",
+                    "in a cream-colored cable-knit cardigan over a chambray shirt and brown corduroy pants",
+                    "in a fitted black leather jacket, white graphic tee, and dark distressed jeans",
+                    "in a modern navy blue Harrington jacket, a simple white long-sleeve top, and stone-colored chinos",
+                    "in a light-wash denim shirt (worn open) over a black muscle-fit tank top and black skinny jeans",
+                    "in a burgundy short-sleeve button-up shirt with a subtle print and tailored navy shorts",
+                    "in an oversized neutral-toned hoodie, slightly distressed light-wash jeans, and clean white sneakers (implied)"
+                ];
                 const femaleClothingExamples = [
                     "in a black backless crop top highlighting cleavage",
                     "in a white halter neck top showing shoulders and subtle cleavage",
@@ -3164,41 +3163,8 @@ exports.performImageGenerationTask = onRequest(
                     "in a layered sheer mesh long sleeve top in black over a low-cut bra",
                     "in a puff sleeve off-the-shoulder top in soft white with romantic cleavage reveal",
                     "in a wrap crop top tied at the side in deep red, exposing bust line",
-                    "in a ribbed tank top in charcoal with modest chest exposure",
-                    "in a black asymmetric strappy top and high-waisted wide-leg trousers, showing bustline",
-                    "in a silk camisole top in deep wine with lace trim and cleavage, paired with shorts",
-                    "in an oversized white band t-shirt tucked into faux leather leggings, slightly lifted to show neckline",
-                    "in a matching activewear set by Nike — black sports bra with cleavage and high-waisted leggings",
-                    "in a floral print sundress in navy with thin straps and open neckline",
-                    "in a modern blazer in dove grey (worn open) over a white bralette and biker shorts",
-                    "in a sky blue button-down shirt tied at the waist over denim shorts, unbuttoned to reveal bust",
-                    "in a black mini dress with a thigh slit and plunging neckline",
-                    "in a cropped zip-up hoodie by Adidas (black) layered over a ribbed white crop top showing cleavage, with high-waisted jeans",
-                    "in a black Adidas cropped hoodie with mesh panels and visible cleavage, paired with leggings",
-                    "in a white Nike crop hoodie with bold logo and open zipper revealing bustline, worn with joggers",
-                    "in a sheer zip-up hoodie in smoke grey over a lace bralette showing full cleavage, with cargo pants",
-                    "in a cropped leather moto jacket (black) over a red lace cami with deep neckline and ripped jeans",
-                    "in a distressed denim zip-up jacket over a white ribbed crop tank showing bust, with biker shorts",
-                    "in a lightweight bomber hoodie in slate grey with sheer paneling and strappy low-cut crop top",
-                    "in an oversized varsity zip jacket in black over a bralette trimmed with lace, revealing cleavage, paired with denim cutoffs",
-                    "in a tech-fabric zip hoodie in deep grey over a mesh reflective crop top with visible bustline and cargo pants",
-                    "in a sporty black mesh-panel zip hoodie over a bandeau top with cleavage, paired with leggings",
-                    "in a cropped black track jacket by Nike, paired with a ribbed tube top showing bust and matching pants",
-                    "in a cropped grey fleece hoodie (unzipped slightly to show neckline) and black jogger pants",
-                    "in a tailored oversized blazer in dark charcoal over a low-cut knit cami and straight-leg jeans",
-                    "in a belted shirt dress in steel blue with a soft V-neckline revealing cleavage, paired with ankle boots"
-                  ];
-                const maleTops = [
-                    "well-fitting plain white crew-neck t-shirt", "classic black v-neck t-shirt",
-                    "light blue button-down shirt (unbuttoned top button)", "grey Henley shirt with sleeves rolled up",
-                    "fitted dark grey polo shirt", "simple black tank top (showing athletic arms)",
-                    "open casual flannel shirt over a plain t-shirt", "comfortable knit sweater",
-                    "stylish bomber jacket over a t-shirt", "modern athletic zip-up hoodie"
-                ];
-                const maleBottoms = [
-                    "dark wash jeans", "chino pants", "beige shorts", "dark jeans",
-                    "comfortable trousers", "casual shorts (appropriate for setting)", "jeans",
-                    "dark pants", "jogger pants"
+                    "in a ribbed tank top in charcoal with modest chest exposure"
+                    // ... Add more diverse and SFW examples as needed, aligning with generateDetailedUgcPrompt list
                 ];
                 const settingExamples = [
                     "Seated at a cozy, modern café — sunlight pouring through large windows, sitting at a wooden table with a coffee cup, plants and minimal decor around.",
@@ -3212,39 +3178,74 @@ exports.performImageGenerationTask = onRequest(
                     "Standing at the entrance of a small art gallery — framed artworks visible behind glass doors, warm indoor lighting spilling outside.",
                     "Waiting at a tram stop or bus station in the city — realistic urban elements like maps, benches, and subtle motion in the background.",
                     "Sitting on a bench in a park — trees in the background, casual people walking by, a peaceful urban setting."
-                  ];
-                // ---- END COPIED LISTS ----
+                ];
+                // --- END NEW ---
 
-                if (clothing_description) {
-                    editPrompt += `Change their clothing to: ${clothing_description}. `;
-                } else {
-                    let randomClothing;
-                    if (genderForClothing === 'man') {
-                        const randomTop = maleTops[Math.floor(Math.random() * maleTops.length)];
-                        const randomBottom = maleBottoms[Math.floor(Math.random() * maleBottoms.length)];
-                        randomClothing = `${randomTop} and ${randomBottom}`;
-                    } else { // Default to female clothing
-                        randomClothing = femaleClothingExamples[Math.floor(Math.random() * femaleClothingExamples.length)];
-                    }
-                    editPrompt += `Change their clothing to: ${randomClothing}. `;
-                    logger.info(`User did not provide clothing_description. Randomly selected (gender: ${genderForClothing}): "${randomClothing}"`);
+                let imageBufferFromUrl;
+                try {
+                    const downloadResponse = await axios.get(baseImageUrl, { responseType: 'arraybuffer' });
+                    imageBufferFromUrl = Buffer.from(downloadResponse.data);
+                    logger.info(`[Task ${firestoreDocId}] Downloaded baseImageUrl (${baseImageUrl}). Size: ${imageBufferFromUrl.length} bytes.`);
+                } catch (downloadError) {
+                    logger.error(`[Task ${firestoreDocId}] Failed to download baseImageUrl (${baseImageUrl}):`, downloadError.message);
+                    throw new Error(`Failed to download baseImage for editing: ${downloadError.message}`);
                 }
 
-                if (setting_description) {
-                    editPrompt += `Change the background to: ${setting_description}. `;
-                } else {
-                    const randomSetting = settingExamples[Math.floor(Math.random() * settingExamples.length)];
-                    editPrompt += `Change the background to: ${randomSetting}. `;
-                    logger.info(`User did not provide setting_description. Randomly selected: "${randomSetting}"`);
+                const imageForEdit = await toFile(
+                    imageBufferFromUrl, 
+                    'source_image.png',
+                    { type: 'image/png' }
+                );
+                logger.info('Prepared downloaded image for SDK, explicitly setting type to image/png.');
+
+                // Determine clothing and setting, using user inputs or random selections
+                const genderForClothing = generationParams.gender ? generationParams.gender.toLowerCase() : 'woman'; // Default to woman if not specified
+                let clothingToUse = generationParams.clothing_description;
+                if (!clothingToUse) {
+                    if (genderForClothing === 'man') {
+                        clothingToUse = maleClothingExamples[Math.floor(Math.random() * maleClothingExamples.length)];
+                    } else {
+                        clothingToUse = femaleClothingExamples[Math.floor(Math.random() * femaleClothingExamples.length)];
+                    }
+                    logger.info(`[Task ${firestoreDocId}] User did not provide clothing_description. Randomly selected (gender: ${genderForClothing}): "${clothingToUse}"`);
+                }
+
+                let settingToUse = generationParams.setting_description;
+                if (!settingToUse) {
+                    settingToUse = settingExamples[Math.floor(Math.random() * settingExamples.length)];
+                    logger.info(`[Task ${firestoreDocId}] User did not provide setting_description. Randomly selected: "${settingToUse}"`);
                 }
                 
-                editPrompt += "Hey gpt! I want to try different outfits and backgrounds. Can you please not change my face and body features, or general appearance. Please only modify specified clothing and/or background.";
-                if (image_style) {
-                    editPrompt += ` Apply an overall style of: ${image_style}.`;
+                const finalImageStyle = generationParams.image_style || 'ultra-realistic photograph, modern influencer aesthetic, sharp focus, natural lighting';
+
+                let pronoun = 'their';
+                let possessivePronoun = 'their';
+                if (generationParams.gender) {
+                    if (generationParams.gender.toLowerCase() === 'woman') {
+                        pronoun = 'her';
+                        possessivePronoun = 'her';
+                    } else if (generationParams.gender.toLowerCase() === 'man') {
+                        pronoun = 'him';
+                        possessivePronoun = 'his';
+                    }
                 }
 
-                generatedImagePrompt = editPrompt; // Store the prompt used for editing
-                logger.info(`[Task ${firestoreDocId}] Prompt for images.edit: "${generatedImagePrompt}"`);
+                // Construct the new detailed prompt for images.edit
+                generatedImagePrompt = `This image features a hyper-realistic, AI-generated character. This is not a real person.
+Please change ${possessivePronoun} outfit to: "${clothingToUse}".
+And place ${pronoun} in the background setting of: "${settingToUse}".
+
+IMPORTANT: You MUST keep ${possessivePronoun} face, facial expression, hair, body shape, and pose EXACTLY the same as in the original image. Only change the clothing and the background environment. Do not alter the character in any other way.
+
+The edited image style should be: "${finalImageStyle}".
+- The ENTIRE image, including the new background and all its elements, MUST be in SHARP FOCUS. No depth of field, bokeh, or artificial background blur.
+- Lighting in the new scene must be NATURAL and DYNAMIC, specific to '${settingToUse}'. It must realistically illuminate both the character and the new background, creating a cohesive scene. Detail light direction, quality (soft, harsh, diffused), and color temperature.
+- Emulate a HIGH-QUALITY MODERN SMARTPHONE PHOTO: natural color balance (often warm), good contrast roll-off. Subtle digital textures (minor compression artifacts, faint sensor noise in shadows) are acceptable for realism.
+- Apply CINEMATIC COLOR GRADING: natural, not overly saturated colors.
+- CRITICAL REITERATION: The character's original facial features, skin texture, hairstyle, expression, pose, and body proportions must be IDENTICALLY PRESERVED. NO changes to the character itself.
+`;
+                
+                logger.info(`[Task ${firestoreDocId}] Using new detailed prompt for images.edit: "${generatedImagePrompt}"`);
 
                 try {
                     const editResponse = await openai.images.edit({
@@ -3765,27 +3766,15 @@ exports.getTikTokAuthUrl = onCall({ region: 'us-central1' }, async (request) => 
         throw new HttpsError('internal', 'TikTok API integration is not configured correctly on the server.');
     }
 
-    // --- PKCE Support ---
-    // const crypto = require('crypto');
-    // Generate a random code verifier (at least 43 characters, max 128)
-    // const codeVerifier = crypto.randomBytes(32).toString('hex'); // Generates a 64-char hex string
-    // Create code challenge using SHA256 then hex encode (as per TikTok docs provided)
-    // const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('hex');
-    // const codeChallengeMethod = 'S256';
-    // --- End PKCE Support ---
-
     const TIKTOK_AUTH_BASE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
     
     const scopes = [
         'user.info.basic',
-        'user.info.profile', // ADDED
-        'user.info.stats',   // ADDED
+        'user.info.profile',
+        'user.info.stats',
         'video.list',
         'video.publish',
         'video.upload'
-                 // ADDED
-        // Add other scopes like 'video.publish', 'video.upload' if needed in the future
-        // Ensure they are enabled in your TikTok App settings.
     ];
 
     const params = new URLSearchParams({
@@ -3794,15 +3783,13 @@ exports.getTikTokAuthUrl = onCall({ region: 'us-central1' }, async (request) => 
         response_type: 'code',
         redirect_uri: redirectUri,
         state: state,
-        // code_challenge: codeChallenge, // PKCE REMOVED
-        // code_challenge_method: codeChallengeMethod // PKCE REMOVED
+        disable_auto_auth: '1' // <<< ADDED THIS PARAMETER
     });
 
     const authorizationUrl = `${TIKTOK_AUTH_BASE_URL}?${params.toString()}`;
 
-    logger.info(`Generated TikTok Auth URL for user ${userId}. State: ${state}`);
-    // Return only the URL and state, codeVerifier is no longer needed for Web flow
-    return { authorizationUrl, state }; // REMOVED codeVerifier
+    logger.info(`Generated TikTok Auth URL for user ${userId}. State: ${state}, DisableAutoAuth: 1`);
+    return { authorizationUrl, state };
 });
 
 async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, not exported
@@ -3811,15 +3798,27 @@ async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, no
 
     try {
         logger.info(`Fetching TikTok user info for open_id: ${openId} with fields: ${requestedFields.join(',')}`);
-        const response = await axios.post(TIKTOK_USER_INFO_ENDPOINT,
-            { fields: requestedFields }, 
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json', 
-                }
+        // OLD POST REQUEST:
+        // const response = await axios.post(TIKTOK_USER_INFO_ENDPOINT,
+        //     { fields: requestedFields }, 
+        //     {
+        //         headers: {
+        //             'Authorization': `Bearer ${accessToken}`,
+        //             'Content-Type': 'application/json', 
+        //         }
+        //     }
+        // );
+
+        // NEW GET REQUEST:
+        const response = await axios.get(TIKTOK_USER_INFO_ENDPOINT, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                // 'Content-Type': 'application/json', // Not needed for GET typically
+            },
+            params: {
+                fields: requestedFields.join(',') // Pass fields as a comma-separated string in query params
             }
-        );
+        });
 
         const userDataContainer = response.data; 
 
@@ -3849,156 +3848,438 @@ async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, no
     }
 }
 
-exports.exchangeTikTokAuthCode = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
+exports.exchangeTikTokAuthCode = onCall({region: 'us-central1'}, async (request) => {
+  const { authorizationCode, redirectUri } = request.data;
+  const userId = request.auth?.uid;
+
+  // <<< ADDED EXTENSIVE LOGGING from previous step - kept for safety >>>
+  logger.info(`exchangeTikTokAuthCode INVOCATION DETAILS:\\n    User ID: ${userId},\\n    Authorization Code (first 10 chars): ${authorizationCode ? authorizationCode.substring(0,10) : 'N/A'}...\\n    Received Redirect URI: ${redirectUri}\\n    TIKTOK_CLIENT_KEY is set: ${process.env.TIKTOK_CLIENT_KEY ? 'Yes' : 'No - THIS IS A PROBLEM!'}\\n    TIKTOK_CLIENT_SECRET is set: ${process.env.TIKTOK_CLIENT_SECRET ? 'Yes' : 'No - THIS IS A PROBLEM!'}\\n  `);
+
+  if (!userId) {
+    logger.error("exchangeTikTokAuthCode: Authentication Error.");
+    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+  }
+
+  if (!authorizationCode || !redirectUri) {
+    logger.error("exchangeTikTokAuthCode: Missing authorizationCode or redirectUri.");
+    throw new HttpsError('invalid-argument', 'Missing authorizationCode or redirectUri.');
+  }
+
+  const clientKey = process.env.TIKTOK_CLIENT_KEY;
+  const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
+
+  if (!clientKey || !clientSecret) {
+    logger.error("TikTok API client key or secret is not configured in environment variables (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET).");
+    throw new HttpsError('internal', 'TikTok API configuration error.');
+  }
+
+  try {
+    const requestBody = new URLSearchParams();
+    requestBody.append('client_key', clientKey);
+    requestBody.append('client_secret', clientSecret);
+    requestBody.append('code', authorizationCode);
+    requestBody.append('grant_type', 'authorization_code');
+    requestBody.append('redirect_uri', redirectUri);
+
+    const tokenResponse = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', requestBody, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    logger.info("TikTok token exchange successful. Response data:", tokenResponse.data);
+
+    const accessToken = tokenResponse.data.access_token;
+    const openId = tokenResponse.data.open_id;
+    const expiresIn = tokenResponse.data.expires_in;
+    const refreshToken = tokenResponse.data.refresh_token;
+    const refreshExpiresIn = tokenResponse.data.refresh_expires_in;
+    const scope = tokenResponse.data.scope;
+    const tokenType = tokenResponse.data.token_type || "Bearer";
+
+    if (!accessToken || !openId) {
+        logger.error("TikTok token response missing access_token or open_id.", tokenResponse.data);
+        throw new HttpsError('internal', 'Failed to retrieve essential tokens from TikTok.');
+    }
+
+    const tiktokIntegrationData = {
+      accessToken: accessToken,
+      openId: openId,
+      expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + expiresIn * 1000)),
+      refreshToken: refreshToken,
+      refreshExpiresInSeconds: refreshExpiresIn,
+      refreshExpiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + refreshExpiresIn * 1000)),
+      scope: scope,
+      tokenType: tokenType,
+      provider: "tiktok",
+      type: "tiktok", // <<< ADDED TYPE FIELD
+      retrievedAt: admin.firestore.FieldValue.serverTimestamp(),
+      user_info: null // Initialize user_info as null
+    };
+
+    // <<< MODIFIED: Create a new document with an auto-generated ID >>>
+    const integrationRef = db.collection("users").doc(userId).collection("integrations").doc(); // Auto-generate ID
+    await integrationRef.set(tiktokIntegrationData);
+    const newIntegrationId = integrationRef.id; // Get the new ID
+
+    logger.info(`New TikTok integration (ID: ${newIntegrationId}) data for user ${userId} (openId: ${openId}) successfully saved.`);
+    return {
+       success: true,
+       message: "New TikTok account tokens linked successfully. Fetching user details...",
+       integrationId: newIntegrationId, // <<< RETURN NEW INTEGRATION ID
+       // For client-side, if needed immediately (though updateUserDetails will fetch fresh)
+       // openId: openId 
+    };
+
+  } catch (error) {
+    logger.error("Error during TikTok token exchange or Firestore save:", error.response ? error.response.data : error.message, error.stack);
+    if (error.isAxiosError && error.response) {
+      logger.error("TikTok API Error Details:", error.response.status, error.response.data);
+      throw new HttpsError('internal', `Failed to exchange TikTok code: ${error.response.data.error_description || error.response.data.error || 'TikTok API Error'}`);
+    }
+    throw new HttpsError('internal', `Failed to exchange TikTok code: ${error.message}`);
+  }
+});
+
+// ... fetchTikTokUserInfo function should remain as is ...
+// ... updateTikTokUserDetails function should remain as is ...
+// ... existing code ...
+
+exports.updateTikTokUserDetails = onCall({ region: 'us-central1' }, async (request) => {
     const userId = request.auth?.uid;
     if (!userId) {
-        logger.error("exchangeTikTokAuthCode: Authentication Error.");
+        logger.error("updateTikTokUserDetails: Authentication Error.");
         throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    // --- MODIFIED: codeVerifier NO LONGER EXPECTED from client ---
-    const { authorizationCode, redirectUri, state: returnedState /*, codeVerifier */ } = request.data; 
-    // logger.info(`[TikTok Token Exchange] Received state: ${returnedState}, Code Verifier (first 10 chars): ${codeVerifier ? codeVerifier.substring(0,10) : 'MISSING'}...`);
-    logger.info(`[TikTok Token Exchange] Received state: ${returnedState} for web flow.`);
-
-
-    if (!authorizationCode) {
-        throw new HttpsError('invalid-argument', 'Missing "authorizationCode" in the request.');
-    }
-    if (!redirectUri) {
-        throw new HttpsError('invalid-argument', 'Missing "redirectUri" in the request. This must match the URI registered in your TikTok app settings.');
-    }
-    // --- REMOVED: Check for codeVerifier ---
-    // if (!codeVerifier) {
-    //     logger.error("[TikTok Token Exchange] codeVerifier is missing from the client request.");
-    //     throw new HttpsError('invalid-argument', 'Missing "codeVerifier" in the request. This is required for PKCE.');
-    // }
-    // --- END REMOVED ---
-
-    const tiktokClientKey = process.env.TIKTOK_CLIENT_KEY;
-    const tiktokClientSecret = process.env.TIKTOK_CLIENT_SECRET;
-
-    if (!tiktokClientKey || !tiktokClientSecret) {
-        logger.error("TikTok API client key or secret not configured (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET).");
-        throw new HttpsError('internal', 'TikTok API integration is not configured correctly on the server. Please contact support.');
+    const { integrationId } = request.data;
+    if (!integrationId) {
+        logger.error("updateTikTokUserDetails: Missing integrationId in request data.");
+        throw new HttpsError('invalid-argument', 'Missing "integrationId" in the request data.');
     }
 
-    const TIKTOK_TOKEN_ENDPOINT = 'https://open.tiktokapis.com/v2/oauth/token/';
+    logger.info(`updateTikTokUserDetails called for user ${userId}, integrationId: ${integrationId}`);
 
     try {
-        logger.info(`User ${userId} attempting to exchange TikTok authorization code: ${authorizationCode.substring(0,10)}... with redirect URI: ${redirectUri}`);
+        const integrationDocRef = db.collection('users').doc(userId).collection('integrations').doc(integrationId);
+        const integrationDocSnap = await integrationDocRef.get();
+
+        if (!integrationDocSnap.exists) {
+            logger.error(`Integration document ${integrationId} not found for user ${userId}.`);
+            throw new HttpsError('not-found', `TikTok integration with ID ${integrationId} not found.`);
+        }
+
+        const integrationData = integrationDocSnap.data();
+        if (integrationData.type !== 'tiktok') {
+             logger.error(`Integration document ${integrationId} for user ${userId} is not of type 'tiktok'. Type is: ${integrationData.type}`);
+             throw new HttpsError('failed-precondition', `Integration ${integrationId} is not a TikTok integration.`);
+        }
+
+        const { accessToken, openId } = integrationData;
+
+        if (!accessToken || !openId) {
+            logger.error(`Missing accessToken or openId in integration document ${integrationId} for user ${userId}.`);
+            throw new HttpsError('internal', 'TikTok integration data is incomplete. Cannot fetch user details.');
+        }
+
+        logger.info(`Fetching TikTok user info for openId: ${openId} using integration ${integrationId}.`);
+        const tikTokUserInfo = await fetchTikTokUserInfo(accessToken, openId); // Reuses the existing internal helper
+
+        if (!tikTokUserInfo) {
+            logger.error(`fetchTikTokUserInfo returned no data for openId ${openId}, integration ${integrationId}.`);
+            throw new HttpsError('internal', 'Failed to retrieve user details from TikTok API.');
+        }
         
-        const params = new URLSearchParams({
-            client_key: tiktokClientKey,
-            client_secret: tiktokClientSecret,
-            code: authorizationCode,
-            grant_type: 'authorization_code',
-            redirect_uri: redirectUri,
-            // code_verifier: codeVerifier // --- REMOVED: code_verifier no longer sent for Web flow ---
-        });
-
-        const tokenResponse = await axios.post(TIKTOK_TOKEN_ENDPOINT, params, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            }
-        });
-
-        const tokenData = tokenResponse.data;
-
-        if (tokenData.error && tokenData.error !== "ok") { // Check for error field and non-"ok" value for token endpoint
-            logger.error(`TikTok token exchange failed. Error: ${tokenData.error}, Desc: ${tokenData.error_description || tokenData.log_id}`, tokenData);
-            throw new HttpsError('internal', `Failed to exchange TikTok code: ${tokenData.error_description || tokenData.error || 'TikTok API error'}`);
-        }
-        if (tokenData.error_code && tokenData.error_code !== 0 ) { // Legacy check, though newer API might use error field primarily
-            logger.error(`TikTok token exchange failed directly from API. Code: ${tokenData.error_code}, Desc: ${tokenData.description || tokenData.error_description}`, tokenData);
-            throw new HttpsError('internal', `Failed to exchange TikTok code: ${tokenData.description || tokenData.error_description || 'TikTok API error'}`);
-        }
-        if (!tokenData.access_token || !tokenData.open_id) { 
-             logger.error(`TikTok token exchange response missing critical data (access_token or open_id).`, tokenData);
-             throw new HttpsError('internal', 'Received incomplete token data from TikTok.');
-        }
-        logger.info(`TikTok token exchange successful for user ${userId}. Open ID: ${tokenData.open_id}, Access Token: ${tokenData.access_token.substring(0,10)}...`);
-
-        let tiktokUserInfo = null;
-        let userDisplayName = null;
-        let userAvatarUrl = null;
-        try {
-            if (tokenData.scope && tokenData.scope.includes('user.info.basic')) {
-                const userInfo = await fetchTikTokUserInfo(tokenData.access_token, tokenData.open_id);
-                if (userInfo) {
-                    tiktokUserInfo = userInfo;
-                    userDisplayName = userInfo.display_name;
-                    userAvatarUrl = userInfo.avatar_url;
-                    logger.info(`Fetched TikTok user info for ${userId}: DisplayName - ${userDisplayName}`);
-                }
-            } else {
-                logger.info(`Skipping TikTok user info fetch for user ${userId} as 'user.info.basic' scope might be missing. Scopes: ${tokenData.scope}`);
-            }
-        } catch (userInfoError) {
-            logger.warn(`Could not fetch TikTok user info for user ${userId} after token exchange: ${userInfoError.message}. Proceeding without it.`);
-        }
-
-        // Store under a more generic name, as it's one integration per user for TikTok for now.
-        const userTiktokRef = db.collection('users').doc(userId).collection('integrations').doc('tiktok');
-
-        const dataToStore = {
-            openId: tokenData.open_id,
-            accessToken: tokenData.access_token,
-            refreshToken: tokenData.refresh_token,
-            scope: tokenData.scope,
-            // TikTok V2 provides expires_in in seconds
-            expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (tokenData.expires_in * 1000)), 
-            // TikTok V2 provides refresh_expires_in in seconds
-            refreshExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + (tokenData.refresh_expires_in * 1000)),
-            tokenType: tokenData.token_type,
-            retrievedAt: admin.firestore.FieldValue.serverTimestamp(), // Renamed from lastUpdated for clarity
-            provider: 'tiktok', // Added a provider field
-            ...(userDisplayName && { displayName: userDisplayName }),
-            ...(userAvatarUrl && { avatarUrl: userAvatarUrl }),
-            ...(tiktokUserInfo && { rawUserProfile: tiktokUserInfo }) // Storing the full raw profile
+        // Construct the user_info object with desired fields
+        // The fetchTikTokUserInfo helper returns: open_id, union_id, avatar_url, display_name, is_verified, follower_count, following_count, likes_count, video_count
+        const userInfoToUpdate = {
+            open_id: tikTokUserInfo.open_id,
+            union_id: tikTokUserInfo.union_id,
+            avatar_url: tikTokUserInfo.avatar_url,
+            display_name: tikTokUserInfo.display_name,
+            username: tikTokUserInfo.username || tikTokUserInfo.display_name, // TikTok might not always have a distinct username; fallback to display_name
+            is_verified: tikTokUserInfo.is_verified,
+            follower_count: tikTokUserInfo.follower_count,
+            following_count: tikTokUserInfo.following_count,
+            likes_count: tikTokUserInfo.likes_count,
+            video_count: tikTokUserInfo.video_count,
+            // Construct profile_deep_link if possible (TikTok's v2 User Info API doesn't directly provide it)
+            // Example for web: `https://www.tiktok.com/@${username_or_unique_id}` - requires a stable username or unique ID field from API.
+            // For now, we'll omit it unless display_name can be reliably used.
+            // profile_deep_link: tikTokUserInfo.display_name ? `https://www.tiktok.com/@${tikTokUserInfo.display_name}` : null, 
+            last_synced_at: admin.firestore.FieldValue.serverTimestamp()
         };
 
-        // Update the main user document with summary info if useful
-        const userDocRef = db.collection('users').doc(userId);
-        const userUpdateData = {
-            tiktokIntegration: {
-                openId: tokenData.open_id,
-                displayName: userDisplayName,
-                avatarUrl: userAvatarUrl,
-                connectedAt: admin.firestore.FieldValue.serverTimestamp()
-            }
-        };
+        await integrationDocRef.update({ user_info: userInfoToUpdate });
 
-        const batch = db.batch();
-        batch.set(userTiktokRef, dataToStore, { merge: true });
-        batch.set(userDocRef, userUpdateData, { merge: true });
-        await batch.commit();
-
-        logger.info(`Successfully stored TikTok tokens and info for user ${userId}, open_id: ${tokenData.open_id}. Updated user doc summary.`);
-
-        return {
-            success: true,
-            message: "TikTok account linked successfully.",
-            data: { 
-                openId: tokenData.open_id,
-                scope: tokenData.scope,
-                displayName: userDisplayName,
-                avatarUrl: userAvatarUrl
-            }
-        };
+        logger.info(`Successfully updated TikTok user_info for integration ${integrationId}, user ${userId}.`);
+        return { success: true, message: 'TikTok user details updated successfully.', user_info: userInfoToUpdate };
 
     } catch (error) {
-        logger.error(`Error during TikTok auth code exchange process for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-        if (axios.isAxiosError(error) && error.response && error.response.data) {
-            const tiktokError = error.response.data;
-            let errMsg = tiktokError.description || tiktokError.error_description || tiktokError.message || JSON.stringify(tiktokError);
-            if (tiktokError.error_code) errMsg = `(Code: ${tiktokError.error_code}) ${errMsg}`;
-            throw new HttpsError('internal', `TikTok API error: ${errMsg}`);
-        }
+        logger.error(`Error in updateTikTokUserDetails for user ${userId}, integration ${integrationId}:`, error.message, error.stack);
         if (error instanceof HttpsError) {
             throw error;
         }
-        throw new HttpsError('internal', `An unexpected error occurred during TikTok linking: ${error.message}`);
+        throw new HttpsError('internal', `An unexpected error occurred while updating TikTok user details: ${error.message}`);
     }
 });
-// --- END TikTok OAuth Integration Functions ---
+
+// ... fetchTikTokUserInfo function should remain as is ...
+// ... updateTikTokUserDetails function should remain as is ...
+// ... existing code ...
+
+// --- NEW: TikTok Direct Posting API Functions ---
+
+// 1. Query Creator Info
+exports.queryTikTokCreatorInfo = onCall({ region: 'us-central1' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("queryTikTokCreatorInfo: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    const { accessToken } = request.data;
+    if (!accessToken) {
+        logger.error(`queryTikTokCreatorInfo: User ${userId} called without accessToken.`);
+        throw new HttpsError('invalid-argument', 'Missing "accessToken" in the request.');
+    }
+
+    const TIKTOK_CREATOR_INFO_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/';
+    logger.info(`User ${userId} querying TikTok creator info.`);
+
+    try {
+        const response = await axios.post(TIKTOK_CREATOR_INFO_ENDPOINT,
+            {}, // Empty body as per TikTok API cURL example
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=UTF-8',
+                }
+            }
+        );
+
+        const responseData = response.data;
+        if (responseData.error && responseData.error.code !== "ok") {
+            logger.error(`queryTikTokCreatorInfo: TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
+            throw new HttpsError('aborted', `TikTok API error: ${responseData.error.message} (Code: ${responseData.error.code})`);
+        }
+
+        logger.info(`queryTikTokCreatorInfo: Successfully fetched creator info for user ${userId}.`, responseData.data);
+        return { success: true, data: responseData.data };
+
+    } catch (error) {
+        logger.error(`queryTikTokCreatorInfo: Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
+            const tiktokError = error.response.data.error;
+            throw new HttpsError('aborted', `TikTok API error: ${tiktokError.message} (Code: ${tiktokError.code})`);
+        }
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Failed to query TikTok creator info: ${error.message}`);
+    }
+});
+
+// 2. Initiate Video Post
+exports.initiateTikTokVideoPost = onCall({ region: 'us-central1' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("initiateTikTokVideoPost: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    // MODIFIED: Only accessToken and sourceInfo are expected for inbox/draft uploads.
+    // const { accessToken, postInfo, sourceInfo } = request.data; // OLD
+    const { accessToken, sourceInfo } = request.data; // NEW
+
+    if (!accessToken || !sourceInfo) { // MODIFIED: Check only for accessToken and sourceInfo
+        logger.error(`initiateTikTokVideoPost: User ${userId} called with missing parameters.`, { hasToken: !!accessToken, hasSourceInfo: !!sourceInfo });
+        // MODIFIED: Updated error message
+        throw new HttpsError('invalid-argument', 'Missing "accessToken" or "sourceInfo" in the request for draft video upload.');
+    }
+    // MODIFIED: Simplified sourceInfo check as postInfo is removed for this endpoint
+    if (!sourceInfo.source || (sourceInfo.source === "PULL_FROM_URL" && !sourceInfo.video_url) || (sourceInfo.source === "FILE_UPLOAD" && (!sourceInfo.video_size || !sourceInfo.chunk_size || !sourceInfo.total_chunk_count))) {
+        logger.error(`initiateTikTokVideoPost: User ${userId} provided invalid sourceInfo.`, sourceInfo);
+        throw new HttpsError('invalid-argument', 'Invalid "sourceInfo" provided for draft video upload. Check required fields for your source type.');
+    }
+
+    // MODIFIED: Changed endpoint to send to inbox/draft
+    const TIKTOK_VIDEO_INIT_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
+    // MODIFIED: Updated log message
+    logger.info(`User ${userId} initiating TikTok video upload to inbox (draft). Source: ${sourceInfo.source}`);
+
+    try {
+        // MODIFIED: Removed post_info from the request body
+        const response = await axios.post(TIKTOK_VIDEO_INIT_ENDPOINT,
+            {
+                // post_info: postInfo, // REMOVED for inbox/draft
+                source_info: sourceInfo
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=UTF-8',
+                }
+            }
+        );
+
+        const responseData = response.data;
+        if (responseData.error && responseData.error.code !== "ok") {
+            logger.error(`initiateTikTokVideoPost (draft): TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
+            throw new HttpsError('aborted', `TikTok API error (draft video): ${responseData.error.message} (Code: ${responseData.error.code})`);
+        }
+
+        logger.info(`initiateTikTokVideoPost (draft): Successfully initiated video upload to inbox for user ${userId}. Publish ID: ${responseData.data.publish_id}`);
+        return { success: true, data: responseData.data };
+
+    } catch (error) {
+        logger.error(`initiateTikTokVideoPost (draft): Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
+            const tiktokError = error.response.data.error;
+            throw new HttpsError('aborted', `TikTok API error (draft video): ${tiktokError.message} (Code: ${tiktokError.code})`);
+        }
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Failed to initiate TikTok video upload to inbox (draft): ${error.message}`);
+    }
+});
+
+// 3. Initiate Photo Post
+exports.initiateTikTokPhotoPost = onCall({ region: 'us-central1' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("initiateTikTokPhotoPost: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    // MODIFIED: Added post_mode to destructuring
+    const { accessToken, postInfo, sourceInfo, post_mode } = request.data;
+
+    // MODIFIED: post_mode is now essential for determining behavior
+    if (!accessToken || !postInfo || !sourceInfo || !post_mode) {
+        logger.error(`initiateTikTokPhotoPost: User ${userId} called with missing parameters.`, { hasToken: !!accessToken, hasPostInfo: !!postInfo, hasSourceInfo: !!sourceInfo, hasPostMode: !!post_mode });
+        throw new HttpsError('invalid-argument', 'Missing "accessToken", "postInfo", "sourceInfo", or "post_mode" in the request.');
+    }
+    if (post_mode !== "DIRECT_POST" && post_mode !== "MEDIA_UPLOAD") {
+        logger.error(`initiateTikTokPhotoPost: User ${userId} provided invalid post_mode: ${post_mode}`);
+        throw new HttpsError('invalid-argument', 'Invalid "post_mode" provided. Must be "DIRECT_POST" or "MEDIA_UPLOAD".');
+    }
+
+    if (!sourceInfo.source || (sourceInfo.source === "PULL_FROM_URL" && !sourceInfo.photo_url && (!sourceInfo.photo_images || sourceInfo.photo_images.length === 0) ) || (sourceInfo.source === "FILE_UPLOAD" && !sourceInfo.photo_size)) {
+        logger.error(`initiateTikTokPhotoPost: User ${userId} provided invalid sourceInfo.`, sourceInfo);
+        throw new HttpsError('invalid-argument', 'Invalid "sourceInfo" provided. For FILE_UPLOAD, ensure "photo_size" is present. For PULL_FROM_URL, ensure "photo_url" or "photo_images" list is present.');
+    }
+
+
+    const TIKTOK_PHOTO_INIT_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/content/init/';
+    logger.info(`User ${userId} initiating TikTok photo post. Mode: ${post_mode}, Title: ${postInfo.title}, Source: ${sourceInfo.source}`);
+
+    // MODIFIED: Construct payload based on post_mode
+    let requestPayload = {
+        media_type: "PHOTO", // This is fixed for this endpoint as per docs for photos
+        post_mode: post_mode,
+        source_info: sourceInfo,
+        // post_info will be constructed based on mode
+    };
+
+    let finalPostInfo = {};
+    if (post_mode === "DIRECT_POST") {
+        // For direct post, include all relevant details from the client's postInfo
+        finalPostInfo = { ...postInfo }; // e.g., title, description, privacy_level, disable_comment, auto_add_music etc.
+        if (!finalPostInfo.privacy_level) {
+            // TikTok API for photo direct post *requires* privacy_level if post_mode is DIRECT_POST
+            // This should be validated or handled client-side, or we can default/error here.
+            // For now, let's assume client sends it or a query to creator_info was made to get options.
+             logger.warn(`initiateTikTokPhotoPost: DIRECT_POST mode for user ${userId} but privacy_level is missing in postInfo. TikTok might reject this.`);
+        }
+    } else if (post_mode === "MEDIA_UPLOAD") {
+        // For media upload (draft), only title and description are typically used from post_info.
+        // Other details like privacy, music are set by the user in TikTok app.
+        if (postInfo.title) finalPostInfo.title = postInfo.title;
+        if (postInfo.description) finalPostInfo.description = postInfo.description;
+        // auto_add_music is not shown in MEDIA_UPLOAD examples, so we omit it.
+    }
+    requestPayload.post_info = finalPostInfo;
+
+
+    try {
+        const response = await axios.post(TIKTOK_PHOTO_INIT_ENDPOINT,
+            requestPayload, // Use the dynamically constructed payload
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=UTF-8', // TikTok docs sometimes show 'application/json'
+                }
+            }
+        );
+
+        const responseData = response.data;
+        if (responseData.error && responseData.error.code !== "ok") {
+            logger.error(`initiateTikTokPhotoPost (${post_mode}): TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
+            throw new HttpsError('aborted', `TikTok API error (${post_mode} photo): ${responseData.error.message} (Code: ${responseData.error.code})`);
+        }
+
+        logger.info(`initiateTikTokPhotoPost (${post_mode}): Successfully initiated photo post for user ${userId}. Publish ID: ${responseData.data.publish_id}`);
+        return { success: true, data: responseData.data };
+
+    } catch (error) {
+        logger.error(`initiateTikTokPhotoPost (${post_mode}): Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+         if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
+            const tiktokError = error.response.data.error;
+            throw new HttpsError('aborted', `TikTok API error (${post_mode} photo): ${tiktokError.message} (Code: ${tiktokError.code})`);
+        }
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Failed to initiate TikTok photo post (${post_mode}): ${error.message}`);
+    }
+});
+
+// 4. Get Post Status
+exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error("getTikTokPostStatus: Authentication Error.");
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    const { accessToken, publishId } = request.data;
+    if (!accessToken || !publishId) {
+        logger.error(`getTikTokPostStatus: User ${userId} called with missing accessToken or publishId.`);
+        throw new HttpsError('invalid-argument', 'Missing "accessToken" or "publishId" in the request.');
+    }
+
+    const TIKTOK_STATUS_FETCH_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
+    logger.info(`User ${userId} fetching status for TikTok publish ID: ${publishId}`);
+
+    try {
+        const response = await axios.post(TIKTOK_STATUS_FETCH_ENDPOINT,
+            { publish_id: publishId },
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=UTF-8',
+                }
+            }
+        );
+
+        const responseData = response.data;
+        if (responseData.error && responseData.error.code !== "ok") {
+            logger.error(`getTikTokPostStatus: TikTok API error for user ${userId}, publishId ${publishId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
+            throw new HttpsError('aborted', `TikTok API error: ${responseData.error.message} (Code: ${responseData.error.code})`);
+        }
+
+        logger.info(`getTikTokPostStatus: Successfully fetched status for user ${userId}, publishId ${publishId}. Status: ${responseData.data.status}`);
+        return { success: true, data: responseData.data };
+
+    } catch (error) {
+        logger.error(`getTikTokPostStatus: Error for user ${userId}, publishId ${publishId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
+        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
+            const tiktokError = error.response.data.error;
+            throw new HttpsError('aborted', `TikTok API error: ${tiktokError.message} (Code: ${tiktokError.code})`);
+        }
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Failed to fetch TikTok post status: ${error.message}`);
+    }
+});
+
+// --- END NEW: TikTok Direct Posting API Functions ---
+
+// ... fetchTikTokUserInfo function should remain as is ...
+// ... updateTikTokUserDetails function should remain as is ...
+// ... existing code ...

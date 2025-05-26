@@ -3,5 +3,11 @@
     "origin": ["http://localhost:5174"],
     "method": ["GET"],
     "maxAgeSeconds": 3600
+  },
+  {
+    "origin": ["https://app.lungoai.com"],
+    "method": ["GET"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
   }
-] 
+]

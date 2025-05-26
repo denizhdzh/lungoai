@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import app from '../firebase'; // Assuming firebase.js is in src folder
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import { DotLottieReact } from '@lottiefiles/dotlottie-react'; // Import DotLottieReact
+import { motion } from 'framer-motion'; // NEW: Import motion
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
@@ -10,6 +10,13 @@ const googleProvider = new GoogleAuthProvider();
 function SignUp() {
   const navigate = useNavigate(); // Initialize useNavigate
   const [isLoading, setIsLoading] = useState(true); // Add loading state
+  const [isSignUpDarkMode, setIsSignUpDarkMode] = useState(false); // NEW: State for dark mode
+
+  // NEW: Effect to read dark mode from localStorage
+  useEffect(() => {
+    const savedMode = localStorage.getItem('darkMode') === 'true';
+    setIsSignUpDarkMode(savedMode);
+  }, []);
 
   // Simulate loading
   useEffect(() => {
@@ -42,13 +49,25 @@ function SignUp() {
   // --- Full Page Loader ---
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
-        {/* Using a slightly different Lottie or the same one is fine */}
-        <DotLottieReact
-          src="https://lottie.host/f5046ffa-160b-4e7b-9d11-1c8f4fe34e04/eppkYXQ80Y.lottie" 
-          loop
-          autoplay
-          style={{ width: '80px', height: '80px' }}
+      <div className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isSignUpDarkMode ? 'bg-neutral-900 text-white' : 'bg-white text-black'}`}>
+        {/* Animated Logo Loader using Framer Motion */}
+        <motion.div
+          style={{
+            width: 80, // Represents 4 units
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 10px currentColor', // Thicker inside border (was 3px)
+            marginBottom: 20, // Optional space below
+            borderRadius: '16px', // Added corner radius
+          }}
+          animate={{
+            height: [80, 40, 80], // 4x4 -> 4x2 -> 4x4
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            repeatType: "loop", // Changed from "reverse" to ensure it goes 80-40-80 then restarts 80-40-80
+            ease: "easeInOut",
+          }}
         />
       </div>
     );
@@ -75,7 +94,7 @@ function SignUp() {
       <div className="max-w-sm w-full relative z-10">
         {/* Logo and Header Section */}
         <div className="text-center mb-10">
-          <img src="/logonaked-black.png" alt="Lungo AI Logo" className="h-16 mx-auto mb-5" />
+          <img src="/logonaked-black.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
           <h1 className="text-3xl font-normal tracking-wide text-black mb-2">lungo ai</h1>
           <p className="text-base text-gray-500">Join Lungo AI and bring your ideas to life.</p>
         </div>

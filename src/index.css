@@ -19,3 +19,14 @@
     @apply h-full;
   } */
 }
+
+@layer utilities {
+  /* Hide scrollbar for WebKit browsers (Chrome, Safari, newer Edge) */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}

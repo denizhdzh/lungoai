@@ -144,7 +144,6 @@ function Admin() {
   const [searchQuery, setSearchQuery] = useState(''); // State for search input
   const [searchResults, setSearchResults] = useState([]); // State for search results
   const [isSearching, setIsSearching] = useState(false); // State for search loading indicator
-  const [sankeyData, setSankeyData] = useState({ series: [], options: {} }); // <-- Sankey State
   const [barChartData, setBarChartData] = useState({ series: [], options: {} }); // <-- Bar Chart State
 
   // --- Calculate Statistics & Process Data --- (Reverted to use hardcoded plans)
@@ -402,130 +401,6 @@ function Admin() {
     return { series: filteredSeries, options: barChartOptions };
   };
 
-  // --- Prepare Sankey Data --- (Restored Function Definition)
-  const prepareSankeyData = (users) => {
-    const links = {}; // { "sourceNode_targetNode": count }
-
-    // Define Plan names for Sankey nodes using the mapping
-    const getSankeyPlanNodeName = (priceId) => {
-        const details = getPlanDetailsFromPriceId(priceId);
-        return details ? `Subscribed - ${details.name}` : null; // Return null if not mapped
-    };
-
-    // Define stage nodes
-    const STAGE_SIGNED_UP = "Signed Up";
-    const STAGE_ONBOARDING_COMPLETE = "Completed Onboarding";
-    const STAGE_ONBOARDING_INCOMPLETE = "Did Not Complete Onboarding";
-    const STAGE_NOT_SUBSCRIBED = "Not Actively Subscribed";
-
-    let countSignedUp = users.length;
-    let countOnboardingComplete = 0;
-    let countOnboardingIncomplete = 0;
-    
-    // Define active statuses
-    const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
-
-    // Calculate transitions
-    users.forEach(user => {
-        const didCompleteOnboarding = user.onboardingCompleted === true;
-
-        // Stage 1 to Stage 2: Signup -> Onboarding Status
-        if (didCompleteOnboarding) {
-            countOnboardingComplete++;
-            const source = STAGE_ONBOARDING_COMPLETE;
-
-            // Stage 2 to Stage 3: Completed Onboarding -> Subscription Status
-            let target = STAGE_NOT_SUBSCRIBED; // Default target for completed but not active
-            const priceId = user.stripePriceId;
-            const status = user.subscriptionStatus;
-            const sankeyPlanName = getSankeyPlanNodeName(priceId);
-
-            if (sankeyPlanName && status && ACTIVE_SUBSCRIPTION_STATUSES.includes(status.toLowerCase())) {
-                 target = sankeyPlanName; // Target specific mapped plan name
-            }
-            
-            const keyStage2to3 = `${source}_${target}`;
-            links[keyStage2to3] = (links[keyStage2to3] || 0) + 1;
-
-        } else {
-            countOnboardingIncomplete++;
-            // Stage 2 to Stage 3 (Implicit): Incomplete Onboarding -> Not Subscribed
-            const source = STAGE_ONBOARDING_INCOMPLETE;
-            const target = STAGE_NOT_SUBSCRIBED;
-            const keyStage2to3_incomplete = `${source}_${target}`;
-            links[keyStage2to3_incomplete] = (links[keyStage2to3_incomplete] || 0) + 1;
-        }
-    });
-
-    // Add Stage 1 to Stage 2 links
-    if (countOnboardingComplete > 0) {
-        links[`${STAGE_SIGNED_UP}_${STAGE_ONBOARDING_COMPLETE}`] = countOnboardingComplete;
-    }
-    if (countOnboardingIncomplete > 0) {
-        links[`${STAGE_SIGNED_UP}_${STAGE_ONBOARDING_INCOMPLETE}`] = countOnboardingIncomplete;
-    }
-
-    // Format links for ApexCharts
-    const seriesData = Object.entries(links)
-        .map(([key, weight]) => {
-            const nodes = key.split('_');
-            const from = String(nodes[0] || 'Unknown');
-            const to = String(nodes[1] || 'Unknown');
-            return [from, to, weight];
-        })
-        .filter(link => link[2] > 0); 
-
-    // Define Sankey Options (keeping previous theme)
-    const sankeyChartOptions = {
-         chart: {
-            type: 'sankey',
-            height: 450, 
-            fontFamily: CHART_DEFAULTS.fontFamily,
-            foreColor: CHART_DEFAULTS.foreColor,
-            background: CHART_DEFAULTS.background,
-            animations: CHART_DEFAULTS.animations,
-         },
-         plotOptions: {
-            sankey: {
-                 vertical: false,
-            },
-            theme: {
-                mode: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-                monochrome: {
-                  enabled: true,
-                  color: CHART_COLORS.accentOrange, 
-                  shadeTo: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-                  shadeIntensity: 0.65
-                }
-            }
-         },
-        tooltip: {
-             style: {
-                fontSize: '12px',
-                fontFamily: CHART_DEFAULTS.fontFamily,
-             },
-            y: {
-                formatter: function (val, { series, seriesIndex, dataPointIndex, w }) {
-                   const link = w.globals.series.original[seriesIndex]?.data[dataPointIndex];
-                   if (link && link.length === 3) {
-                     const fromNode = link[0] || 'Source';
-                     const toNode = link[1] || 'Target';
-                     return `${fromNode} → ${toNode}: ${val} users`;
-                   }
-                   return val + " users"; 
-                },
-                 title: {
-                    formatter: (seriesName) => '', 
-                 }
-            }
-        },
-    };
-
-    const finalSeries = seriesData.length > 0 ? [{ name: 'User Journey', data: seriesData }] : []; 
-
-    return { series: finalSeries, options: sankeyChartOptions };
-  };
-
   // --- Fetch Data on Admin Login ---
   useEffect(() => {
     if (!isAdminLoggedIn) return; // Only run if admin is logged in
@@ -598,41 +473,46 @@ function Admin() {
         });
         console.log("Finished calculating generation counts.");
 
-        // 3. Fetch Feature Requests
-        const requestsDocRef = doc(db, 'system', 'feature-requests');
-        const requestsDocSnap = await getDoc(requestsDocRef);
-        let fetchedFeatures = [];
-        if (requestsDocSnap.exists()) {
-          const data = requestsDocSnap.data();
-          fetchedFeatures = Object.entries(data)
-            .map(([key, value]) => ({ // Use map key as feature ID/title
-                id: key, 
-                title: key, // Assuming key is the title
-                votes: value?.vote || 0 // Safely access vote count
-            }))
-            .sort((a, b) => b.votes - a.votes); // Sort by votes descending
-        } else {
-          console.log("Feature requests document not found!");
+        // 3. Fetch User-Specific Feature Requests
+        let allUserFeatureRequests = [];
+        if (fetchedUsers.length > 0) {
+            const featureRequestPromises = fetchedUsers.map(async (user) => {
+                try {
+                    const requestsRef = collection(db, 'users', user.id, 'featureRequests');
+                    const requestsSnapshot = await getDocs(requestsRef);
+                    requestsSnapshot.forEach(docSnapshot => {
+                        const data = docSnapshot.data();
+                        allUserFeatureRequests.push({
+                            id: `${user.id}-${docSnapshot.id}`, // Composite ID for React key
+                            userId: user.id,
+                            userEmail: user.email, // Add user's email
+                            requestId: docSnapshot.id,
+                            title: data.title || 'No Title',
+                            status: data.status || 'Unknown',
+                            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()) 
+                        });
+                    });
+                } catch (err) {
+                    console.error(`Error fetching feature requests for user ${user.id}:`, err);
+                }
+            });
+            await Promise.all(featureRequestPromises);
+            allUserFeatureRequests.sort((a, b) => b.createdAt - a.createdAt); // Sort newest first
         }
-        setFeatureRequests(fetchedFeatures);
-        console.log("Fetched Feature Requests:", fetchedFeatures.length);
+        setFeatureRequests(allUserFeatureRequests);
+        console.log("Fetched All User Feature Requests:", allUserFeatureRequests.length);
 
         // 4. Calculate Stats (No longer needs plans passed)
         const calculatedStats = processUserData(fetchedUsers, totalGeneratedImages, totalGeneratedVideos);
         setStats(calculatedStats);
         console.log("Calculated Stats:", calculatedStats);
 
-        // 5. Prepare Sankey Data (No longer needs plans passed)
-        const sankeyChartData = prepareSankeyData(fetchedUsers);
-        setSankeyData(sankeyChartData);
-        console.log("Prepared Sankey Data:", sankeyChartData);
-
-        // 6. Prepare Bar Chart Data (Instead of Treemap)
+        // 5. Prepare Bar Chart Data (Instead of Treemap)
         const barData = prepareBarChartData(fetchedUsers);
         setBarChartData(barData);
         console.log("Prepared Bar Chart Data:", barData);
 
-        // 7. Filter Recent Signups (e.g., last 7 days)
+        // 6. Filter Recent Signups (e.g., last 7 days)
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const recent = fetchedUsers
@@ -640,6 +520,8 @@ function Admin() {
             .sort((a, b) => b.createdAt.toDate() - a.createdAt.toDate()); // Sort newest first
         setRecentSignups(recent);
         console.log("Recent Signups (Last 7 Days):", recent.length);
+
+        setUsersData(fetchedUsers); // Set usersData state here
 
       } catch (error) {
         console.error("Error fetching admin data:", error);
@@ -1471,27 +1353,6 @@ function Admin() {
                   <div className="flex items-center justify-center h-40 text-sm text-gray-500 dark:text-zinc-400">
                     No feature requests found.
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* --- NEW: User Flow Sankey Chart --- */}
-            <div className="bg-white dark:bg-zinc-950 p-5 rounded-sm border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 transition-colors">
-              <div className="border-b border-gray-200 dark:border-zinc-800 pb-4 mb-4">
-                  <h3 className="text-base font-medium text-gray-800 dark:text-zinc-200">User Journey: Signup to Subscription</h3>
-              </div>
-              <div>
-                {sankeyData.series && sankeyData.series.length > 0 && sankeyData.series[0].data.length > 0 ? (
-                    <ReactApexChart
-                        options={sankeyData.options}
-                        series={sankeyData.series}
-                        type="sankey"
-                        height={sankeyData.options?.chart?.height || 400}
-                    />
-                ) : (
-                    <div className="flex items-center justify-center h-40 text-sm text-gray-500 dark:text-zinc-400">
-                        Not enough data to display user flow.
-                    </div>
                 )}
               </div>
             </div>

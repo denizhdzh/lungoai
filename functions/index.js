@@ -1,3 +1,4 @@
+const functions = require('firebase-functions'); // <-- ADD THIS LINE
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onRequest } = require("firebase-functions/v2/https"); // Keep for the new task handler
 const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import onSchedule
@@ -24,15 +25,14 @@ const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
   // Basic Plan
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 15, videos: 10, slideshows: 30 }, // Monthly
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 15, videos: 10, slideshows: 30 }, // Yearly
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 2000 }, // Monthly Basic
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 2000 }, // Yearly Basic
   // Pro Plan
-  "price_1RMqH7Df8kAOBAT30BGfHv66": { images: 50, videos: 40, slideshows: 100 }, // Monthly
-  "price_1RMqHMDf8kAOBAT3bCTcdNwq": { images: 50, videos: 40, slideshows: 100 }, // Yearly
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { general_credits: 10000 }, // Monthly Pro
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { general_credits: 10000 }, // Yearly Pro
   // Business Plan
-  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 120, videos: 90, slideshows: 250 }, // Monthly
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 120, videos: 90, slideshows: 250 } // Yearly
-
+  "price_1RMqHgDf8kAOBAT3m6kthIND": { general_credits: 30000 }, // Monthly Business
+  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { general_credits: 30000 }  // Yearly Business
 };
 // --- End Plan Credit Allocations ---
 
@@ -44,6 +44,12 @@ const runwayTasksQueueName = 'runway-polling-queue'; // The queue you created in
 const runwayTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/handleVideoPollingTask`; // URL of the Runway polling function
 const MAX_POLLING_DURATION_SECONDS = 10 * 60; // 10 minutes
 const POLLING_INTERVAL_SECONDS = 60; // 1 minute
+
+// --- NEW: Missing constants for polling ---
+const RUNWAY_POLLING_TIMEOUT_MS = MAX_POLLING_DURATION_SECONDS * 1000; // Convert to milliseconds
+const MAX_POLLING_ATTEMPTS = 5; // Max polling attempts for a task
+const MAX_POLLING_BACKOFF_SECONDS = 300; // 5 minutes max backoff
+// --- END NEW ---
 
 // --- NEW: Cloud Tasks Configuration for Image Generation ---
 const imageGenTasksQueueName = 'image-generation-queue'; // New queue for image generation tasks
@@ -60,10 +66,15 @@ const videoPipelineTasksQueueName = 'video-pipeline-queue'; // New queue for sta
 const videoPipelineTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/startVideoPipeline`;
 const VIDEO_PIPELINE_TIMEOUT_SECONDS = 540; // Timeout for the pipeline initiation function
 
-// --- NEW: Cloud Tasks Configuration for Direct Image Generation (Polling) ---
-// const directImageGenTasksQueueName = 'direct-image-generation-queue'; 
-// const directImageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performDirectImageGenerationTask`;
-// const DIRECT_IMAGE_GEN_TIMEOUT_SECONDS = IMAGE_GEN_TIMEOUT_SECONDS; // Can reuse existing timeout or define a new one
+// --- NEW: Cloud Tasks Configuration for Direct Image Generation ---
+const directImageGenTasksQueueName = 'direct-image-gen-queue';
+const directImageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performDirectImageGenerationTask`;
+const DIRECT_IMAGE_GEN_TIMEOUT_SECONDS = IMAGE_GEN_TIMEOUT_SECONDS; // Reuse existing timeout
+
+// --- NEW: Cloud Tasks Configuration for Slideshow Generation ---
+const slideshowTasksQueueName = 'slideshow-generation-queue';
+const slideshowTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performSlideshowGenerationTask`;
+const SLIDESHOW_GEN_TIMEOUT_SECONDS = 540; // Timeout for slideshow generation, adjust as needed
 
 // command.js içeriğini buraya alalım (veya ortak bir modülden import edelim)
 // !! ÖNEMLİ: Bu komut listesini src/command.js ile senkronize tutmalısın!
@@ -149,18 +160,16 @@ const commandDefinitions = [
   {
     "code": 301,
     "name": "GENERATE_IMAGE_TIKTOK_SLIDESHOW",
-    "description": "Generates text content for a 4-image TikTok-style slideshow using a chosen background.",
+    "description": "Generates a 4-slide TikTok-style slideshow using a product, background, and specified type.",
      "parameters": [
-       { "name": "topic", "type": "string", "description": "The central theme or subject for the slideshow text if specific slide text is not provided.", "required": false },
-       { "name": "slide_1_text", "type": "string", "description": "Optional. Specific text for the first slide.", "required": false },
-       { "name": "slide_2_text", "type": "string", "description": "Optional. Specific text for the second slide.", "required": false },
-       { "name": "slide_3_text", "type": "string", "description": "Optional. Specific text for the third slide.", "required": false },
-       { "name": "slide_4_text", "type": "string", "description": "Optional. Specific text for the fourth slide.", "required": false },
-       { "name": "background_name", "type": "string", "description": "Optional. The name of a background image from user settings. If omitted, a suitable one is chosen.", "required": false },
-       { "name": "image_style", "type": "string", "description": "Optional. Consistent artistic style for text overlays or minor visual elements.", "required": false },
-       // --- ADDED LANGUAGE PARAMETER ---
+      { "name": "user_prompt", "type": "string", "description": "The user's textual description or topic for the slideshow content.", "required": false },
+      { "name": "product_id", "type": "string", "description": "The ID of the user's product to be featured or used as context.", "required": true },
+      { "name": "background_id", "type": "string", "description": "The ID of the user's background image to be used for the slideshow.", "required": true },
+      { "name": "slideshow_type", "type": "string", "description": "The type of slideshow to generate: 'safe_secure' (comfort and trust), 'learn_grow' (educational content), 'viral_fun' (trendy and engaging), or 'personal_stories' (relatable experiences).", "required": true },
        { "name": "language", "type": "string", "description": "Optional. The language for the generated slide text (e.g., 'en', 'es', 'tr'). Default: 'en'.", "required": false }
-    ]
+    ],
+    "jobType": "slideshow_generation",
+    "estimated_cost": 50
   },
   // --- EDITING COMMANDS (400-499) ---
   {
@@ -238,13 +247,7 @@ const commandDefinitions = [
     "parameters": [ { "name": "target_mode", "type": "string", "description": "Optional. Specify 'light' or 'dark'. If omitted, it toggles the current mode.", "required": false } ]
   },
 
-  // --- AUTHENTICATION COMMANDS (700-799) ---
-  {
-    "code": 701,
-    "name": "LOG_OUT",
-    "description": "Logs the user out of the application.",
-    "parameters": [] // No parameters needed for logout
-  },
+
   // --- INTERNAL COMMANDS (Not directly parsed from user text) ---
   {
     "code": 507,
@@ -295,217 +298,174 @@ const commandDefinitions = [
 // }
 
 exports.parseUserCommand = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-  // For v2 onCall, data is in request.data
+  // --- Authentication Check ---
+  const userId = request.auth?.uid;
+  if (!userId) {
+    logger.error("parseUserCommand called without authentication.");
+    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+  }
+
   const data = request.data;
-  // Authentication info is in request.auth
-  // const auth = request.auth;
-
-  // --- Initialize OpenAI Client within the handler ---
-let openai;
-try {
-    // const functionsConfig = functions.config(); // Eski yöntem
-    // const apiKey = functionsConfig.openai?.key; // Eski yöntem
-    const apiKey = process.env.OPENAI_KEY; // YENİ YÖNTEM: process.env kullan
-
-  if (!apiKey) {
-      logger.error("OpenAI API Key not found in environment variables (OPENAI_KEY). Set using `firebase functions:config:set openai.key=...` or directly in environment.");
+  
+  // --- Initialize OpenAI Client (only if text processing is needed) ---
+  let openai;
+  try {
+    const apiKey = process.env.OPENAI_KEY; 
+    if (!apiKey) {
+      logger.error("OpenAI API Key not found in environment variables (OPENAI_KEY).");
       throw new HttpsError('internal', 'OpenAI service is not available due to missing configuration.');
     }
-      openai = new OpenAI({ apiKey: apiKey });
-    logger.info("OpenAI SDK initialized successfully using process.env for this invocation.");
-
+    openai = new OpenAI({ apiKey: apiKey });
+    logger.info("OpenAI SDK initialized successfully for this invocation.");
   } catch (error) {
-    logger.error("Error initializing OpenAI within handler using process.env:", error);
+    logger.error("Error initializing OpenAI within handler:", error);
     throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
   }
-  // --- End OpenAI Client Initialization ---
 
-  // --- Güvenlik ve Girdi Kontrolü ---
-  // Kimlik doğrulaması yapılmış kullanıcı mı kontrolü (opsiyonel ama önerilir)
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
-  // }
-
-  // OpenAI SDK başlatılamadıysa hata döndür - Bu kontrol artık yukarıdaki try/catch ile gereksizleşti, ama zararı yok.
-  if (!openai) {
-      logger.error("OpenAI SDK not initialized. Check configuration and logs.");
-      throw new HttpsError('internal', 'OpenAI service is not available. Have you configured the API key?');
-  }
-
-  const userText = data.text;
-  if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
-    throw new HttpsError('invalid-argument', 'The function must be called with a non-empty "text" argument.');
-  }
-  // --- NEW: Extract chatHistory ---
-  const chatHistory = data.chatHistory || []; // Default to empty array if not provided
-  logger.info("Received user text:", userText, "Chat History:", chatHistory);
-
-
-  // --- Prompt Hazırlama ---
-  // Komutları ve açıklamalarını içeren bir metin bloğu oluştur
-  const commandDescriptions = commandDefinitions.map(cmd =>
-    `Code: ${cmd.code}\nName: ${cmd.name}\nDescription: ${cmd.description}\nParameters: ${JSON.stringify(cmd.parameters)}\n---`
-  ).join('\n');
-
-  const formattedHistory = chatHistory.map(line => `${line}`).join('\n'); // Format history for prompt
-
-  const prompt = `
-    Analyze the user's request below. Your goal is to identify the single most appropriate command from the provided list that matches the user's primary intent. Extract values for ALL parameters (required and optional) defined for that command if they are present or clearly implied in the request.
-    Consider the chat history provided for better context.
-
-    Available Commands:
-    ${commandDescriptions}
-
-    Chat History (Last 5 exchanges):
-    ${formattedHistory}
-
-    Current User Request: "${userText}"
-
-    **Matching Guidelines:**
-    *   Focus on the core action the user wants (e.g., "generate video", "generate image", "add product", "log out").
-    *   If the request clearly indicates video generation (e.g., contains "video", "tiktok video", "make a video"), strongly prefer command 101 (GENERATE_UGC_TIKTOK_VIDEO). Extract details like subject, action, setting etc., into its parameters.
-    *   Similarly, prioritize image generation commands (201, 202, 203) if the intent is clearly about creating an image.
-    *   If the user's request is ambiguous or doesn't align well with the intent of any command, return commandCode: 0.
-
-    **Special Instructions for GENERATE_UGC_IMAGE (Code 202):** If you identify command 202, prioritize extracting the core descriptive text about the person into the 'subject_description' parameter. Then, attempt to separately extract specific optional parameters like 'age', 'gender', 'clothing_description', etc., from the user text if they are explicitly mentioned or clearly inferable *in addition* to the core description. The 'subject_description' should contain the main identifying information.
-
-    Your response MUST be a JSON object containing:
-    1.  "commandCode": The integer code of the matched command.
-    2.  "parameters": An object containing values for **ALL parameters (both required and optional)** defined for the matched command, IF they are mentioned or can be reasonably inferred from the user text. If a parameter (required or optional) is not mentioned/found, use null for its value. If no parameters are defined for the command, provide an empty object {}.
-
-    Example Response Format 1 (Required & Optional Params Found - Command 202):
-    {
-      "commandCode": 202,
-      "parameters": {
-        "subject_description": "25 year old blonde woman in a park wearing a red dress", // Core description
-        "clothing_description": "wearing a red dress", // Extracted separately if possible
-        "setting_description": "in a park", // Extracted separately
-        "image_style": null,
-        "age": 25, // Extracted separately
-        "gender": "woman" // Extracted separately
-      }
+  // --- NEW FLOW: Check if frontend sent a fixed command code ---
+  if (data.commandCode && typeof data.commandCode === 'number' && data.commandCode !== 0) {
+    logger.info(`[parseUserCommand User ${userId}] Frontend sent fixed commandCode: ${data.commandCode}`);
+    
+    const commandDef = commandDefinitions.find(cmd => cmd.code === data.commandCode);
+    if (!commandDef) {
+      logger.error(`[parseUserCommand User ${userId}] Invalid command code received from frontend: ${data.commandCode}`);
+      throw new HttpsError('invalid-argument', `Invalid command code: ${data.commandCode}`);
     }
-    Example Response Format 2 (Only Subject Description Found - Command 202):
-    {
-        "commandCode": 202,
-        "parameters": {
-            "subject_description": "sad man looking out window",
-            "clothing_description": null,
-            "setting_description": null,
-            "image_style": null,
-            "age": null,
-            "gender": "man" // Inferred
+
+    // Use client-sent parameters directly
+    const finalParameters = data.parameters || {};
+    
+    logger.info(`[parseUserCommand User ${userId}] Using frontend parameters for command ${data.commandCode}:`, finalParameters);
+
+    // --- EXECUTE THE COMMAND ---
+    logger.info(`[parseUserCommand User ${userId}] Executing command ${data.commandCode} with final parameters:`, finalParameters);
+    
+    // Call the appropriate generation function based on command code
+    switch (data.commandCode) {
+      case 101: // GENERATE_UGC_TIKTOK_VIDEO
+        logger.info(`[parseUserCommand User ${userId}] Calling requestImageGeneration for video`);
+        try {
+          // Destructure mentionedCreatorId instead of creator_id from finalParameters
+          const { product_id, mentionedCreatorId, user_prompt, language } = finalParameters;
+
+          // Update the check to use mentionedCreatorId
+          if (!product_id || !mentionedCreatorId) {
+            logger.error(`[parseUserCommand User ${userId}] Missing required parameters for video: product_id=${product_id}, mentionedCreatorId=${mentionedCreatorId}`);
+            throw new HttpsError('invalid-argument', "Video generation requires Product and UGC Model selection.");
+          }
+          
+          const videoRequest = {
+            auth: request.auth,
+            data: finalParameters,
+            rawRequest: request.rawRequest || {}
+          };
+
+          const videoResult = await exports.requestImageGeneration.run(videoRequest);
+          logger.info(`[parseUserCommand User ${userId}] requestImageGeneration returned:`, videoResult);
+          return videoResult;
+
+        } catch (videoError) {
+          logger.error(`[parseUserCommand User ${userId}] Error in video generation:`, videoError);
+          if (videoError instanceof HttpsError) throw videoError;
+          throw new HttpsError('internal', `Video generation failed: ${videoError.message}`);
         }
-    }
-    Example Response Format 3 (Other Command Type):
-    {
-      "commandCode": 201,
-      "parameters": {
-         "scene_description": "futuristic city",
-         "image_style": null
-      }
-    }
-    Example Response Format 4 (No Parameters Needed):
-    {
-        "commandCode": 701,
-        "parameters": {}
-    }
 
-    Analyze the user request: "${userText}" and provide the JSON output:
-  `;
+      case 201: // GENERATE_BACKGROUND_IMAGE
+      case 202: // GENERATE_UGC_IMAGE  
+        logger.info(`[parseUserCommand User ${userId}] Calling generateImage for image command ${data.commandCode}`);
+        try {
+          const imageRequest = {
+            auth: request.auth,
+            data: { ...finalParameters, commandCode: data.commandCode }, // Pass commandCode here
+            rawRequest: request.rawRequest || {}
+          };
 
-  // --- OpenAI Çağrısı ---
-  try {
-    logger.info("Sending prompt to OpenAI...");
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Model seçimini yapabilirsin
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1, // Daha deterministik sonuçlar için düşük sıcaklık
-      response_format: { type: "json_object" }, // JSON çıktısı istediğimizi belirtelim
-    });
+          const imageResult = await exports.generateImage.run(imageRequest);
+          logger.info(`[parseUserCommand User ${userId}] generateImage returned:`, imageResult);
+          return imageResult;
 
-    logger.info("Raw response from OpenAI:", completion.choices[0].message.content);
-
-    // OpenAI'den gelen JSON yanıtını parse et
-    const resultJsonString = completion.choices[0].message.content;
-    let result;
-    try {
-        result = JSON.parse(resultJsonString);
-    } catch (parseError) {
-        logger.error("Error parsing JSON response from OpenAI:", parseError, "Raw response:", resultJsonString);
-        throw new HttpsError('internal', 'Failed to parse response from AI service.');
-    }
-
-
-    // --- Yanıt Doğrulama ve İşleme ---
-    if (!result || typeof result.commandCode !== 'number' || typeof result.parameters !== 'object') {
-         logger.error("Invalid JSON structure received from OpenAI:", result);
-         throw new HttpsError('internal', 'Received invalid structure from AI service.');
-    }
-
-    // Dönen commandCode'un tanımlı olup olmadığını kontrol et
-    const commandDef = commandDefinitions.find(cmd => cmd.code === result.commandCode);
-    // Check for code 0 specifically OR if the returned code isn't in our active list
-    if (result.commandCode === 0 || !commandDef) {
-        // Handle code 0 slightly differently in log if AI returned it directly
-        if (result.commandCode === 0) {
-             logger.info(`OpenAI determined no clear command match for: \"${userText}\". Returning code 0.`);
-        } else { // Code wasn't 0, but not found in our list (should be less likely now)
-             logger.error(`OpenAI returned an invalid or removed command code: ${result.commandCode}. User text: \"${userText}\"`);
+        } catch (imageError) {
+          logger.error(`[parseUserCommand User ${userId}] Error in image generation:`, imageError);
+          if (imageError instanceof HttpsError) throw imageError;
+          throw new HttpsError('internal', `Image generation failed: ${imageError.message}`);
         }
-        return { commandCode: 0, parameters: {} }; 
+
+      case 301: // GENERATE_IMAGE_TIKTOK_SLIDESHOW
+        logger.info(`[parseUserCommand User ${userId}] Calling generateImageSlideshow for slideshow`);
+        try {
+          const { product_id, background_id, slideshow_type, user_prompt, language } = finalParameters;
+
+          if (!product_id || !background_id || !slideshow_type) {
+            logger.error(`[parseUserCommand User ${userId}] Missing required parameters for slideshow: product_id=${product_id}, background_id=${background_id}, slideshow_type=${slideshow_type}`);
+            throw new HttpsError('invalid-argument', "Slideshow generation requires Product, Background, and Type selection.");
+          }
+          
+          const productDoc = await db.collection('users').doc(userId).collection('products').doc(product_id).get();
+          if (!productDoc.exists) {
+            logger.error(`[parseUserCommand User ${userId}] Product with ID ${product_id} not found for slideshow.`);
+            throw new HttpsError('not-found', `Product not found: ${product_id}.`);
+          }
+          const productData = productDoc.data();
+
+          const backgroundDoc = await db.collection('users').doc(userId).collection('backgrounds').doc(background_id).get();
+          if (!backgroundDoc.exists) {
+            logger.error(`[parseUserCommand User ${userId}] Background with ID ${background_id} not found for slideshow.`);
+            throw new HttpsError('not-found', `Background not found: ${background_id}.`);
+          }
+          const backgroundData = backgroundDoc.data();
+          
+          const effectiveTopic = user_prompt || productData.name || 'AI Generated Slideshow Content';
+          
+          const slideshowParams = {
+            topic: effectiveTopic,
+            background_name: backgroundData.name, 
+            language: language || 'en',
+            _product_context: productData, 
+            _slideshow_type_context: slideshow_type,
+            product_id: product_id,
+            background_id: background_id,
+          };
+
+          logger.info(`[parseUserCommand User ${userId}] Final slideshow parameters:`, slideshowParams);
+
+          const slideshowRequest = {
+            auth: request.auth,
+            data: slideshowParams,
+            rawRequest: request.rawRequest || {}
+          };
+
+          const slideshowResult = await exports.generateImageSlideshow.run(slideshowRequest);
+          logger.info(`[parseUserCommand User ${userId}] generateImageSlideshow returned:`, slideshowResult);
+          return slideshowResult;
+
+        } catch (slideshowError) {
+          logger.error(`[parseUserCommand User ${userId}] Error in slideshow generation:`, slideshowError);
+          if (slideshowError instanceof HttpsError) throw slideshowError;
+          throw new HttpsError('internal', `Slideshow generation failed: ${slideshowError.message}`);
+        }
+
+      default:
+        logger.error(`[parseUserCommand User ${userId}] No handler for command code ${data.commandCode}`);
+        throw new HttpsError('invalid-argument', `Command ${data.commandCode} is not supported for direct execution.`);
     }
 
-     // --- Parameter Extraction Logic (Revised) ---
-     // Artık hem zorunlu hem isteğe bağlı parametreleri işlememiz lazım.
-     const finalParameters = {};
-     // Önce tüm tanımlı parametreleri null ile başlatalım
-     commandDef.parameters.forEach(p => {
-         finalParameters[p.name] = null;
-     });
-     // Sonra OpenAI'nin döndürdüğü ve null olmayan parametrelerle üzerine yazalım
-     if (result.parameters) { // Check if parameters object exists
-         Object.keys(result.parameters).forEach(paramName => {
-             // Ensure the parameter name exists in our definition for the command
-             if (commandDef.parameters.some(p => p.name === paramName)) {
-                 // Assign the value if it's not explicitly null from OpenAI
-                 if (result.parameters[paramName] !== null) {
-                     finalParameters[paramName] = result.parameters[paramName];
-                 }
-                 // If OpenAI returned null, it stays null (as initialized)
-        } else {
-                 // Log if OpenAI returned a parameter not defined for this command
-                 logger.warn(`OpenAI returned parameter '${paramName}' which is not defined for command ${result.commandCode}. Ignoring.`);
-             }
-         });
-     }
+  } else {
+    // --- LEGACY TEXT-ONLY FLOW (for backwards compatibility) ---
+    const userText = data.text;
+    if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'Either a valid command code with parameters, or non-empty text is required.');
+    }
 
-     // Gerekli parametrelerin hala null olup olmadığını kontrol et (opsiyonel loglama)
-     commandDef.parameters.forEach(p => {
-         if (p.required && finalParameters[p.name] === null) {
-              logger.warn(`Required parameter '${p.name}' for command ${result.commandCode} could not be extracted or was null.`);
-              // We don't throw an error here, maybe subsequent functions handle missing required params
-         }
-     });
-     // --- End Parameter Extraction Logic ---
-
-    logger.info("Returning final result:", { commandCode: result.commandCode, parameters: finalParameters });
-    // Sonucu istemciye gönder
-    return { commandCode: result.commandCode, parameters: finalParameters };
-
-  } catch (error) {
-    logger.error("Error calling OpenAI or processing response:", error);
-     // OpenAI'den gelen API hatalarını daha iyi loglamak için
-     if (error instanceof OpenAI.APIError) {
-       logger.error('OpenAI API Error:', error.status, error.name, error.headers, error.error);
-       throw new HttpsError('internal', `OpenAI API Error: ${error.name}`);
-     }
-     // Diğer HttpsError'ları tekrar fırlat
-     if (error instanceof HttpsError) {
-       throw error;
-     }
-     // Diğer genel hatalar
-    throw new HttpsError('internal', 'Failed to process command with AI service.', error.message);
+    logger.info(`[parseUserCommand User ${userId}] Using legacy text-only parsing for: "${userText}"`);
+    
+    // [Keep the existing OpenAI parsing logic for text-only commands]
+    // This would be the original AI parsing code for backwards compatibility
+    // For now, return a simple response
+    return { 
+      commandCode: 0, 
+      parameters: {}, 
+      message: "Text-only commands are not fully implemented in the new flow. Please use the creation interface." 
+    };
   }
 });
 
@@ -856,7 +816,8 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
         }
 
         logger.info("Generated detailed prompt:", detailedPrompt);
-        return detailedPrompt;
+        // MODIFIED: Return an object with prompt and subjectTerm
+        return { detailedPrompt: detailedPrompt, subjectTerm: subjectTerm };
 
     } catch (error) {
         logger.error("Error calling GPT-4o for detailed prompt generation:", error);
@@ -864,132 +825,283 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
     }
 }
 
+// NEW HELPER FUNCTION FOR ENVIRONMENT DETAILS
+async function generateEnvironmentDetailsPrompt(baseSettingDescription, requestedStyle, baseClothingDescription, openaiInstance) {
+    const settingExamples = [
+        // Realistic, visually appealing environments with influencer-style clarity (Copy from generateDetailedUgcPrompt or refine)
+        "Seated at a cozy, modern café — sunlight pouring through large windows, sitting at a wooden table with a coffee cup, plants and minimal decor around.",
+        "Leaning against a brick wall on a quiet city street during golden hour, with soft lighting and subtle street activity in the background.",
+        "Standing inside a bright loft-style studio apartment — large windows, natural shadows, a few plants, and a clean, minimalist setup.",
+        // ... (ensure these are diverse and high-quality examples)
+    ];
+
+    const finalSetting = baseSettingDescription || settingExamples[Math.floor(Math.random() * settingExamples.length)];
+    const finalStyle = requestedStyle || 'modern influencer aesthetic, high quality realistic photo, dynamic composition, natural lighting, fashion focus';
+    const finalClothing = baseClothingDescription;
+    
+    // --- Background Detailing Logic (Copied from generateDetailedUgcPrompt for consistency) ---
+    let backgroundEnhancement = "";
+    let plausiblePlaceName = ""; 
+    if (finalSetting.toLowerCase().includes("cafe")) {
+        plausiblePlaceName = ["The Daily Grind", "Maple Leaf Cafe", "Corner Perk", "Urban Bean"][Math.floor(Math.random() * 4)];
+        backgroundEnhancement = ` Add details like other patrons blurred in the background, coffee cups on tables, maybe plants. Include the cafe name '${plausiblePlaceName}' subtly, perhaps visible reversed on a window or on a small menu board.`;
+    } else if (finalSetting.toLowerCase().includes("university") || finalSetting.toLowerCase().includes("campus")) {
+        plausiblePlaceName = ["Northwood University Commons", "Central City College", "Oakridge Institute Plaza"][Math.floor(Math.random() * 3)];
+        backgroundEnhancement = ` Include architectural details, maybe other students walking in the distance (blurred). Add the name '${plausiblePlaceName}' subtly, perhaps engraved on a stone sign near an entrance or on a banner.`;
+    } else if (finalSetting.toLowerCase().includes("bookstore")) {
+        plausiblePlaceName = ["The Reading Nook", "Chapters & Verse", "Old Town Books"][Math.floor(Math.random() * 3)];
+        backgroundEnhancement = ` Fill the background with bookshelves, books, maybe a comfortable reading chair. Include the name '${plausiblePlaceName}' subtly on a sign near the entrance or a bookmark display.`;
+    } else if (finalSetting.toLowerCase().includes("gallery")) {
+        plausiblePlaceName = ["Avant Garde Gallery", "City Art Space", "The Modern Frame"][Math.floor(Math.random() * 3)];
+        backgroundEnhancement = ` Show abstract or modern paintings on the walls, track lighting, perhaps another visitor blurred in the background. Include the name '${plausiblePlaceName}' subtly on a plaque near the entrance or on a brochure stand.`;
+    } // Add more cases as needed from generateDetailedUgcPrompt if they were good
+    // --- END: Background Detailing Logic ---
+
+    const backgroundInstructions = "Ensure the background is detailed, makes sense for the scene, and is in sharp focus.";
+
+    // REVISED environmentInstructionPrompt to be more aligned with generateDetailedUgcPrompt for environment parts
+    const environmentInstructionPrompt = `
+    You are an AI assistant tasked with generating a highly detailed and evocative description for the **environment and visual properties** of an image, based on a core setting and style. This description will be part of a larger prompt for an AI image generator.
+    Do NOT describe any people, characters, or figures.
+
+    Objective: Create a photorealistic, high-quality image emulating a **natural, spontaneous selfie taken with a modern smartphone (e.g., iPhone, Android)**.
+    The shot should be a **closer, more intimate perspective** (phone not visible, arm relaxed as if holding a phone closer).
+    The ENTIRE image, including the background and all its elements, MUST be in **sharp focus**. Strictly avoid any depth of field effects, bokeh, or artificial background blur.
+
+    
+    Required Elements (These aspects SHOULD BE DETAILED and VARIED by you, the AI, based on user inputs and realism goals):
+    1.  Clothing (Person Aspect - Keep current logic, describe fit/fabric/color/style): The subject is wearing: "${finalClothing}". Describe fit (e.g., 'well-fitting', 'slightly oversized'), fabric, color, and subtle details. Clothing should align with a modern, trendy style appropriate for the setting: "${finalSetting}". Describe cleavage appropriately if relevant to neckline.
+
+    2.  Setting (ENVIRONMENT - Detail this extensively):
+        *   The user-specified setting is: "${finalSetting}". This is PARAMOUNT.
+        *   Describe this specific setting with rich, naturalistic details. ${backgroundInstructions}
+        *   The setting must complement the subject and overall aesthetic.
+        *   CRITICAL: The entire scene, especially the background, MUST be rendered in sharp, crisp focus, showing distinct textures and edge sharpness.
+        *   The background should feel authentic, "lived-in," and not overly pristine or staged. Include subtle signs of normal use or slight, natural disarray appropriate for the setting (e.g., a slightly creased cushion, a few stray leaves, minor scuffs on a wall).
+
+    3.  Lighting (ENVIRONMENT - Detail this extensively and make it DYNAMIC):
+        *   Describe lighting that is **highly specific, natural, and dynamic to the provided setting ("${finalSetting}")**.
+        *   For example:
+            *   If outdoors with foliage: "Face partially illuminated through broken shadows cast by foliage above. Sunlight filters through leaves, creating sharp, irregular dappled shadow patterns across face and hair."
+            *   If indoors near window: "Soft, directional window light illuminating one side of the face, with gentle falloff into shadow on the other."
+            *   If urban at night: "Mixed lighting from street lamps and shop windows, creating areas of warm and cool light with visible highlights and reflections."
+        *   The lighting MUST realistically illuminate both subject and background, creating a cohesive scene.
+        *   Detail the direction, quality (e.g., soft, harsh, diffused, dappled), and color temperature of light sources appropriate for "${finalSetting}".
+        *   The lighting should visibly affect the subject: skin (natural highlights/shadows, e.g., rembrandt lighting if applicable) and clothing (revealing texture).
+
+    4.  Smartphone Camera & Lens Emulation (TECHNICAL DETAILS - Incorporate these):
+        *   The image should exhibit characteristics of a high-quality modern smartphone photo (e.g., iPhone, Android).
+        *   Include "soft lens characteristics": slight chromatic aberration around high-contrast edges (especially in the background).
+        *   Specify a "natural, often warm color balance" typical of smartphone processing.
+        *   Describe "natural contrast roll-off" in both shadows and highlights, avoiding overly crushed blacks or blown-out whites.
+        *   Incorporate "minor, subtle digital compression artifacts" and "a very slight, fine-grained sensor noise pattern" in darker areas to give an organic digital texture. These should be almost imperceptible but add to realism.
+
+    5.  Color & Grading (AESTHETIC):
+        *   Aim for cinematic color grading, potentially warm tones, soft natural contrast, and a very subtle film grain if it enhances the "real photo" feel without looking like an explicit filter. Colors should appear natural and not overly saturated.
+
+    6.  Composition & Pose (SELFIE DETAILS - Make this feel spontaneous):
+        *   Portrait orientation.
+        *   Composition and framing should be natural, contextually appropriate for "${finalSetting}", and embody a **spontaneous selfie feel**.
+        *   Encourage "imperfect framing" and "subtle signs of handheld stability" (e.g., a very slight, natural tilt or off-center composition).
+        *   Camera angle can vary: "slightly below eye level," "eye-level," or "slightly above," typical of how one might naturally take a selfie.
+        *   If in a confined space like a **car**: framing MUST be chest-up or close-up on face/upper torso. NO lap/legs/shorts/pants. Use a slightly lower camera angle. Arm holding (unseen) phone should be relaxed and close.
+        *   If **seated/standing**: waist-up or head-and-shoulders frame from a natural selfie angle.
+        *   Prioritize a natural, unforced pose. Subject's gaze: "${finalGaze}". Expression: "${finalExpression}".
+        *   Ensure head doesn't appear disproportionately large due to an overly close/wide-angle effect unless it's a specific artistic choice for a typical selfie. Framing should feel intentional yet casual.
+
+    7.  Overall Style (AESTHETIC - Combine all elements):
+        *   The image MUST have the style: "${finalStyle}".
+        *   Emphasize photorealistic details, natural and dynamic lighting specific to the scene.
+        *   **Reiterate: Sharp focus throughout the entire image (subject and background).**
+        *   The final image should resemble a spontaneous, high-quality, real-life selfie taken on a modern smartphone during a casual moment, rich in environmental and lighting detail.
+
+    Safety Compliance: PRIORITIZE SFW content adhering to OpenAI's safety policies. Avoid suggestive or borderline content.
+
+    Output Requirements:
+    - Combine ALL elements into a single, coherent paragraph for the image generator.
+    - Output MUST be ONLY the generated prompt string (no intros, labels).
+    - Focus on descriptive keywords, photorealistic details.
+    - Ensure prompt is SFW.
+
+    Generate the environment description paragraph now.
+    `;
+
+    logger.info("Generating environment details prompt with GPT-4o-mini (Revised for Quality):", environmentInstructionPrompt);
+
+    try {
+        const completion = await openaiInstance.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: environmentInstructionPrompt }],
+            temperature: 0.5,
+            max_tokens: 300, // INCREASED max_tokens to 300
+        });
+        const environmentDetails = completion.choices[0]?.message?.content?.trim();
+
+        if (!environmentDetails) {
+            logger.error("GPT-4o-mini failed to generate environment details (Revised for Quality).");
+            throw new Error("Failed to generate environment details via text AI (Revised).");
+        }
+
+        logger.info("Generated environment details (Revised for Quality):", environmentDetails);
+        return environmentDetails;
+
+    } catch (error) {
+        logger.error("Error calling GPT-4o-mini for environment details generation (Revised for Quality):", error);
+        throw new HttpsError('internal', 'Failed to generate environment details using helper AI (Revised).', error.message);
+    }
+}
+
 // --- generateImage Function (Reverted to Synchronous Direct Call) ---
 exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
+    logger.info("[generateImage ENTRY] Received request. Auth:", JSON.stringify(request.auth), "Data:", JSON.stringify(request.data)); // DETAILED ENTRY LOG
     const userId = request.auth?.uid;
     if (!userId) {
-        logger.error("generateImage called without authentication.");
+        logger.error("[generateImage] Called without authentication.");
         throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    const data = request.data; // Contains commandCode and parameters like subject_description, scene_description, image_subject, style etc.
+    // --- NEW: Credit Check ---
+    const userRef = db.collection('users').doc(userId);
+    try {
+        logger.info(`[generateImage User: ${userId}] Performing credit check.`);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+            logger.error(`[generateImage User: ${userId}] User profile not found for credit check.`);
+            throw new HttpsError('not-found', 'User profile not found for credit check.');
+        }
+        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
+        if (currentCredits < 90) {
+            logger.warn(`[generateImage User: ${userId}] Insufficient general_credits (${currentCredits}) for image generation (needs 90).`);
+            throw new HttpsError('resource-exhausted', `Insufficient general credits for image generation. You need at least 90 credits. You have ${currentCredits}.`);
+        }
+        logger.info(`[generateImage User: ${userId}] Credit check passed. Credits: ${currentCredits}.`);
+    } catch (error) {
+        logger.error(`[generateImage User: ${userId}] Error during credit check:`, error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'Failed to perform credit check.');
+    }
+    // --- END NEW: Credit Check ---
+
+    const data = request.data;
     if (!data || !data.commandCode) {
+        logger.error(`[generateImage User: ${userId}] Missing commandCode in request data.`);
         throw new HttpsError('invalid-argument', 'Missing commandCode in request.');
     }
 
-    // Kredi kontrolü isteğiniz üzerine buradan kaldırıldı. Ön yüzde yapılacağı varsayılıyor.
-    // logger.info(`User ${userId} attempting direct image generation. Credit check handled by frontend.`);
-
-    // --- NEW: Firestore Transaction for Credit Check and Decrement ---
-    const userRef = db.collection('users').doc(userId);
-    try {
-        await db.runTransaction(async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists) {
-                throw new HttpsError('not-found', 'User profile not found for credit check.');
-            }
-            const currentCredits = parseInt(userDoc.data()?.image_credit, 10) || 0;
-            if (currentCredits <= 0) {
-                throw new HttpsError('resource-exhausted', 'Insufficient image credits.');
-            }
-            // Decrement image_credit
-            transaction.update(userRef, { image_credit: admin.firestore.FieldValue.increment(-1) });
-            logger.info(`Image credit decremented for user ${userId}. New count (approx): ${currentCredits - 1}`);
-        });
-    } catch (error) {
-        logger.error(`Error during image credit transaction for user ${userId}:`, error);
-        if (error instanceof HttpsError) throw error; // Re-throw HttpsError
-        throw new HttpsError('internal', 'Failed to process image credits.'); // Generic error for others
-    }
-    // --- END NEW: Firestore Transaction ---
+    logger.info(`[generateImage User: ${userId}] Initialized. Command code: ${data.commandCode}.`);
 
     let openai;
     try {
         const apiKey = process.env.OPENAI_KEY;
         if (!apiKey) {
-            logger.error("generateImage: OpenAI API Key not found (OPENAI_KEY).");
+            logger.error("[generateImage] OpenAI API Key not found (OPENAI_KEY).");
             throw new HttpsError('internal', 'OpenAI service configuration error.');
         }
         openai = new OpenAI({ apiKey: apiKey });
+        logger.info(`[generateImage User: ${userId}] OpenAI client initialized. typeof openai: ${typeof openai}. openai is null: ${openai === null}`);
+        if (!openai || !openai.images || !openai.images.generate) {
+            logger.error(`[generateImage User: ${userId}] OpenAI client or images.generate method is not properly initialized!`, openai);
+            throw new HttpsError('internal', 'OpenAI client critical component missing post-initialization.');
+        }
     } catch (error) {
-        logger.error("generateImage: Failed to initialize OpenAI service:", error);
+        logger.error(`[generateImage User: ${userId}] Failed to initialize OpenAI service:`, error);
         throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
     }
 
     try {
         const commandCode = data.commandCode;
         let finalPromptToUse;
-        let imageStyle = data.style; // Common parameter
+        let imageStyle = data.style;
+        let detectedGender = null;
 
-        logger.info(`[DirectGenerate ${userId}] Received command code: ${commandCode}, Params:`, data);
+        logger.info(`[generateImage User: ${userId}] Processing command code: ${commandCode}, Params:`, data);
 
-        if (commandCode === 202) { // GENERATE_UGC_IMAGE
-            logger.info(`[DirectGenerate ${userId}] Command code 202 (UGC Image). Generating detailed prompt...`);
+        if (commandCode === 202) {
+            logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Calling generateDetailedUgcPrompt...`);
             if (!data.subject_description) {
-                // throw new HttpsError('invalid-argument', 'Missing required parameter for UGC Image: subject_description');
-                throw new HttpsError('invalid-argument', "Please provide a description for the subject of the UGC image. For example, 'a woman smiling' or 'a man holding a product'.");
+                logger.error(`[generateImage User: ${userId}] Missing subject_description for command 202.`);
+                throw new HttpsError('invalid-argument', "Please provide a description for the subject of the UGC image.");
             }
-            // generateDetailedUgcPrompt'u çağıralım (bu fonksiyonun dosyanızda olduğunu varsayıyorum)
-            finalPromptToUse = await generateDetailedUgcPrompt({
+            const promptResult = await generateDetailedUgcPrompt({
                 subject_description: data.subject_description,
                 clothing: data.clothing_description,
                 setting: data.setting_description,
-                style: data.image_style, // Parametre adını eşleştir
+                style: data.image_style,
                 age: data.age,
                 gender: data.gender
-            }, openai); // openai instance'ını paslıyoruz
-            imageStyle = imageStyle || 'ultra-realistic photograph, UGC style'; 
-        } else if (commandCode === 201) { // GENERATE_BACKGROUND_IMAGE
+            }, openai);
+            logger.info(`[generateImage User: ${userId}] generateDetailedUgcPrompt returned. promptResult is null: ${promptResult === null}`);
+            if (!promptResult || !promptResult.detailedPrompt) {
+                logger.error(`[generateImage User: ${userId}] generateDetailedUgcPrompt failed to return a detailed prompt. Result:`, promptResult);
+                throw new HttpsError('internal', 'Failed to generate detailed prompt for UGC image.');
+            }
+            finalPromptToUse = promptResult.detailedPrompt;
+            detectedGender = promptResult.subjectTerm;
+            imageStyle = imageStyle || 'ultra-realistic photograph, UGC style';
+            logger.info(`[generateImage User: ${userId}] Detailed prompt generated for command 202. Length: ${finalPromptToUse?.length}`);
+        } else if (commandCode === 201) {
              if (!data.scene_description) {
-                // throw new HttpsError('invalid-argument', 'Missing required parameter for Background Image: scene_description');
-                throw new HttpsError('invalid-argument', "Please describe the scene for the background image. For example, 'a bright and modern office' or 'a serene beach at sunset'.");
+                throw new HttpsError('invalid-argument', "Please describe the scene for the background image.");
              }
              finalPromptToUse = data.scene_description;
              imageStyle = imageStyle || 'photorealistic'; 
-             logger.info(`[DirectGenerate ${userId}] Command code 201. Using direct prompt: "${finalPromptToUse}"`);
-        } else if (commandCode === 203) { // GENERATE_RANDOM_IMAGE
+            logger.info(`[generateImage User: ${userId}] Using direct prompt for command 201: "${finalPromptToUse}"`);
+        } else if (commandCode === 203) {
              if (!data.image_subject) {
-                 // throw new HttpsError('invalid-argument', 'Missing required parameter for Random Image: image_subject');
-                 throw new HttpsError('invalid-argument', "Please provide a subject for the image. For example, you can say 'generate an image of a futuristic city' or 'a cat wearing a hat'.");
+                throw new HttpsError('invalid-argument', "Please provide a subject for the image.");
              }
              finalPromptToUse = data.image_subject;
              imageStyle = imageStyle || 'photorealistic';
-             logger.info(`[DirectGenerate ${userId}] Command code 203. Using direct prompt: "${finalPromptToUse}"`);
+            logger.info(`[generateImage User: ${userId}] Using direct prompt for command 203: "${finalPromptToUse}"`);
         } else {
+            logger.error(`[generateImage User: ${userId}] Unsupported command code: ${commandCode}`);
             throw new HttpsError('invalid-argument', `Unsupported command code (${commandCode}) for direct image generation.`);
         }
         
-        logger.info(`[DirectGenerate ${userId}] Generating image with final prompt: "${finalPromptToUse}", Style: ${imageStyle}, Quality: hd`);
+        logger.info(`[generateImage User: ${userId}] Preparing to call openai.images.generate. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
+        if (!openai || !openai.images || typeof openai.images.generate !== 'function') {
+            logger.error(`[generateImage User: ${userId}] CRITICAL: openai.images.generate is not a function before calling! typeof openai.images.generate: ${typeof openai.images?.generate}`);
+            throw new HttpsError('internal', 'OpenAI images.generate is not available.');
+        }
 
         const imageGenResponse = await openai.images.generate({
             model: "gpt-image-1", 
             prompt: finalPromptToUse,
             n: 1,
             size: "1024x1536",
-            quality: "high", // Use 'high' as requested
+            quality: "high",
         });
+        logger.info(`[generateImage User: ${userId}] openai.images.generate call completed. Response received.`);
+        // logger.debug(`[generateImage User: ${userId}] Full imageGenResponse:`, JSON.stringify(imageGenResponse)); // Potentially very verbose
 
         const base64Data = imageGenResponse.data && imageGenResponse.data.length > 0 ? imageGenResponse.data[0]?.b64_json : null;
-
         if (!base64Data) {
-            logger.error(`[DirectGenerate ${userId}] AI response did not contain base64 image data (b64_json).`, { data: imageGenResponse.data });
+            logger.error(`[generateImage User: ${userId}] AI response did not contain base64 image data. imageGenResponse.data:`, imageGenResponse.data);
             throw new HttpsError('internal', "AI did not return base64 image data.");
         }
+        logger.info(`[generateImage User: ${userId}] Base64 data extracted. Length: ${base64Data.length}`);
 
         const imageBuffer = Buffer.from(base64Data, 'base64');
+        logger.info(`[generateImage User: ${userId}] Image buffer created. Length: ${imageBuffer.length}`);
+
         const fileName = `direct_generations/${userId}/${Date.now()}_${commandCode}.png`; 
         const file = bucket.file(fileName);
+        logger.info(`[generateImage User: ${userId}] Firebase Storage file object created for: ${fileName}. typeof file: ${typeof file}. file is null: ${file === null}`);
+        if (!file || typeof file.save !== 'function') {
+            logger.error(`[generateImage User: ${userId}] CRITICAL: Firebase Storage file.save is not a function! typeof file.save: ${typeof file?.save}`);
+            throw new HttpsError('internal', 'Storage file.save method not available.');
+        }
 
-        logger.info(`[DirectGenerate ${userId}] Uploading image to Storage: ${fileName}`);
-        await file.save(imageBuffer, {
-            metadata: { contentType: 'image/png' },
-            public: true
-        });
+        logger.info(`[generateImage User: ${userId}] Uploading image to Storage: ${fileName}`);
+        await file.save(imageBuffer, { metadata: { contentType: 'image/png' }, public: true });
+        logger.info(`[generateImage User: ${userId}] file.save call completed for ${fileName}.`);
+
         const publicUrl = file.publicUrl();
-        logger.info(`[DirectGenerate ${userId}] Image uploaded successfully. Public URL: ${publicUrl}`);
+        logger.info(`[generateImage User: ${userId}] Image uploaded successfully. Public URL: ${publicUrl}`);
 
         // Firestore generations koleksiyonuna kaydet
         try {
+            logger.info(`[generateImage User: ${userId}] Attempting to save generation metadata to Firestore.`);
             const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
             let typeString = 'image';
             if (commandCode === 202) typeString = 'image'; // Note: Command code for UGC was 202 in your definitions
@@ -1006,59 +1118,58 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
                 quality: "high",
                 source: 'direct_generateImage_call',
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                gender: commandCode === 202 ? detectedGender : null
             };
-            await generationDocRef.set(generationData);
-            logger.info(`[DirectGenerate ${userId}] Successfully wrote to generations collection for image: ${generationDocRef.id}`);
+            
+            await db.runTransaction(async (transaction) => {
+                logger.info(`[generateImage User: ${userId}] Starting Firestore transaction for doc ${generationDocRef.id}.`);
+                const userSnapshot = await transaction.get(userRef);
+                const creditsInTransaction = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
+                if (creditsInTransaction < 90) {
+                    logger.warn(`[generateImage User: ${userId}] Insufficient credits in transaction (${creditsInTransaction}). Needed 90.`);
+                    throw new HttpsError('resource-exhausted', `Insufficient general credits at time of transaction (needs 90). You have ${creditsInTransaction}.`);
+                }
+                transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-90) });
+                transaction.set(generationDocRef, generationData);
+                logger.info(`[generateImage User: ${userId}] Firestore transaction committed for doc ${generationDocRef.id}.`);
+            });
 
-            // *** ADD firestoreDocId to the return object ***
+            logger.info(`[generateImage User: ${userId}] Successfully wrote to generations collection (ID: ${generationDocRef.id}) and decremented general_credits by 90.`);
             return {
                 success: true,
                 message: "Image generated and uploaded successfully.",
                 imageUrl: publicUrl,
-                firestoreDocId: generationDocRef.id, // <-- ADDED THIS LINE
+                firestoreDocId: generationDocRef.id,
                 finalPrompt: finalPromptToUse,
-                originalParameters: data // İstemci tarafında gerekebilecek orijinal parametreleri geri döndür
+                originalParameters: data
             };
 
         } catch (firestoreError) {
-            logger.error(`[DirectGenerate ${userId}] Failed to write to generations collection:`, firestoreError);
-            // We don't re-throw here to ensure the image URL is still returned to the client
-            // The image was successfully generated and stored, logging is a secondary concern.
-            // *** Ensure we still return the image URL even if Firestore write fails, but now also try to include a null firestoreDocId or indicate failure ***
+            logger.error(`[generateImage User: ${userId}] Failed to write to generations collection or run transaction:`, firestoreError);
             return {
-                success: true, // Image itself was generated
+                success: true,
                 message: "Image generated, but failed to save metadata to Firestore.",
                 imageUrl: publicUrl,
-                firestoreDocId: null, // Indicate Firestore save failed
+                firestoreDocId: null,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                errorSavingMetadata: true // Add a flag
+                errorSavingMetadata: true
             };
         }
 
     } catch (error) {
-        logger.error(`Error in direct generateImage for user ${userId}:`, error);
-        if (error instanceof HttpsError) throw error;
+        logger.error(`[generateImage User: ${userId}] Error in main try block of generateImage:`, error);
         if (error instanceof OpenAI.APIError) {
-            logger.error('[DirectGenerate OpenAI API Error]:', error.status, error.name, error.message, error.headers);
-            // --- NEW: Attempt to refund credit if OpenAI API call fails ---
-            try {
-                await userRef.update({ image_credit: admin.firestore.FieldValue.increment(1) });
-                logger.info(`Image credit refunded for user ${userId} due to OpenAI API error.`);
-            } catch (refundError) {
-                logger.error(`Failed to refund image credit for user ${userId} after OpenAI API error:`, refundError);
-            }
-            // --- END NEW ---
+            logger.error(`[generateImage User: ${userId} OpenAI API Error]:`, error.status, error.name, error.message, error.headers);
+            // Attempt to refund credit if OpenAI API call fails (ensure this logic is sound or remove if problematic)
+            // try {
+            //     await userRef.update({ image_credit: admin.firestore.FieldValue.increment(1) });
+            //     logger.info(`[generateImage User: ${userId}] Image credit potentially refunded due to OpenAI API error.`);
+            // } catch (refundError) {
+            //     logger.error(`[generateImage User: ${userId}] Failed to refund image credit after OpenAI API error:`, refundError);
+            // }
             throw new HttpsError('internal', `OpenAI API Error: ${error.name} - ${error.message}`);
         }
-        // --- NEW: Attempt to refund credit if other internal error occurs ---
-        try {
-            await userRef.update({ image_credit: admin.firestore.FieldValue.increment(1) });
-            logger.info(`Image credit refunded for user ${userId} due to internal error: ${error.message}`);
-        } catch (refundError) {
-            logger.error(`Failed to refund image credit for user ${userId} after internal error:`, refundError);
-        }
-        // --- END NEW ---
         throw new HttpsError('internal', `Failed to generate image directly: ${error.message}`);
     }
 });
@@ -1173,8 +1284,17 @@ const videoHooksList = [
 
 // --- NEW: Runway Video Prompts (Positive, focus on facial expressions, avoid hands) ---
 const runwayVideoPrompts = [
-    "The person raises their eyebrows in brief surprise, then smiles softly while looking into the camera."
-];
+    "The person tilts their head slightly to the side with a curious expression, maintaining eye contact with the camera.",
+    "The person blinks slowly, then looks down briefly before returning their gaze to the camera.",
+    "The person gently nods once in acknowledgment, lips closed in a calm expression.",
+    "The person furrows their brows subtly, as if puzzled, then relaxes their face into a neutral expression.",
+    "The person closes their eyes for a moment, takes a silent breath, and opens them again with a serene look.",
+    "The person tilts their head back slightly and smiles with just their eyes.",
+    "The person shifts their weight slightly from one leg to the other while maintaining a steady facial expression.",
+    "The person leans forward ever so slightly, as if interested, with a focused look in their eyes.",
+    "The person gives a short, subtle shrug with their shoulders while keeping a neutral face.",
+    "The person raises their eyebrows slowly, as if in realization, then softens their expression."
+  ];;
 // --- END: Runway Video Prompts ---
 
 // --- NEW: generateImageForVideo Function --- // RENAMED TO requestImageGeneration
@@ -1300,310 +1420,8 @@ exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds:
     }
 });
 
-// --- OLD generateImageForVideo is now replaced by the two functions above ---
-// exports.generateImageForVideo = onCall(...)
 
-// --- triggerVideoGenerationAndHook Function (MODIFIED TO WAIT FOR IMAGE URL) ---
-exports.triggerVideoGenerationAndHook = onCall({ region: 'us-central1', timeoutSeconds: 540 }, async (request, context) => { 
-    const { userId, firestoreDocId, hook_text, language } = request.data; // Extract userId and other params from request.data
-
-    // Manuel userId kontrolü
-    if (!userId) {
-        logger.error("triggerVideoGenerationAndHook: Manuel userId gönderilmedi veya request.data içinde bulunamadı.");
-        throw new HttpsError('invalid-argument', 'userId parametresi eksik veya hatalı gönderildi.');
-    }
-    logger.info(`triggerVideoGenerationAndHook fonksiyonu manuel userId ile çağrıldı: ${userId}, docId: ${firestoreDocId}`);
-
-    // Validate essential parameters
-    if (!firestoreDocId) {
-        logger.error("Validation Error: firestoreDocId is missing in the request.");
-        throw new HttpsError('invalid-argument', 'The function must be called with a "firestoreDocId".');
-    }
-    // language validation (optional based on requirements)
-
-    const userRef = db.collection('users').doc(userId);
-    const postDocRef = userRef.collection('tiktok-posts').doc(firestoreDocId);
-
-    // --- Wait for Initial Image URL --- 
-    const MAX_WAIT_SECONDS = 75; // Max time to wait for image URL (adjust as needed)
-    const POLLING_INTERVAL_MS = 3000; // Check every 3 seconds
-    let initialImageUrl = null;
-    let postData = null;
-    let waitTime = 0;
-
-    logger.info(`[${firestoreDocId}] Waiting for initialImageUrl...`);
-    while (waitTime < MAX_WAIT_SECONDS * 1000) {
-        const docSnapshot = await postDocRef.get();
-        if (!docSnapshot.exists) {
-            logger.error(`[${firestoreDocId}] Firestore document disappeared while waiting for image URL.`);
-            throw new HttpsError('not-found', `Document ${firestoreDocId} not found during wait.`);
-        }
-        postData = docSnapshot.data();
-        initialImageUrl = postData.initialImageUrl;
-        const imageStatus = postData.status;
-
-        if (initialImageUrl) {
-            logger.info(`[${firestoreDocId}] initialImageUrl found: ${initialImageUrl}`);
-            break; // URL found, exit loop
-        } else if (imageStatus === 'image_gen_failed') {
-            logger.error(`[${firestoreDocId}] Image generation failed (status: 'image_gen_failed') while waiting.`);
-            throw new HttpsError('failed-precondition', `Image generation failed: ${postData.error || 'Unknown image generation error'}`);
-        }
-
-        // Not ready yet, wait and check again
-        logger.info(`[${firestoreDocId}] Image URL not ready yet (Status: ${imageStatus}). Waiting ${POLLING_INTERVAL_MS / 1000}s...`);
-        await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
-        waitTime += POLLING_INTERVAL_MS;
-    }
-
-    if (!initialImageUrl) {
-        logger.error(`[${firestoreDocId}] Timed out after ${MAX_WAIT_SECONDS}s waiting for initialImageUrl.`);
-        await postDocRef.update({ status: 'image_gen_timeout', error: `Timed out waiting for initial image URL after ${MAX_WAIT_SECONDS}s.` });
-        throw new HttpsError('deadline-exceeded', `Timed out waiting for the initial image to be generated.`);
-    }
-    // --- End Wait for Initial Image URL ---
-
-
-    logger.info(`Starting main logic of triggerVideoGenerationAndHook for user: ${userId}, doc: ${firestoreDocId}`);
-    
-    // --- 1. Fetch Firestore Document (Data is already in postData from the wait loop) ---
-    // No need to fetch again, use postData obtained during the wait
-    logger.info(`Using fetched postData for doc ${firestoreDocId}. Initial image URL: ${initialImageUrl}`);
-
-    // --- 1.5 Fetch User Products and Select First --- 
-    let selectedProduct = null;
-    let productToUseForAppending = { // NEW: Object to hold product details for appending
-        url: null,
-        type: null,
-        isStandardized: false,
-        originalUrl: null
-    };
-    try {
-        const productsRef = db.collection('users').doc(userId).collection('products');
-        const productsSnapshot = await productsRef.limit(1).get(); // Get only the first one
-        if (!productsSnapshot.empty) {
-            const productDoc = productsSnapshot.docs[0];
-            const productData = productDoc.data();
-            selectedProduct = { // Keep selectedProduct for hook text generation context for now
-                id: productDoc.id,
-                name: productData.name || productData.product_name,
-                description: productData.description || productData.product_description,
-                // mediaUrl, mediaType, standardizedVideoUrl, isVideoStandardized are now in productData
-            };
-
-            const originalMediaUrl = productData.mediaUrl;
-            productToUseForAppending.originalUrl = originalMediaUrl; // Store original URL
-
-            if (productData.isVideoStandardized && productData.standardizedVideoUrl) {
-                productToUseForAppending.url = productData.standardizedVideoUrl;
-                productToUseForAppending.isStandardized = true;
-                logger.info(`Using standardized product video for appending: ${productData.standardizedVideoUrl}`);
-            } else if (originalMediaUrl) {
-                productToUseForAppending.url = originalMediaUrl; // Fallback to original if not standardized
-                productToUseForAppending.isStandardized = false;
-                logger.warn(`Product video for ${productDoc.id} is not standardized or standardized URL is missing. Falling back to original: ${originalMediaUrl}`);
-            } else {
-                logger.warn(`Selected product ${productDoc.id} for user ${userId} is missing any mediaUrl. Cannot append.`);
-                // productToUseForAppending.url will remain null
-            }
-            // Determine type based on the URL that will be used (standardized or original)
-            if (productToUseForAppending.url) {
-                 productToUseForAppending.type = productData.mediaType || (productToUseForAppending.url.includes('.mp4') || productToUseForAppending.url.includes('.mov') ? 'video' : 'image');
-            }
-
-            logger.info(`Selected product ${selectedProduct?.id} for appending to video ${firestoreDocId}. URL to use: ${productToUseForAppending.url}, Type: ${productToUseForAppending.type}, Standardized: ${productToUseForAppending.isStandardized}`);
-        } else {
-            logger.warn(`User ${userId} has no products defined. Cannot append product media to video ${firestoreDocId}.`);
-            // Proceed without appending
-        }
-    } catch (error) {
-        logger.error(`Error fetching products for user ${userId} in triggerVideoGenerationAndHook:`, error);
-        // Proceed without appending, don't throw error for this
-        // productToUseForAppending remains with null url
-    }
-    // --- End Fetch User Products --- 
-
-    // --- 2. Generate Hook Text (if needed) --- 
-    let openai; // Initialize OpenAI client
-    try {
-        const apiKey = process.env.OPENAI_KEY;
-        if (!apiKey) {
-            logger.error("OpenAI API Key for hook text generation not found in environment variables (OPENAI_KEY).");
-            throw new HttpsError('internal', 'OpenAI service configuration error for hook generation.');
-        }
-        openai = new OpenAI({ apiKey: apiKey });
-    } catch (error) { 
-        logger.error("Error initializing OpenAI for hook text generation:", error);
-        if (error instanceof HttpsError) { // Re-throw HttpsError if it's already one
-            throw error;
-        }
-        // Wrap other errors as HttpsError for consistent error handling by the caller
-        throw new HttpsError('internal', `Failed to initialize OpenAI service for hook text: ${error.message}`); 
-    }
-
-    let finalHookText = hook_text;
-    if (!finalHookText) {
-        try {
-            // ... (logic to get product context string `productContext` if selectedProduct exists)
-            let productContext = '';
-             if (selectedProduct && selectedProduct.name && selectedProduct.description) {
-                productContext = `\n\nConsider this product: ${selectedProduct.name}: ${selectedProduct.description.substring(0,150)}...\n`;
-             }
-            const originalParams = postData.originalParameters || {};
-             const hookPrompt = `Generate a very short, catchy hook text suitable for a TikTok video intro, in ${language || 'en'}. The video involves: ${originalParams.subject_description || 'a person'} ${originalParams.action_description || 'smiling'} in ${originalParams.setting_description || 'a studio'}. Keep it under 10 words. Hook text only.${productContext}`; // Append product context
-             // ... (Call OpenAI, set finalHookText, handle errors as before) ...
-            const completion = await openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: hookPrompt }], temperature: 0.8, max_tokens: 30 });
-             finalHookText = completion.choices[0]?.message?.content?.trim().replace(/"/g, '');
-            if (!finalHookText) { logger.warn("GPT-4o-mini failed hook, using default."); finalHookText = "Check this out!"; }
-              else { logger.info(`Generated hook: "${finalHookText}"`); }
-        } catch (error) { logger.error("Error generating hook text:", error); finalHookText = "Check this out!"; }
-    } else {
-        logger.info(`Using user-provided hook: "${finalHookText}"`);
-    }
-
-    // --- 3. Call RunwayML Image-to-Video --- 
-    let runwayTaskId; // Declare runwayTaskId here, will be set by the API call
-    try {
-        const runwayApiKey = process.env.RUNWAY_KEY;
-        if (!runwayApiKey) {
-            logger.error("Runway API key (RUNWAY_KEY) is not configured.");
-            throw new HttpsError('internal', 'RunwayML API key not configured.');
-        }
-
-        // Re-check initialImageUrl just in case (although the wait loop should guarantee it)
-        if (!initialImageUrl) {
-            logger.error("Cannot call Runway without initialImageUrl (check after wait loop).");
-            throw new HttpsError('failed-precondition', 'Initial image URL is missing, cannot trigger video generation.');
-        }
-
-        // Select a random video prompt/hook from the new list
-        const videoPrompt = runwayVideoPrompts[Math.floor(Math.random() * runwayVideoPrompts.length)];
-
-        // ADDED: Define the API endpoint for RunwayML image-to-video
-        const runwayApiEndpoint = "https://api.dev.runwayml.com/v1/image_to_video"; 
-
-        const requestBody = {
-            model: "gen4_turbo", 
-            promptImage: initialImageUrl, // MODIFIED: Changed from imageUrl to promptImage
-            promptText: videoPrompt, 
-            seed: Math.floor(Math.random() * 1000000),
-            duration: 5, // seconds
-            ratio: "720:1280",
-            motion: 4 // Example motion value, adjust as needed
-        };
-
-        logger.info(`Calling RunwayML API (${runwayApiEndpoint}) with body:`, requestBody);
-
-        const response = await axios.post(runwayApiEndpoint, requestBody, {
-            headers: {
-                'Authorization': `Bearer ${runwayApiKey}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json', // ADDED Accept header
-                'X-Runway-Version': '2024-11-06'
-            }
-        });
-
-        logger.info("Full response from RunwayML API:", response.data); // ADDED: Log the full API response
-
-        if (response.data && response.data.uuid) { // Runway often uses 'uuid' for task ID
-            runwayTaskId = response.data.uuid;
-            logger.info(`RunwayML task submitted successfully. Task ID (uuid): ${runwayTaskId}`);
-        } else if (response.data && response.data.task_id) { // Fallback to 'task_id'
-            runwayTaskId = response.data.task_id;
-            logger.info(`RunwayML task submitted successfully. Task ID (task_id): ${runwayTaskId}`);
-        } else if (response.data && response.data.id) { // ADDED: Fallback to 'id' as per user's old helper
-            runwayTaskId = response.data.id;
-            logger.info(`RunwayML task submitted successfully. Task ID (id): ${runwayTaskId}`);
-        } else {
-            logger.error("RunwayML API response did not contain a recognizable task ID (uuid, task_id, or id).", response.data);
-            throw new HttpsError('internal', 'Failed to get a valid task ID from RunwayML.');
-        }
-
-    } catch (runwayError) {
-        logger.error(`Error calling RunwayML API for document ${firestoreDocId}:`, runwayError.response ? runwayError.response.data : runwayError.message);
-        let errorMessage = 'Failed to submit to RunwayML.';
-        if (runwayError.response && runwayError.response.data && runwayError.response.data.error) {
-            errorMessage = `RunwayML Error: ${runwayError.response.data.error}`;
-        }
-        await postDocRef.update({ status: 'runway_submission_failed', error: errorMessage, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-        throw new HttpsError('internal', `Failed to trigger video generation with RunwayML: ${errorMessage}`);
-    }
-    // --- End Call RunwayML Image-to-Video ---
-
-    // --- 4. Update Firestore & Schedule Poll (MODIFIED) ---
-    try {
-        const startTime = Date.now(); // Record start time for polling deadline
-        const updatePayload = {
-            status: 'processing', 
-            hookText: finalHookText, // Save the final hook
-            runwayTaskId: runwayTaskId,
-            pollingStartTime: startTime, 
-            // MODIFIED: Use details from productToUseForAppending
-            productToAppendUrl: productToUseForAppending.url, 
-            productToAppendType: productToUseForAppending.type,
-            isProductToAppendStandardized: productToUseForAppending.isStandardized,
-            originalProductMediaUrl: productToUseForAppending.originalUrl, // Store original for reference/fallback
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        await db.runTransaction(async (transaction) => {
-            const userSnapshot = await transaction.get(userRef);
-            const currentCredits = parseInt(userSnapshot.data()?.video_credit, 10) || 0;
-            if (currentCredits <= 0) {
-                // This specific HttpsError will be caught by the main try-catch block
-                throw new HttpsError('resource-exhausted', 'Insufficient video credits during transaction in startVideoPipeline.');
-            }
-            transaction.update(postDocRef, updatePayload);
-            transaction.update(userRef, { video_credit: admin.firestore.FieldValue.increment(-1) });
-        });
-        logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (status, hook, runwayId, product) & decremented video_credit.`);
-
-        // --- Schedule the first polling task ---
-        const pollTaskPayload = {
-            userId: userId, // Pass userId
-            firestoreDocId: firestoreDocId,
-            runwayTaskId: runwayTaskId,
-            startTime: startTime, // Pass the initial startTime for polling duration checks
-            attempt: 1 // Initial attempt
-        };
-
-        const task = {
-            httpRequest: {
-                httpMethod: 'POST',
-                url: runwayTaskHandlerUrl, // Defined at the top of the file
-                headers: { 'Content-Type': 'application/json' },
-                body: Buffer.from(JSON.stringify(pollTaskPayload)).toString('base64'),
-            },
-            scheduleTime: {
-                seconds: Math.floor(Date.now() / 1000) + POLLING_INTERVAL_SECONDS // Schedule for a bit later
-            },
-        };
-
-        const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, runwayTasksQueueName); // Defined at the top
-        await tasksClient.createTask({ parent: parent, task: task });
-        logger.info(`Runway polling task enqueued for doc ${firestoreDocId} to queue ${runwayTasksQueueName}. First poll in ${POLLING_INTERVAL_SECONDS}s.`);
-
-    } catch (error) {
-        logger.error(`Error during Firestore transaction or scheduling poll for ${firestoreDocId}:`, error);
-        // Update Firestore with an error status if transaction/scheduling fails
-        await postDocRef.update({
-            status: 'scheduling_failed',
-            error: `Failed to schedule polling: ${error.message}`,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        // Rethrow error to ensure the client knows something went wrong if this part fails critically
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `Failed to schedule video processing task: ${error.message}`);
-    }
-
-    // --- 5. Return Success Response (as before) --- 
-    return {
-        success: true,
-        message: `Video generation started (Task ID: ${runwayTaskId}). Backend will process completion.`,
-        data: { runwayTaskId: runwayTaskId } 
-    };
-});
-
+// --- handleVideoPollingTask Function (MODIFIED) ---
 // --- handleVideoPollingTask Function (MODIFIED) ---
 exports.handleVideoPollingTask = onRequest(
     { region: 'us-central1', timeoutSeconds: 300, memory: '1GiB' }, 
@@ -1697,34 +1515,21 @@ exports.handleVideoPollingTask = onRequest(
                     error: null,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
-                logger.info(`Firestore document ${firestoreDocId} updated to status 'pending_concatenation'. Runway video: ${runwayGeneratedVideoUrl}`);
+                logger.info(`Firestore document ${firestoreDocId} updated with Runway video URL: ${runwayGeneratedVideoUrl}.`); // Modified log
 
                 if (productUrlToAppend && productTypeToAppend) {
-                    logger.info(`Product media found for doc ${firestoreDocId}. Enqueuing concatenation task.`);
-                    const taskPayload = {
-                        userId: userId,
-                        firestoreDocId: firestoreDocId,
-                        runwayVideoUrl: runwayGeneratedVideoUrl,
-                        productMediaUrl: productUrlToAppend,
-                        productMediaType: productTypeToAppend
-                    };
-
-                    const task = {
-                        httpRequest: {
-                            httpMethod: 'POST',
-                            url: concatTaskHandlerUrl, // Use the new handler URL
-                            headers: { 'Content-Type': 'application/json' },
-                            body: Buffer.from(JSON.stringify(taskPayload)).toString('base64')
-                        },
-                        scheduleTime: {
-                            seconds: Math.floor(Date.now() / 1000) + 5 // Schedule a few seconds in the future
-                        }
-                    };
-
-                    const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, concatTasksQueueName); // Use the new queue name
-                    await tasksClient.createTask({ parent: parent, task: task });
-                    logger.info(`Concatenation task enqueued for doc ${firestoreDocId} to queue ${concatTasksQueueName}.`);
-                    response.status(200).send('Runway video ready. Concatenation task enqueued.');
+                    // MODIFIED: Do not enqueue concatenation. Instead, mark as completed.
+                    logger.info(`Product media found for doc ${firestoreDocId}, but concatenation is now bypassed. Marking as complete with Runway video.`);
+                    await postDocRef.update({
+                        status: 'ready-to-edit',
+                        videoUrl: runwayGeneratedVideoUrl, // Final URL is the Runway URL
+                        error: null, // Clear any previous error
+                        // Optionally, you might want to clear productToAppendUrl/Type here if they are no longer relevant
+                        // productToAppendUrl: admin.firestore.FieldValue.delete(),
+                        // productToAppendType: admin.firestore.FieldValue.delete(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    response.status(200).send('Runway video ready and marked as complete. Concatenation bypassed.');
                 } else {
                     logger.warn(`Runway video generated for doc ${firestoreDocId}, but no product media was specified for appending. Marking as complete.`);
                  await postDocRef.update({
@@ -1808,9 +1613,84 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
     const os = require('os'); // For temp directory
     // --- END FFMPEG Initialization ---
 
-    // Destructure ALL parameters, including the new language parameter
-    const { topic, slide_1_text, slide_2_text, slide_3_text, slide_4_text, background_name, image_style, language } = request.data;
+    // Destructure ALL parameters, including the new language parameter and slideshow type
+    const { topic, slide_1_text, slide_2_text, slide_3_text, slide_4_text, background_name, image_style, language, _slideshow_type_context } = request.data;
     const targetLanguage = language || 'en'; // Default to English if not provided
+    const slideshowType = _slideshow_type_context || 'learn_grow'; // Default to learn_grow if not provided
+    const generationId = Date.now().toString(); // <--- ADDED THIS LINE
+
+    // --- Define Slideshow Type Instructions ---
+    const getSlideshowTypeInstruction = (type) => {
+        switch (type) {
+            case 'safe_secure':
+                return `
+                SLIDESHOW TYPE: Safe & Secure
+                GOAL: Create content that builds trust, comfort, and emotional safety.
+        
+                STRUCTURE (4 slides total):
+                1. Slide 1 : Gentle Hook: A calming or reassuring statement that draws the viewer in (e.g., "Feeling overwhelmed? You're not alone.")
+                2. Slide 2 : Empathy or Support: A relatable thought or supportive message (e.g., "Some days are hard. That's okay.")
+                3. Slide 3 : Reassuring Insight: Offer a calming perspective, truth, or helpful affirmation (e.g., "You're doing better than you think.")
+                4. Slide 4 : Positive Close: End with a peaceful, hopeful note or gentle call to breathe/reflect/feel safe.
+        
+                TONE: Soft, warm, nurturing, emotionally safe. Avoid fast pacing or intense visuals.
+                `;
+        
+            case 'learn_grow':
+                return `
+                SLIDESHOW TYPE: Learn & Grow
+                GOAL: Deliver bite-sized educational or self-growth content that informs and empowers.
+        
+                STRUCTURE (4 slides total):
+                1. Slide 1 : Knowledge Hook: A question or bold fact to grab attention (e.g., "3 Questions to Ask Before You Sleep")
+                2. Slide 2 : Insight #1: Share a clear, concise point or fact
+                3. Slide 3 : Insight #2: Continue with another relevant fact, tip, or insight
+                4. Slide 4 : Insight #3: Wrap up with the final tip or a short reflective summary
+        
+                TONE: Clear, informative, motivating. Keep visuals clean and readable. Avoid cluttered slides.
+                `;
+        
+            case 'viral_fun':
+                return `
+                SLIDESHOW TYPE: Viral & Fun
+                GOAL: Entertain and engage with lighthearted, trendy, or humorous content.
+        
+                STRUCTURE (4 slides total):
+                1. Slide 1 : Viral Hook: Something that instantly grabs attention, usually funny, weird, or relatable (e.g., "POV: You finally check your bank account after a night out")
+                2. Slide 2 : Escalate: Take the joke or moment a step further (e.g., show the reaction or drama)
+                3. Slide 3 : Twist or Punchline: Hit the funniest or most unexpected part
+                4. Slide 4 : Meme-y Finish: Add a final comment, reaction, or ending punch (e.g., "I'm never going outside again 💀")
+        
+                TONE: Playful, relatable, energetic. Visuals should be expressive or use meme culture/style.
+                `;
+        
+            case 'personal_stories':
+                return `
+                SLIDESHOW TYPE: Personal Stories
+                GOAL: Share a real or relatable story that creates emotional resonance.
+        
+                STRUCTURE (4 slides total):
+                1. Slide 1 : Setup: Introduce a situation or emotion to hook the viewer (e.g., "I didn't realize I was burned out until this happened…")
+                2. Slide 2 : Build: Give more context or backstory (what was going on, how you felt)
+                3. Slide 3 : Turning Point or Realization: Share the key moment, shift, or lesson
+                4. Slide 4 : Reflection: Close with an emotional takeaway or thought others can relate to
+        
+                TONE: Honest, human, emotional. Use first-person voice and authentic imagery or tone.
+                `;
+        
+            default:
+                return `
+                SLIDESHOW TYPE: Learn & Grow (default)
+                Use a 4-slide structure:
+                1. Hook with a question or bold idea
+                2-4. Deliver 3 short, valuable takeaways or facts
+                Aim to educate or inspire curiosity in a simple, direct way.
+                `;
+        }
+    };
+
+    const slideshowTypeInstruction = getSlideshowTypeInstruction(slideshowType);
+    logger.info(`[${generationId}] Using slideshow type: ${slideshowType}`);
 
     // --- Initialize OpenAI Client (as before) ---
     let openai;
@@ -1835,9 +1715,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         if (!userDoc.exists) {
             throw new HttpsError('not-found', 'User profile not found.');
         }
-        const currentCredits = parseInt(userDoc.data()?.slideshow_credit, 10) || 0;
+        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
         if (currentCredits <= 0) {
-            throw new HttpsError('resource-exhausted', 'Insufficient slideshow credits to generate slideshow.');
+            throw new HttpsError('resource-exhausted', 'Insufficient general credits to generate slideshow.');
         }
     } catch (error) {
         logger.error(`Error fetching user credits for slideshow (user ${userId}):`, error);
@@ -1848,7 +1728,6 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
 
     let slideTexts = [slide_1_text, slide_2_text, slide_3_text, slide_4_text];
     const providedTextCount = slideTexts.filter(text => text && text.trim() !== '').length;
-    const generationId = Date.now().toString();
 
     try {
         // --- Fetch User Products for Context ---
@@ -1928,6 +1807,8 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
 
             // --- CORE INSTRUCTION BLOCK (REVISED) ---
             const coreTextInstruction = `
+                ${slideshowTypeInstruction}
+
                 ${productContext ? 
                 `IMPORTANT PRODUCT CONTEXT: ${productContext}
                 Your first task is to deeply understand this product context. From this, you MUST derive a general THEME or TOPIC (e.g., if the product is about astrology, the theme is 'astrology'; if it's about Notion templates for students, the theme could be 'student productivity' or 'academic organization').
@@ -1937,6 +1818,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                 
                 Generate text for each of the 4 slides IN ${targetLanguage.toUpperCase()}.
                 Each slide's text MUST be short, engaging, and directly reflect the THEME (derived from product context if provided, otherwise from the "${effectiveTopic}").
+                The content MUST follow the slideshow type guidelines specified above.
                 The tone should be natural, relatable, poetic, or intriguing.
                 
                 CRITICAL RULES FOR SLIDE TEXT:
@@ -1944,8 +1826,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                 2. MUST NOT include generic calls to action or conversational phrases (e.g., avoid "Join the conversation", "How do you...", "Find your...", "Discover the...", "Check this out", "Stay tuned").
                 3. MUST NOT mention any specific product names, brand names, or detailed product features from the context provided.
                 4. MUST be a statement, a short piece of a narrative, an evocative description, or a relatable feeling connected to the derived THEME.
+                5. MUST align with the slideshow type guidelines to create the appropriate mood and messaging.
 
-                Focus on making statements, telling a mini-story, or evoking an emotion related to the THEME.
+                Focus on making statements, telling a mini-story, or evoking an emotion related to the THEME while following the slideshow type requirements.
 
                 If specific text for some slides is provided below, use that text for those slides and generate text ONLY for the empty/missing slides, ensuring thematic consistency with the DERIVED THEME and adherence to ALL critical rules.
                 Provided texts: Slide 1: "${slide_1_text || ''}", Slide 2: "${slide_2_text || ''}", Slide 3: "${slide_3_text || ''}", Slide 4: "${slide_4_text || ''}"
@@ -2158,15 +2041,15 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         // Transaction for saving generation and decrementing credits
         await db.runTransaction(async (transaction) => {
             const userSnapshot = await transaction.get(userRef);
-            const currentCredits = parseInt(userSnapshot.data()?.slideshow_credit, 10) || 0;
-            if (currentCredits <= 0) {
-                throw new HttpsError('resource-exhausted', 'Insufficient slideshow credits during transaction for slideshow.');
+            const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
+            if (currentCredits < 50) { // CHECK if enough credits for slideshow
+                throw new HttpsError('resource-exhausted', 'Insufficient general credits for slideshow (needs 50).');
             }
-            transaction.update(userRef, { slideshow_credit: admin.firestore.FieldValue.increment(-1) });
+            transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-50) }); // DECREMENT by 50
             transaction.set(generationDocRef, generationData);
         });
 
-        logger.info(`Slideshow generation record saved (ID: ${generationDocRef.id}) and credits decremented for user ${userId}. BG: ${selectedBackgroundImageName}, AI Selected ID: ${aiSelectedBackgroundId}`);
+        logger.info(`Slideshow generation record saved (ID: ${generationDocRef.id}) and general_credits decremented by 50 for user ${userId}.`); // UPDATED LOG
         return { success: true, message: "Slideshow content and images generated successfully.", data: { generationId: generationDocRef.id, slideTexts, selectedBackgroundUrl, processedImageUrls } };
 
     } catch (error) {
@@ -2524,16 +2407,19 @@ exports.stripeWebhookHandler = onRequest(
                      // Update Credits Based on Plan 
                      // Only grant/refresh credits if the subscription is truly active and not pending cancellation at period end.
                      if ((status === 'active' || status === 'trialing') && priceId && !dataObject.cancel_at_period_end) {
-                         const allocation = planCreditAllocations[priceId] || { images: 0, videos: 0, slideshows: 0 }; // MODIFIED FALLBACK
-                         updateData.image_credit = allocation.images;
-                         updateData.video_credit = allocation.videos;
-                         updateData.slideshow_credit = allocation.slideshows; 
-                         updateData.image_credit_limit = allocation.images;
-                         updateData.video_credit_limit = allocation.videos;
-                         updateData.slideshow_credit_limit = allocation.slideshows; 
-                         logger.info(`Granting/updating credits for user ${userDocRef.id} (plan: ${priceId}) because subscription is active and not pending cancellation at period end.`);
+                         const allocation = planCreditAllocations[priceId] || { general_credits: 0 }; // MODIFIED FALLBACK to general_credits
+                         updateData.general_credits = allocation.general_credits; // CHANGED to general_credits
+                         updateData.general_credits_limit = allocation.general_credits; // CHANGED to general_credits_limit
+                         // REMOVE old specific credit types
+                         // updateData.image_credit = allocation.images;
+                         // updateData.video_credit = allocation.videos;
+                         // updateData.slideshow_credit = allocation.slideshows; 
+                         // updateData.image_credit_limit = allocation.images;
+                         // updateData.video_credit_limit = allocation.videos;
+                         // updateData.slideshow_credit_limit = allocation.slideshows; 
+                         logger.info(`Granting/updating general_credits for user ${userDocRef.id} (plan: ${priceId}) because subscription is active and not pending cancellation at period end. Credits: ${allocation.general_credits}`); // UPDATED LOG
                      } else {
-                         logger.info(`Subscription for user ${userDocRef.id} (plan: ${priceId}, status: ${status}, cancel_at_period_end: ${dataObject.cancel_at_period_end}) is not eligible for credit refresh at this time.`);
+                         logger.info(`Subscription for user ${userDocRef.id} (plan: ${priceId}, status: ${status}, cancel_at_period_end: ${dataObject.cancel_at_period_end}) is not eligible for general_credits refresh at this time.`); // UPDATED LOG
                      }
                      // Optional: Add logic here for 'canceled', 'past_due' if needed
 
@@ -2602,12 +2488,8 @@ exports.stripeWebhookHandler = onRequest(
                         subscriptionCanceledAt: deletedSubscription.canceled_at ? admin.firestore.Timestamp.fromDate(new Date(deletedSubscription.canceled_at * 1000)) : null, // Use canceled_at if available
                         subscriptionDeletedAt: admin.firestore.FieldValue.serverTimestamp(), // Add deletion timestamp
                         subscriptionLength: null,
-                        image_credit: 0, // Reset credits
-                        video_credit: 0,
-                        slideshow_credit: 0,
-                        image_credit_limit: 0, // Reset limits
-                        video_credit_limit: 0,
-                        slideshow_credit_limit: 0,
+                        general_credits: 0, // Reset credits
+                        general_credits_limit: 0, // Reset limits
                         subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
                     };
 
@@ -2618,6 +2500,51 @@ exports.stripeWebhookHandler = onRequest(
                 }
                 break;
             // --- END NEW CASE ---    
+
+            case 'checkout.session.completed':
+                const session = dataObject;
+                const sessionCustomerId = session.customer;
+                const sessionMetadata = session.metadata;
+                
+                logger.info(`Processing checkout session completed for customer: ${sessionCustomerId}, session: ${session.id}`);
+                
+                // Check if this is a one-time credit purchase
+                if (sessionMetadata && sessionMetadata.purchaseType === 'one_time_credits') {
+                    const userId = sessionMetadata.userId;
+                    const creditQuantity = parseInt(sessionMetadata.creditQuantity);
+                    
+                    if (userId && creditQuantity > 0) {
+                        try {
+                            const userRef = db.collection('users').doc(userId);
+                            const userDoc = await userRef.get();
+                            
+                            if (userDoc.exists) {
+                                const currentCredits = userDoc.data().general_credits || 0;
+                                const newCredits = currentCredits + creditQuantity;
+                                
+                                await userRef.update({
+                                    general_credits: newCredits,
+                                    lastCreditPurchase: {
+                                        amount: creditQuantity,
+                                        sessionId: session.id,
+                                        timestamp: admin.firestore.FieldValue.serverTimestamp()
+                                    }
+                                });
+                                
+                                logger.info(`Added ${creditQuantity} credits to user ${userId}. New total: ${newCredits}`);
+                            } else {
+                                logger.error(`User ${userId} not found for credit purchase`);
+                            }
+                        } catch (error) {
+                            logger.error(`Error processing credit purchase for user ${userId}:`, error);
+                        }
+                    } else {
+                        logger.error(`Invalid credit purchase data: userId=${userId}, creditQuantity=${creditQuantity}`);
+                    }
+                } else {
+                    logger.info(`Checkout session completed but not a one-time credit purchase: ${session.id}`);
+                }
+                break;
 
             default:
                 logger.info(`Unhandled Stripe event type: ${event.type}`);
@@ -2680,8 +2607,8 @@ exports.refreshMonthlyCredits = onSchedule(
                 return; // continue to next user in forEach
             }
 
-            const allocation = planCreditAllocations[priceId] || { images: 0, videos: 0, slideshows: 0 };
-            if (allocation.images === 0 && allocation.videos === 0 && allocation.slideshows === 0 && priceId) {
+            const allocation = planCreditAllocations[priceId] || { general_credits: 0 };
+            if (allocation.general_credits === 0 && priceId) {
                  logger.warn(`User ${userId} (PriceID: ${priceId}) has a plan with 0 credit allocation. Skipping actual credit update, but will update lastRefreshTimestamp if due.`);
             }
 
@@ -2728,9 +2655,7 @@ exports.refreshMonthlyCredits = onSchedule(
             if (needsRefresh) {
                 logger.info(`User ${userId} (Plan: ${priceId}, Length: ${subscriptionLength}) marked for credit refresh. Reason: ${logReason}`);
                 batch.update(doc.ref, {
-                    image_credit: allocation.images,
-                    video_credit: allocation.videos,
-                    slideshow_credit: allocation.slideshows,
+                    general_credits: allocation.general_credits,
                     lastCreditRefresh: admin.firestore.Timestamp.now() // Update with server timestamp
                 });
                 usersToRefreshCount++;
@@ -2953,8 +2878,8 @@ exports.performVideoConcatenation = onRequest(
                     const contentForListFile = `file '${standardizedRunwayVideoPath.replace(/\\/g, '/')}'\nfile '${standardizedProductVideoPath.replace(/\\/g, '/')}'`;
                     await fsPromises.writeFile(concatListPath, contentForListFile);
                     
-            await new Promise((resolve, reject) => {
-                ffmpeg()
+                    await new Promise((resolve, reject) => {
+                        ffmpeg()
                             .input(concatListPath)
                             .inputOptions(['-f', 'concat', '-safe', '0'])
                             .outputOptions(['-c', 'copy'])
@@ -3101,6 +3026,7 @@ exports.performImageGenerationTask = onRequest(
         let generatedImagePrompt = null;
         let base64DataForUpload = null;
         let generatedFileName = null;
+        let detectedSubjectTerm = null; // Initialize detectedSubjectTerm here
 
         try {
             // Update status to generating
@@ -3280,16 +3206,23 @@ The edited image style should be: "${finalImageStyle}".
                     logger.error(`[Task ${firestoreDocId}] subject_description is missing for new image generation (no baseImage).`);
                     throw new Error("Cannot generate new image without subject_description when no base image is provided.");
                 }
-                generatedImagePrompt = await generateDetailedUgcPrompt(
+                
+                // Call generateDetailedUgcPrompt and destructure its result
+                const promptResult = await generateDetailedUgcPrompt(
                     {
                         subject_description,
                         clothing: clothing_description, // Pass clothing_description here as well
                         setting: setting_description,   // Pass setting_description here as well
-                        style: image_style, age, gender
+                        style: image_style, age, gender,
+                        commandCode: generationParams.commandCode // Pass commandCode for context if needed by prompt gen
                     },
                     openai
                 );
-                logger.info(`[Task ${firestoreDocId}] Generating image with detailed prompt: "${generatedImagePrompt}"`);
+                generatedImagePrompt = promptResult.detailedPrompt; // Get the string prompt
+                detectedSubjectTerm = promptResult.subjectTerm; // Assign value in Scenario A
+
+                logger.info(`[Task ${firestoreDocId}] Generating image with detailed prompt: "${generatedImagePrompt}" (Subject Term: ${detectedSubjectTerm})`);
+                
                 const imageResponseA = await openai.images.generate({
                     model: "gpt-image-1", prompt: generatedImagePrompt, n: 1,
                     size: "1024x1536", quality: "high",
@@ -3310,7 +3243,9 @@ The edited image style should be: "${finalImageStyle}".
             logger.info(`[Task ${firestoreDocId}] Uploaded. URL: ${initialImageUrl}`);
 
             await postDocRef.update({
-                status: 'image_generated', initialImageUrl, generatedImagePrompt,
+                status: 'image_generated', initialImageUrl, 
+                generatedImagePrompt: generatedImagePrompt, // Ensure this is the string prompt
+                subjectTerm: detectedSubjectTerm, // Store the detected subject term
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(), error: null
             });
             logger.info(`[Task ${firestoreDocId}] Firestore updated: 'image_generated'.`);
@@ -4277,9 +4212,3 @@ exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) 
         throw new HttpsError('internal', `Failed to fetch TikTok post status: ${error.message}`);
     }
 });
-
-// --- END NEW: TikTok Direct Posting API Functions ---
-
-// ... fetchTikTokUserInfo function should remain as is ...
-// ... updateTikTokUserDetails function should remain as is ...
-// ... existing code ...

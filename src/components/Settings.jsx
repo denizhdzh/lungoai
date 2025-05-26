@@ -3,7 +3,7 @@ import { auth, db, storage } from '../firebase';
 import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy, onSnapshot, where } from "@firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage";
 import { updateProfile, signOut, deleteUser } from "firebase/auth";
-import { useNavigate, useOutletContext } from 'react-router-dom'; // Import useNavigate & useOutletContext
+import { useNavigate, useOutletContext, useLocation } from 'react-router-dom'; // Import useNavigate, useOutletContext, and useLocation
 // Import Firebase Functions
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut } from '@phosphor-icons/react';
@@ -38,11 +38,13 @@ const libraryImageDescriptions = {
 
 function Settings() {
   const user = auth.currentUser;
-  const navigate = useNavigate(); // Initialize navigate
-  const { refreshLayoutData } = useOutletContext(); // <-- GET THE REFRESH FUNCTION
+  const navigate = useNavigate();
+  const location = useLocation(); // Get location object
+  const { refreshLayoutData } = useOutletContext();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('user');
+  const [activeTab, setActiveTab] = useState('user'); // Default tab
   const [isLoading, setIsLoading] = useState(false);
+  const [shouldOpenAddProductForm, setShouldOpenAddProductForm] = useState(false);
   
   // User settings states
   const [firstName, setFirstName] = useState(''); // New state for first name
@@ -133,6 +135,51 @@ function Settings() {
   const [showDeleteTikTokConfirmModal, setShowDeleteTikTokConfirmModal] = useState(false);
   const [tikTokAccountToDelete, setTikTokAccountToDelete] = useState(null); // { id, name }
 
+  // --- NEW: useEffect to load user data from Firestore for the profile form ---
+  useEffect(() => {
+    if (user && user.uid) {
+      const userDocRef = doc(db, 'users', user.uid);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setFirstName(data.firstName || '');
+          setLastName(data.lastName || '');
+          setPhotoURL(data.photoURL || user.photoURL || ''); // Fallback to auth user photoURL
+          // If displayName was used to prefill and now we have specific fields:
+          // No, displayName is constructed, so this is fine.
+        } else {
+          // Document doesn't exist, try to populate from auth.currentUser if available
+          console.log("User document not found in Firestore for settings, attempting to populate from auth profile.");
+          if (user.displayName) {
+            const nameParts = user.displayName.split(' ');
+            setFirstName(nameParts[0] || '');
+            setLastName(nameParts.slice(1).join(' ') || '');
+          } else {
+            setFirstName('');
+            setLastName('');
+          }
+          setPhotoURL(user.photoURL || '');
+        }
+      }, (error) => {
+        console.error("Error fetching user document from Firestore for settings:", error);
+        // Fallback to auth user details on error
+        if (user.displayName) {
+          const nameParts = user.displayName.split(' ');
+          setFirstName(nameParts[0] || '');
+          setLastName(nameParts.slice(1).join(' ') || '');
+        }
+        setPhotoURL(user.photoURL || '');
+      });
+      return () => unsubscribe(); // Cleanup listener
+    } else {
+      // No user, clear fields
+      setFirstName('');
+      setLastName('');
+      setPhotoURL('');
+    }
+  }, [user]); // Rerun if user object changes
+  // --- END NEW useEffect ---
+
   // Tab configuration - Added Plan & Billing, updated icons
   const tabs = [
     { id: 'user', label: 'User Profile', icon: <User size={18} /> },
@@ -143,6 +190,32 @@ function Settings() {
     { id: 'backgrounds', label: 'Background Images', icon: <ImagesSquare size={18} /> },
     { id: 'featureRequests', label: 'Feature Requests', icon: <Sparkle size={18} /> }, // Changed icon
   ];
+
+  // --- NEW: useEffect to set activeTab from URL hash and update hash on tab click ---
+  useEffect(() => {
+    const hash = location.hash.replace('#', '');
+    const params = new URLSearchParams(location.search);
+    const action = params.get('action');
+
+    const isValidTab = tabs.some(tab => tab.id === hash);
+    if (hash && isValidTab) {
+      setActiveTab(hash);
+      if (hash === 'products' && action === 'add') {
+        setShouldOpenAddProductForm(true);
+        // Clear the action param from URL
+        navigate(`${location.pathname}#${hash}`, { replace: true }); 
+      }
+    } else if (!hash && location.pathname === '/settings') {
+      navigate('#user', { replace: true });
+      setActiveTab('user');
+    }
+  }, [location.hash, location.search, navigate, tabs]);
+
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    navigate(`#${tabId}`); // Update URL hash
+  };
+  // --- END NEW useEffect ---
 
   // Dark mode effect
   useEffect(() => {
@@ -242,6 +315,13 @@ function Settings() {
       setShowLibrary(false);
       setLibraryImages([]);
       setSelectedLibraryImages([]);
+      
+      // Open add product form if directed from URL and tab is products
+      if (activeTab === 'products' && shouldOpenAddProductForm) {
+        setShowAddProductForm(true);
+        setShouldOpenAddProductForm(false); // Reset the flag
+      }
+
       // NEW: Reset TikTok form when tab changes or data is fetched
       // setShowAddTiktokAccountForm(false); // REMOVED
       // setNewTiktokAccount({ username: '' }); // REMOVED
@@ -276,7 +356,7 @@ function Settings() {
     };
     
     fetchData();
-  }, [activeTab, user]); // Removed fetchUserData from dependencies as it's stable
+  }, [activeTab, user, shouldOpenAddProductForm]); // Removed fetchUserData from dependencies as it's stable, added shouldOpenAddProductForm
 
   // --- NEW: Fetch TikTok Accounts ---
   useEffect(() => {
@@ -881,6 +961,12 @@ function Settings() {
   // --- Delete Product (Modified: Show modal instead of window.confirm) ---
   const handleDeleteProduct = (productId, productLogoUrl, productMediaUrl, productName) => { // Accept name
     if (!user) return;
+
+    if (products.length === 1) {
+      showCustomToast('You cannot delete your last product. You must have at least one product.', 'error');
+      return;
+    }
+
     // Set product details and show modal
     setProductToDelete({ 
       id: productId, 
@@ -1237,7 +1323,7 @@ function Settings() {
           )}
 
           {/* Manage Billing Button Area - Added below PricingSection */} 
-          {!isFetchingSubscription && (
+          {!isFetchingSubscription && userSubscription?.stripeCustomerId && (userSubscription?.subscriptionStatus === 'active' || userSubscription?.subscriptionStatus === 'trialing') && (
              <div className="mt-12 pt-8 border-t border-gray-100 dark:border-zinc-800 flex flex-col items-start">
                 <h3 className="text-base font-medium text-gray-800 dark:text-zinc-200 mb-3">Manage Your Subscription</h3>
                 <p className="text-sm text-gray-600 dark:text-zinc-400 mb-4 max-w-xl">
@@ -1306,15 +1392,16 @@ function Settings() {
             }
             // Otherwise, toggle the form visibility as usual.
             setShowAddProductForm(!showAddProductForm);
+            if (editingProduct) { // If was editing, reset form when cancelling
+              resetProductForm();
+            }
           }}
           // Disable button if it's in the "Add Product" state (showAddProductForm is false)
           // AND the product limit (products.length >= 1) is reached.
           // The button acts as "Cancel" when showAddProductForm is true, so it shouldn't be disabled then based on product count.
-          disabled={!showAddProductForm && products.length >= 1}
+          // disabled={!showAddProductForm && products.length >= 1}
           className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors 
-                      ${(!showAddProductForm && products.length >= 1) 
-                        ? 'bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 cursor-not-allowed' 
-                        : 'bg-gray-900 text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-200'}
+                      bg-gray-900 text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-200
                     `}
         >
           {showAddProductForm ? <X size={16} /> : <Plus size={16} />}
@@ -2512,7 +2599,7 @@ function Settings() {
               {tabs.map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabClick(tab.id)} // Use new handler
                   className={`
                     w-full text-left px-3 py-2 rounded-md flex items-center gap-2.5 transition-colors duration-150 ease-in-out
                     ${activeTab === tab.id

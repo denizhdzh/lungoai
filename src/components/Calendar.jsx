@@ -9,7 +9,7 @@ function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(currentDate.getMonth());
   const [currentYear, setCurrentYear] = useState(currentDate.getFullYear());
-  const [viewMode, setViewMode] = useState('monthly');
+  const [viewMode, setViewMode] = useState('weekly');
   const [events, setEvents] = useState([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [selectedDay, setSelectedDay] = useState(null);

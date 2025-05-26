@@ -17,6 +17,7 @@ import Generation from './pages/Generation.jsx';
 import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
+import { motion } from 'framer-motion';
 
 // --- IMMEDIATE THEME CHECK (Before React Renders) ---
 if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -107,14 +108,29 @@ function AppRouter() {
 
   // Wait until auth check AND user data fetch are complete before rendering routes
   if (!authChecked || !userDataFetched) {
-    // Use Lottie animation for initial loading
+    // Use custom logo spinner for initial loading
+    // const isDarkMode = document.documentElement.classList.contains('dark'); // No longer needed for src
+    // const logoSrc = isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"; // No longer needed for src
+
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white dark:bg-zinc-950">
-        <DotLottieReact
-          src="https://lottie.host/f5046ffa-160b-4e7b-9d11-1c8f4fe34e04/eppkYXQ80Y.lottie"
-          loop
-          autoplay
-          style={{ width: '80px', height: '80px' }}
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white dark:bg-neutral-950 text-black dark:text-white">
+        <motion.div
+          style={{
+            width: 80, // Represents 4 units
+            boxSizing: 'border-box',
+            boxShadow: 'inset 0 0 0 10px currentColor', // Thicker inside border
+            marginBottom: 20, // Optional space below
+            borderRadius: '16px',
+          }}
+          animate={{
+            height: [80, 40, 80], // 4x4 -> 4x2 -> 4x4
+          }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            repeatType: "loop",
+            ease: "easeInOut",
+          }}
         />
       </div>
     );

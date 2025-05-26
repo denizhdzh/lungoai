@@ -10,8 +10,8 @@ const createStripeCheckoutSession = httpsCallable(functions, 'createStripeChecko
 const planPriceMap = {
   "price_1RMqEZDf8kAOBAT3ltD6n2lX": "Basic (Monthly)",
   "price_1RMqGbDf8kAOBAT3vgwkWLr6": "Basic (Yearly)",
-  "price_1RMqH7Df8kAOBAT30BGfHv66": "Pro (Monthly)",
-  "price_1RMqHMDf8kAOBAT3bCTcdNwq": "Pro (Yearly)",
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": "Pro (Monthly)",
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": "Pro (Yearly)",
   "price_1RMqHgDf8kAOBAT3m6kthIND": "Business (Monthly)",
   "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": "Business (Yearly)",
 };
@@ -22,16 +22,19 @@ const plans = [
   {
     id: 'basic',
     name: 'Basic Plan',
-    monthlyPrice: 59.00,
-    yearlyMonthlyPrice: parseFloat((59.00 * 8 / 12).toFixed(2)),
+    monthlyPrice: 29.00,
+    yearlyMonthlyPrice: parseFloat((29.00 * 10 / 12).toFixed(2)),
     monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX",
     yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6",
+    credits: 2000,
     features: [
-      '1 Product',
-      '10 Videos',
-      '15 Images',
-      '30 Slideshows',
-      'E-mail support',
+      'AI UGC Video Generation',
+      'AI Image Generation (High & Medium Quality)',
+      'Slideshow Content Generation',
+      'AI-Powered Scripts + Visuals',
+      'Watermark-Free Downloads',
+      'No Editing Required',
+      'E-mail Support',
     ],
     buttonText: 'Get Started',
     mostPopular: false,
@@ -39,18 +42,19 @@ const plans = [
   {
     id: 'pro',
     name: 'Pro plan',
-    monthlyPrice: 119.00,
-    yearlyMonthlyPrice: parseFloat((119.00 * 8 / 12).toFixed(2)),
-    monthlyPriceId: "price_1RMqH7Df8kAOBAT30BGfHv66",
-    yearlyPriceId: "price_1RMqHMDf8kAOBAT3bCTcdNwq",
+    monthlyPrice: 89.00,
+    yearlyMonthlyPrice: parseFloat((89.00 * 10 / 12).toFixed(2)),
+    monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM",
+    yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq",
+    credits: 10000,
     features: [
-      'Up to 5 Product',
-      '40 Videos',
-      '50 Images',
-      '90 Slideshows',
-      'E-mail support',
-      'Automation (very soon)',
-      'Tiktok Publishing (soon)',
+      'AI UGC Video Generation',
+      'AI Image Generation (High & Medium Quality)',
+      'Slideshow Content Generation',
+      'AI-Powered Scripts + Visuals',
+      'Watermark-Free Downloads',
+      'No Editing Required',
+      'E-mail Support',
     ],
     buttonText: 'Get Started',
     mostPopular: true,
@@ -58,18 +62,19 @@ const plans = [
   {
     id: 'business',
     name: 'Business plan',
-    monthlyPrice: 299.00,
-    yearlyMonthlyPrice: parseFloat((299.00 * 8 / 12).toFixed(2)),
+    monthlyPrice: 179.00,
+    yearlyMonthlyPrice: parseFloat((179.00 * 10 / 12).toFixed(2)),
     monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND",
     yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho",
+    credits: 30000,
     features: [
-      'Up to 10 Product',
-      '90 Videos',
-      '120 Images',
-      '250 Slideshows',
-      'E-mail support',
-      'Automation (very soon)',
-      'Tiktok Publishing (soon)',
+      'AI UGC Video Generation',
+      'AI Image Generation (High & Medium Quality)',
+      'Slideshow Content Generation',
+      'AI-Powered Scripts + Visuals',
+      'Watermark-Free Downloads',
+      'No Editing Required',
+      'E-mail Support',
     ],
     buttonText: 'Get Started',
     mostPopular: false,
@@ -128,6 +133,17 @@ function AnimatedPrice({ price, duration = 800 }) {
     </span>
   );
 }
+
+// --- NEW: Animated Credits Component ---
+function AnimatedCredits({ credits, duration = 800 }) {
+  const animatedCredits = useCounterAnimation(credits, duration);
+  return (
+    <span className="text-2xl font-semibold text-gray-700 dark:text-zinc-200">
+      {Math.round(animatedCredits).toLocaleString()} Credits
+    </span>
+  );
+}
+// --- End Animated Credits Component ---
 
 // Animated feature value component with dark mode support
 function AnimatedValue({ contentBefore, value, contentAfter = "", duration = 600 }) {
@@ -325,7 +341,7 @@ function PricingSection({ id, subscriptionData, user }) {
               onClick={() => setBillingCycle('yearly')}
             >
               Yearly 
-              <span className="ml-2 text-xs font-medium text-green-600 dark:text-green-500">Save 33%</span>
+              <span className="ml-2 text-xs font-medium text-green-600 dark:text-green-500">2 months free</span>
             </button>
           </div>
         </div>
@@ -364,10 +380,11 @@ function PricingSection({ id, subscriptionData, user }) {
                   </div>
                   
                   <div className="flex flex-col">
-                    <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle} />
-                    <span className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+                    <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
+                    <span className="text-xs text-gray-500 dark:text-zinc-400 mt-1 mb-2">
                       {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
                     </span>
+                    <AnimatedCredits credits={plan.credits} duration={800 + index * 100} key={billingCycle + '-credits'} />
                   </div>
                 </div>
                 
@@ -400,26 +417,6 @@ function PricingSection({ id, subscriptionData, user }) {
                 <p className="text-xs uppercase tracking-wider text-gray-500 dark:text-zinc-500 mt-8 mb-3">Features</p>
                 <ul role="list" className="space-y-2.5 text-xs leading-6 text-gray-600 dark:text-zinc-300">
                   {plan.features.map((feature, idx) => {
-                    const numMatch = feature.match(/(\d+)/);
-                    const hasNumber = numMatch !== null;
-                    
-                    if (hasNumber) {
-                      const numValue = numMatch[1];
-                      const parts = feature.split(numValue);
-                      
-                      return (
-                        <li key={idx} className="flex gap-x-2.5 items-start">
-                          <CheckCircle className="h-4 w-4 flex-none text-gray-400 dark:text-zinc-500 mt-0.5" weight="fill" aria-hidden="true" />
-                          <AnimatedValue 
-                            contentBefore={parts[0]} 
-                            value={numValue} 
-                            contentAfter={parts[1]} 
-                            duration={600 + idx * 100}
-                          />
-                        </li>
-                      );
-                    }
-                    
                     let baseFeature = feature;
                     let suffix = null;
                     const soonMatch = feature.match(/\((very soon|soon)\)$/i);

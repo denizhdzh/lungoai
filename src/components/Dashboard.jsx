@@ -283,7 +283,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
   const [editedSlideTexts, setEditedSlideTexts] = useState([...(generation.slideTexts || [])]);
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(generation.selectedBackgroundId || '');
   const [selectedTextColor, setSelectedTextColor] = useState(generation.textColor || 'white');
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(2);
   const [textOpacity, setTextOpacity] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -441,49 +441,59 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
         onShowSuccessNotification('Video rendering started! It will be ready for download shortly.');
         
       } else if (generation.type === 'slideshow') {
-        console.log('[renderSlideshow] Starting slideshow render...');
-        console.log('[renderSlideshow] selectedBackgroundId:', selectedBackgroundId);
-        console.log('[renderSlideshow] generation.selectedBackgroundId:', generation.selectedBackgroundId);
-        console.log('[renderSlideshow] generation.aiSelectedBackgroundId:', generation.aiSelectedBackgroundId);
-        console.log('[renderSlideshow] editedSlideTexts:', editedSlideTexts);
-        console.log('[renderSlideshow] generation.slideTexts:', generation.slideTexts);
+        // THIS BLOCK IS MODIFIED TO CALL THE NEW FUNCTION
+        console.log('[RenderSlideshowAsSingleImage] Starting single image render for slideshow display...');
         
         const functions = getFunctions();
-        const renderSlideshow = httpsCallable(functions, 'renderSlideshow');
+        const callRenderAndReplace = httpsCallable(functions, 'renderAndReplaceGenerationImage');
+
+        let bgUrlToUse = generation.selectedBackgroundUrl; // Default to existing URL on the generation
+        if (selectedBackgroundId && backgrounds && backgrounds.length > 0) {
+            const foundBg = backgrounds.find(bg => bg.id === selectedBackgroundId);
+            if (foundBg && foundBg.imageUrl) {
+                bgUrlToUse = foundBg.imageUrl;
+            }
+        }
+
+        if (!bgUrlToUse) {
+            console.error('[RenderSlideshowAsSingleImage] No background URL could be determined.');
+            throw new Error('No background selected or available for rendering.');
+        }
+
+        const textForSingleRender = editedSlideTexts[currentSlideIndex] || 
+                                   (generation.slideTexts && generation.slideTexts.length > currentSlideIndex 
+                                     ? generation.slideTexts[currentSlideIndex] 
+                                     : '');
         
-        // Validate backgroundId before sending
-        const finalBackgroundId = selectedBackgroundId || generation.selectedBackgroundId;
-        console.log('[renderSlideshow] finalBackgroundId:', finalBackgroundId);
-        
-        if (!finalBackgroundId) {
-          throw new Error('No background selected for slideshow rendering');
+        if (!textForSingleRender && (editedSlideTexts.length === 0 || !editedSlideTexts[currentSlideIndex])) {
+            // If there are no texts at all, or current slide index points to an empty/undefined text.
+             logger.warn(`[RenderSlideshowAsSingleImage] No text provided for current slide ${currentSlideIndex + 1}. Rendering with placeholder or empty if backend supports.`);
+             // The backend function _renderSingleSlide handles empty textToRender by creating an empty processedSlideText.
+             // So, we can proceed. If specific behavior for "no text" is needed, add it here.
         }
 
         const payload = {
-          slideshowId: generation.id,
-          slideTexts: editedSlideTexts.length > 0 ? editedSlideTexts : generation.slideTexts,
-          backgroundId: finalBackgroundId,
-          textColor: selectedTextColor || generation.textColor || 'white'
+          targetGenerationId: generation.id,
+          backgroundUrl: bgUrlToUse,
+          textToRender: textForSingleRender,
         };
 
-        console.log('[renderSlideshow] Sending payload:', payload);
-        console.log('[renderSlideshow] Generation data:', {
-          id: generation.id,
-          selectedBackgroundId: generation.selectedBackgroundId,
-          aiSelectedBackgroundId: generation.aiSelectedBackgroundId,
-          slideTexts: generation.slideTexts,
-          textColor: generation.textColor
-        });
+        console.log('[RenderSlideshowAsSingleImage] Sending payload to renderAndReplaceGenerationImage:', payload);
         
         try {
-          const result = await renderSlideshow(payload);
-          console.log('[renderSlideshow] Success result:', result);
-        onShowSuccessNotification('Slideshow rendering started! It will be ready for download shortly.');
+          const result = await callRenderAndReplace(payload);
+          console.log('[RenderSlideshowAsSingleImage] Success result:', result);
+          // Update notification to be more specific to the action
+          onShowSuccessNotification('Current slide rendered and slideshow updated! It will be ready for download shortly.');
+          // Optionally, trigger a refresh or update local state if needed,
+          // though the backend updates Firestore which should trigger data refresh via listeners.
+          // onGenerationUpdated might need to be called here if the parent needs immediate state update
+          // For now, relying on existing data flow.
         } catch (renderError) {
-          console.error('[renderSlideshow] Error details:', renderError);
-          console.error('[renderSlideshow] Error code:', renderError.code);
-          console.error('[renderSlideshow] Error message:', renderError.message);
-          throw new Error(`Slideshow rendering failed: ${renderError.message || renderError.code || 'Unknown error'}`);
+          console.error('[RenderSlideshowAsSingleImage] Error details:', renderError);
+          console.error('[RenderSlideshowAsSingleImage] Error code:', renderError.code);
+          console.error('[RenderSlideshowAsSingleImage] Error message:', renderError.message);
+          throw new Error(`Rendering failed: ${renderError.message || renderError.code || 'Unknown error'}`);
         }
         
       } else {
@@ -512,11 +522,15 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
     setTimeout(() => {
       setCurrentSlideIndex(prev => {
         const newIndex = prev + direction;
-        const maxIndex = numSlides - 1;
-        return Math.max(0, Math.min(newIndex, maxIndex));
+        const maxIndex = numSlides - 1; 
+        // IMPORTANT: Log inside setCurrentSlideIndex callback
+        console.log(`[handleSlideChange] Direction: ${direction}, Prev Index: ${prev}, New Index Attempt: ${newIndex}, Max Index: ${maxIndex}, numSlides: ${numSlides}`);
+        const finalNewIndex = Math.max(0, Math.min(newIndex, maxIndex));
+        console.log(`[handleSlideChange] Final New Index: ${finalNewIndex}`);
+        return finalNewIndex;
       });
       setTextOpacity(1);
-    }, 150);
+    }, 150); // text fade timeout
   };
 
   const handleSaveEdits = async () => {
@@ -628,27 +642,16 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
   const canGoPrevious = generation.type === 'slideshow' && currentSlideIndex > 0;
   
   // Fix navigation logic to work for both processed images and text-based slides
-  const canGoNext = generation.type === 'slideshow' && (() => {
-    // If we have processed images (rendered slideshow), use their count
-    if (generation.processedImageUrls && generation.processedImageUrls.length > 0 && !isEditing) {
-      return currentSlideIndex < generation.processedImageUrls.length - 1;
-    }
-    // Otherwise, use slide texts count
-    const slideTextsToUse = generation.slideTexts || [];
-    return slideTextsToUse.length > 0 && currentSlideIndex < slideTextsToUse.length - 1;
-  })();
+  // UPDATED LOGIC for canGoNext and numSlides to respect isEditing state
+  const currentDisplayableTexts = isEditing ? editedSlideTexts : (generation.slideTexts || []);
   
-  // Fix numSlides calculation to work for both cases
-  const numSlides = (() => {
-    if (generation.type !== 'slideshow') return 1;
-    // If we have processed images (rendered slideshow) and not editing, use their count
-    if (generation.processedImageUrls && generation.processedImageUrls.length > 0 && !isEditing) {
-      return generation.processedImageUrls.length;
-    }
-    // Otherwise, use slide texts count
-    const slideTextsToUse = generation.slideTexts || [];
-    return slideTextsToUse.length || 1;
-  })();
+  const canGoNext = generation.type === 'slideshow' && 
+                    currentDisplayableTexts.length > 0 && 
+                    currentSlideIndex < (currentDisplayableTexts.length - 1);
+  
+  const numSlides = generation.type === 'slideshow' ? 
+                    (currentDisplayableTexts.length > 0 ? currentDisplayableTexts.length : 1) 
+                    : 1;
 
   // Computed property to check if there are changes
   const hasChanges = useMemo(() => {
@@ -747,13 +750,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                 transition={{ delay: 0.1 }}
                 className="w-full h-full"
               >
-                {generation.processedImageUrls && generation.processedImageUrls.length > 0 && !isEditing ? (
-                  <img
-                    src={generation.processedImageUrls[currentSlideIndex]}
-                    alt={`Slideshow image ${currentSlideIndex + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : generation.selectedBackgroundUrl && generation.slideTexts ? (
+                {generation.selectedBackgroundUrl && generation.slideTexts ? (
                   <div className="relative w-full h-full">
                     <img
                       src={(() => {
@@ -771,10 +768,10 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: textOpacity, y: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="max-w-[90%]"
+                        className="max-w-[85%]" // MODIFIED: Reduced width
                       >
                         <p 
-                          className={`text-base font-medium text-center ${selectedTextColor === 'white' ? 'text-white' : 'text-black'}`}
+                          className={`text-base font-medium text-left ${selectedTextColor === 'white' ? 'text-white' : 'text-black'}`} // MODIFIED: text-center to text-left
                           style={{ 
                             textShadow: selectedTextColor === 'white' 
                               ? '0 1px 2px rgba(0,0,0,0.8)' 
@@ -807,7 +804,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
 
                 {/* Slideshow navigation - Smaller */}
                 {numSlides > 1 && (
-                  <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between p-2">
+                  <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between p-2 z-20"> {/* ADDED z-20 HERE */}
                     <motion.button 
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -820,7 +817,10 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                     <motion.button 
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleSlideChange(1)}
+                      onClick={() => {
+                        console.log('[DEBUG] Next button clicked!'); // DIRECT CLICK LOG
+                        handleSlideChange(1);
+                      }}  // Next
                       disabled={!canGoNext}
                       className={`p-1.5 bg-black/40 text-white rounded-full backdrop-blur-sm transition-all ${canGoNext ? 'hover:bg-black/60' : 'opacity-30 cursor-not-allowed'}`}
                     >
@@ -1371,23 +1371,24 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                     </motion.button>
                   )}
                   
-                  {(generation.type === 'slideshow' && (!generation.processedImageUrls || generation.processedImageUrls.length === 0)) && (
+                  {/* MODIFIED: Slideshow render button always visible */}
+                  {generation.type === 'slideshow' && (
                     <motion.button
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
-                      onClick={handleDownload}
+                      onClick={handleDownload} // This now calls renderAndReplaceGenerationImage
                       disabled={isDownloading}
                       className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
                 >
                       {isDownloading ? (
                         <>
                           <CircleNotch size={12} className="animate-spin" />
-                          Rendering...
+                          Rendering Current Slide...
                         </>
                       ) : (
                         <>
                           <FilmSlate size={12} />
-                          Render and Ready to Download
+                          Render Current Slide & Update
                         </>
                       )}
                     </motion.button>
@@ -1396,7 +1397,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   <div className="grid grid-cols-2 gap-1.5">
                     {/* Show download button for rendered videos and slideshows */}
                     {((generation.type === 'video' && generation.finalVideoUrl) || 
-                      (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0)) && (
+                      (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0 && generation.processedImageUrls[0])) && (
                       <motion.button
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}

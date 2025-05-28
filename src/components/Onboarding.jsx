@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, collection, writeBatch, serverTimestamp } from "@firebase/firestore"; // Import Firestore functions
+import { doc, setDoc, collection, writeBatch, serverTimestamp, updateDoc } from "@firebase/firestore"; // Import Firestore functions
 import { updateProfile } from "firebase/auth"; // <-- ADD THIS IMPORT
 import { auth, db, storage } from '../firebase'; // Import auth, db, and storage
+import { getFunctions, httpsCallable } from 'firebase/functions'; // NEW: Import Firebase Functions
 import PricingSection from './PricingSection'; // Import PricingSection
 import { Plus, X, Package, Image as ImageIcon, CheckCircle, CircleNotch, FilmSlate } from '@phosphor-icons/react'; // Added icons
 import { ref, uploadBytes, getDownloadURL, listAll } from "firebase/storage"; // Added Firebase storage functions
@@ -26,6 +27,10 @@ const libraryImageDescriptions = {
   "Window & Words.png": "A person working on a laptop inside a cafe with large windows looking out onto a city street."
 };
 // --- END NEW ---
+
+// NEW: Initialize Firebase Functions
+const functions = getFunctions();
+const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo');
 
 // Accept the setOnboardingComplete prop
 function Onboarding({ setOnboardingComplete }) { 
@@ -160,31 +165,22 @@ function Onboarding({ setOnboardingComplete }) {
     setStep(prev => prev - 1);
   };
 
-  const handleComplete = async () => {
-    if (!validateStep()) {
-      return; 
-    }
-    setShowOffer(true);
-  };
-  
-  const finalizeOnboarding = async () => {
+  // NEW: Extracted function to save core onboarding details
+  const _saveOnboardingDetails = async () => {
     const user = auth.currentUser;
     if (!user) {
-      console.error("No user found, cannot save onboarding data.");
+      console.error("[_saveOnboardingDetails] No user found, cannot save onboarding data.");
       alert("Error: No user session found. Please try logging in again.");
-      setIsLoading(false);
-      return; 
+      return false; // Indicate failure
     }
-    setIsLoading(true);
 
-    console.log('Attempting to save onboarding data for user:', user.uid);
-    console.log('Onboarding data:', formData);
+    console.log('[_saveOnboardingDetails] Attempting to save onboarding data for user:', user.uid);
+    console.log('[_saveOnboardingDetails] Onboarding data:', formData);
 
     try {
       const userDocRef = doc(db, "users", user.uid); 
       const defaultPhotoURL = "https://firebasestorage.googleapis.com/v0/b/ugcai-f429e.firebasestorage.app/o/pp-placeholder.jpeg?alt=media";
       
-      // Base user data for Firestore
       const userDataToSave = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -194,7 +190,7 @@ function Onboarding({ setOnboardingComplete }) {
         interests: formData.interests,
         notifications: formData.notifications,
         dataCollection: formData.dataCollection,
-        onboardingCompleted: true,
+        onboardingCompleted: false, // Will be set to true later by finalizeOnboarding
         email: user.email,
         uid: user.uid,
         photoURL: defaultPhotoURL,
@@ -202,19 +198,17 @@ function Onboarding({ setOnboardingComplete }) {
       };
 
       await setDoc(userDocRef, userDataToSave, { merge: true });
-      console.log('Base user onboarding data saved successfully.');
+      console.log('[_saveOnboardingDetails] Base user onboarding data saved successfully.');
       
-      // Update Auth profile
       if (auth.currentUser) {
         try {
           await updateProfile(auth.currentUser, { photoURL: defaultPhotoURL, displayName: `${formData.firstName} ${formData.lastName}`.trim() });
-          console.log('Firebase Auth user profile updated successfully!');
+          console.log('[_saveOnboardingDetails] Firebase Auth user profile updated successfully!');
         } catch (authError) {
-          console.error("Error updating Firebase Auth user profile:", authError);
+          console.error("[_saveOnboardingDetails] Error updating Firebase Auth user profile:", authError);
         }
       }
 
-      // --- Save Product ---
       if (formData.productName && formData.productLogoFile && formData.productMediaFile) {
         const newProductId = doc(collection(db, 'users', user.uid, 'products')).id;
         let logoUrl = null;
@@ -242,17 +236,29 @@ function Onboarding({ setOnboardingComplete }) {
             standardizedVideoUrl: null,
           };
           await setDoc(doc(db, 'users', user.uid, 'products', newProductId), productData);
-          console.log('Product data saved successfully during onboarding.');
-          // Optionally call video standardization if mediaType is video (as in Settings.jsx)
-          // For simplicity in onboarding, this is omitted for now.
+          console.log('[_saveOnboardingDetails] Product data saved successfully.');
+          
+          if (mediaType === 'video' && mediaUrl) {
+            const storagePath = `users/${user.uid}/products/${newProductId}/media/original_video.${mediaExtension}`;
+            console.log(`[_saveOnboardingDetails] Video uploaded, calling manuallyStandardizeProductVideo for product ${newProductId}, path: ${storagePath}`);
+            manuallyStandardizeProductVideo({
+              userId: user.uid,
+              productId: newProductId,
+              originalVideoPathInStorage: storagePath,
+              originalFileExtension: mediaExtension
+            }).then(result => {
+              console.log('[_saveOnboardingDetails] manuallyStandardizeProductVideo call INITIATED (background).', result);
+            }).catch(error => {
+              console.error('[_saveOnboardingDetails] Error INITIATING manuallyStandardizeProductVideo (background):', error);
+            });
+          }
         } catch (productError) {
-          console.error("Error saving product during onboarding:", productError);
-          // Decide how to handle this - alert user? proceed without product?
+          console.error("[_saveOnboardingDetails] Error saving product:", productError);
           alert("There was an error saving your product information. Please try adding it later from settings.");
+          return false; // Indicate failure
         }
       }
       
-      // --- Save Background ---
       let finalBackgroundUrl = null;
       let finalBackgroundName = null;
       let finalBackgroundDescription = 'Onboarding background.';
@@ -262,11 +268,11 @@ function Onboarding({ setOnboardingComplete }) {
         try {
           finalBackgroundUrl = await uploadFileOnboarding(formData.backgroundFile, `users/${user.uid}/backgrounds/uploads`);
           finalBackgroundName = formData.backgroundName;
-          // Description generation could be added here like in Settings.jsx for consistency
           finalIsFromLibrary = false;
         } catch (bgUploadError) {
-          console.error("Error uploading custom background during onboarding:", bgUploadError);
+          console.error("[_saveOnboardingDetails] Error uploading custom background:", bgUploadError);
           alert("Error uploading your custom background. Please try again from settings.");
+          return false; // Indicate failure
         }
       } else if (formData.backgroundChoice === 'library' && formData.selectedLibraryBackgroundUrl) {
         finalBackgroundUrl = formData.selectedLibraryBackgroundUrl;
@@ -287,36 +293,81 @@ function Onboarding({ setOnboardingComplete }) {
             createdAt: serverTimestamp(),
           };
           await setDoc(backgroundDocRef, backgroundData);
-          console.log('Background data saved successfully during onboarding.');
+          console.log('[_saveOnboardingDetails] Background data saved successfully.');
         } catch (bgSaveError) {
-          console.error("Error saving background data during onboarding:", bgSaveError);
+          console.error("[_saveOnboardingDetails] Error saving background data:", bgSaveError);
           alert("Error saving your background choice. Please try again from settings.");
+          return false; // Indicate failure
         }
       }
+      console.log('[_saveOnboardingDetails] All details saved successfully.');
+      return true; // Indicate success
+    } catch (error) {
+      console.error("[_saveOnboardingDetails] Error saving onboarding details:", error);
+      alert("An error occurred while saving your onboarding information. Please try again.");
+      return false; // Indicate failure
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!validateStep()) {
+      return; 
+    }
+    setIsLoading(true); // Start loading before saving details
+    const detailsSaved = await _saveOnboardingDetails();
+    setIsLoading(false); // Stop loading after attempt
+
+    if (detailsSaved) {
+      setShowOffer(true);
+    } else {
+      // Handle the case where saving details failed (error already alerted in _saveOnboardingDetails)
+      console.log("Onboarding details saving failed. Offer not shown.");
+    }
+  };
+  
+  const finalizeOnboarding = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("No user found, cannot finalize onboarding.");
+      // alert("Error: No user session found. Please try logging in again."); // Already handled by _saveOnboardingDetails generally
+      return; 
+    }
+    // setIsLoading(true); // isLoading is now handled by handleComplete and skipOffer
+
+    console.log('Finalizing onboarding for user:', user.uid);
+    // The core data (profile, product, background) is now assumed to be saved by _saveOnboardingDetails.
+    // This function now only needs to mark onboarding as completed and navigate.
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      await updateDoc(userDocRef, {
+        onboardingCompleted: true,
+        // Other fields like lastOnboardingFinalizedAt: serverTimestamp() could be added here if needed.
+      });
+      console.log('User onboarding status marked as completed.');
       
       setOnboardingComplete(); 
-      navigate('/'); // Navigate to dashboard after everything
+      navigate('/'); 
 
     } catch (error) {
-      console.error("Error finalizing onboarding data:", error);
-      alert("An error occurred while saving your onboarding information. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+      console.error("Error marking onboarding as completed:", error);
+      alert("An error occurred while finalizing your setup. Please try again.");
+    } 
+    // finally { // setIsLoading(false); // isLoading is now handled by handleComplete and skipOffer }
   };
   
   const skipOffer = async () => {
     setIsSkipping(true); // Use isSkipping to disable button and show loader
-    setIsLoading(true); // also use general isLoading
-    try {
-      await finalizeOnboarding(); // This now handles everything including navigation on success
-    } catch (error) {
-      console.error("Error finalizing onboarding when skipping offer:", error);
-      // Error is already alerted in finalizeOnboarding, just reset loading states
-    } finally {
-      setIsSkipping(false);
-      setIsLoading(false);
-    }
+    // setIsLoading(true); // setIsLoading is managed by handleComplete or if _saveOnboardingDetails was called directly here before offer
+    
+    // Since _saveOnboardingDetails is now called *before* showing the offer (in handleComplete),
+    // we can assume the core details are saved if the user reaches this point.
+    // We just need to finalize by marking onboarding complete and navigating.
+    console.log("User is skipping the offer. Proceeding to finalize onboarding.");
+    await finalizeOnboarding(); // This function now only marks as complete and navigates
+
+    // No direct need to setIsLoading(false) here as finalizeOnboarding doesn't manage it,
+    // and the loading state for the skip button (isSkipping) is handled locally.
+    setIsSkipping(false);
   };
 
   // --- Helper to Fetch Library Backgrounds for Onboarding ---
@@ -669,7 +720,7 @@ function Onboarding({ setOnboardingComplete }) {
                     ) : libraryImages.length === 0 ? (
                       <p className="text-xs text-gray-500 py-4 text-center">Library is currently empty.</p>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto px-2 py-1">
+                      <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto px-2 py-1">
                         {libraryImages.map(img => (
                           <div 
                             key={img.url}
@@ -757,7 +808,12 @@ function Onboarding({ setOnboardingComplete }) {
         <p className="mt-2 text-gray-600 dark:text-neutral-300">Unlock the full potential of LungoAI with a premium plan</p>
       </div>
       
-      <PricingSection id="pricing" subscriptionData={null} user={auth.currentUser} />
+      <PricingSection 
+        id="pricing" 
+        subscriptionData={null} 
+        user={auth.currentUser} 
+        onSubscriptionSuccess={finalizeOnboarding}
+      />
     </div>
   );
 

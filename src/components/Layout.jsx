@@ -1404,9 +1404,9 @@ function Layout() {
                   />
                   <button 
                     onClick={handleCommandSubmit}
-                    disabled={(!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset) || areSubOptionsRequiredAndMissing()}
+                    disabled={!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset) || areSubOptionsRequiredAndMissing()}
                     className={`p-1.5 rounded-md transition-all duration-200 ease-in-out 
-                                ${((!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset) || areSubOptionsRequiredAndMissing()) 
+                                ${((!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset)) || areSubOptionsRequiredAndMissing()) 
                                   ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50' 
                                   : 'bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 text-neutral-100 dark:text-neutral-900'}`}
                   >
@@ -1650,36 +1650,45 @@ function Layout() {
                         {name: 'Video', icon: VideoIcon, mode: 'video', credits: 175},
                         {name: 'Image', icon: ImageIcon, mode: 'image', credits: 90},
                         {name: 'Slideshow', icon: SlideshowIcon, mode: 'slideshow', credits: 50}
-                      ].map((item) => (
-                        <button
-                          key={item.name}
-                          onClick={() => {
-                            setCreationMode(item.mode);
-                            setIsChatInputVisible(true);
-                            setIsCreateDropdownOpen(false);
-                            setSelectedItem(item.name);
-                          }}
-                          className="flex items-center w-full px-3 py-2.5 text-sm text-left text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-150 ease-in-out focus:outline-none focus:bg-neutral-100 dark:focus:bg-neutral-800"
-                        >
-                          <div className="flex items-center">
-                            {/* Frame for logo and credits */}
-                            <div className="flex items-center p-1 mr-3 border border-neutral-200 dark:border-neutral-800 rounded-md bg-neutral-200 dark:bg-neutral-900 bg-opacity-50 dark:bg-opacity-50">
-                              <img 
-                                src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
-                                alt="Lungo AI Logo" 
-                                className="h-2 w-auto mr-1" // Maintain aspect ratio, adjust height as needed
-                                style={{ transform: 'rotate(90deg)' }} 
-                              />
-                              <span className="text-xs text-neutral-600 dark:text-neutral-300">
-                                {item.credits}
-                              </span>
+                      ].map((item) => {
+                        const hasEnoughCredits = firestoreUserData && firestoreUserData.general_credits >= item.credits;
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={() => {
+                              if (!hasEnoughCredits) return;
+                              setCreationMode(item.mode);
+                              setIsChatInputVisible(true);
+                              setIsCreateDropdownOpen(false);
+                              // setSelectedItem(item.name); // setSelectedItem is not defined, consider removing or defining if needed
+                            }}
+                            disabled={!hasEnoughCredits}
+                            className={`flex items-center w-full px-3 py-2.5 text-sm text-left rounded-lg transition-colors duration-150 ease-in-out focus:outline-none 
+                                        ${!hasEnoughCredits 
+                                          ? 'text-neutral-400 dark:text-neutral-600 cursor-not-allowed' 
+                                          : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:bg-neutral-100 dark:focus:bg-neutral-800'}
+                                      `}
+                          >
+                            <div className="flex items-center">
+                              {/* Frame for logo and credits */}
+                              <div className="flex items-center p-1 mr-3 border border-neutral-200 dark:border-neutral-800 rounded-md bg-neutral-200 dark:bg-neutral-900 bg-opacity-50 dark:bg-opacity-50">
+                                <img 
+                                  src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
+                                  alt="Lungo AI Logo" 
+                                  className="h-2 w-auto mr-1" // Maintain aspect ratio, adjust height as needed
+                                  style={{ transform: 'rotate(90deg)' }} 
+                                />
+                                <span className="text-xs text-neutral-600 dark:text-neutral-300">
+                                  {item.credits}
+                                </span>
+                              </div>
+                              {/* Item name */}
+                              <span>{item.name}</span>
                             </div>
-                            {/* Item name */}
-                            <span>{item.name}</span>
-                          </div>
-                          {/* Removed the separate credits span from here as it's now in the frame */}
-                        </button>
-                      ))}
+                            {/* Removed the separate credits span from here as it's now in the frame */}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
               </div>

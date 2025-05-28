@@ -11,9 +11,10 @@ const axios = require('axios');
 const { CloudTasksClient } = require('@google-cloud/tasks'); // <-- ADD Cloud Tasks Client
 const fs = require('fs').promises; // For async file operations
 const path = require('path'); // For path manipulation
-// const ffmpeg = require('fluent-ffmpeg'); // TAŞINACAK
-// const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path; // TAŞINACAK
-// ffmpeg.setFfmpegPath(ffmpegPath); // TAŞINACAK
+const os = require('os'); // Added for tmpdir access in renderAndReplaceGenerationImage
+const ffmpeg = require('fluent-ffmpeg'); // MOVED TO GLOBAL SCOPE
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path; // MOVED TO GLOBAL SCOPE
+ffmpeg.setFfmpegPath(ffmpegPath); // MOVED TO GLOBAL SCOPE
 // const stripe = require('stripe')(process.env.STRIPE_SECRET); // <-- REMOVE Global Stripe import and initialize
 
 // Initialize Firebase Admin SDK (once)
@@ -25,11 +26,11 @@ const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
   // Basic Plan
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 2000 }, // Monthly Basic
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 2000 }, // Yearly Basic
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 2500 }, // Monthly Basic
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 2500 }, // Yearly Basic
   // Pro Plan
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { general_credits: 10000 }, // Monthly Pro
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { general_credits: 10000 }, // Yearly Pro
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { general_credits: 1200 }, // Monthly Pro
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { general_credits: 1200 }, // Yearly Pro
   // Business Plan
   "price_1RMqHgDf8kAOBAT3m6kthIND": { general_credits: 30000 }, // Monthly Business
   "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { general_credits: 30000 }  // Yearly Business
@@ -54,7 +55,7 @@ const MAX_POLLING_BACKOFF_SECONDS = 300; // 5 minutes max backoff
 // --- NEW: Cloud Tasks Configuration for Image Generation ---
 const imageGenTasksQueueName = 'image-generation-queue'; // New queue for image generation tasks
 const imageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performImageGenerationTask`; // URL for the new image generation handler
-const IMAGE_GEN_TIMEOUT_SECONDS = 8 * 60; // 8 minutes for image generation, adjust as needed
+const IMAGE_GEN_TIMEOUT_SECONDS = 540; // 8 minutes for image generation, adjust as needed
 
 // --- NEW: Cloud Tasks Configuration for Video Concatenation ---
 const concatTasksQueueName = 'video-concatenation-queue'; // New queue for concatenation tasks
@@ -297,7 +298,7 @@ const commandDefinitions = [
 //    console.error("Error initializing Runway Client:", error);
 // }
 
-exports.parseUserCommand = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
+exports.parseUserCommand = onCall({ region: 'us-central1', timeoutSeconds: 540, memory: '1GB' }, async (request) => { // ADDED memory: '1GB'
   // --- Authentication Check ---
   const userId = request.auth?.uid;
   if (!userId) {
@@ -1606,13 +1607,6 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    // --- FFMPEG Initialization for this function scope ---
-    const ffmpeg = require('fluent-ffmpeg');
-    const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-    ffmpeg.setFfmpegPath(ffmpegPath);
-    const os = require('os'); // For temp directory
-    // --- END FFMPEG Initialization ---
-
     // Destructure ALL parameters, including the new language parameter and slideshow type
     const { topic, slide_1_text, slide_2_text, slide_3_text, slide_4_text, background_name, image_style, language, _slideshow_type_context } = request.data;
     const targetLanguage = language || 'en'; // Default to English if not provided
@@ -1735,8 +1729,8 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         let productContext = '';
         try {
             const productsSnapshot = await db.collection('users').doc(userId).collection('products').limit(3).get();
-            if (!productsSnapshot.empty) {
-                const firstProductDoc = productsSnapshot.docs[0];
+                if (!productsSnapshot.empty) {
+                    const firstProductDoc = productsSnapshot.docs[0];
                 productForTopic = {
                     name: firstProductDoc.data().name || firstProductDoc.data().product_name,
                     description: firstProductDoc.data().description || firstProductDoc.data().product_description
@@ -1769,9 +1763,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         let aiSelectedBackgroundId = null;
         let actualBackgroundUsedForContext = null; // This will hold the chosen BG object (name, desc, id, imageUrl)
 
-        const userBackgroundsSnapshot = await db.collection('users').doc(userId).collection('backgrounds').get();
-        const availableBackgrounds = [];
-        if (!userBackgroundsSnapshot.empty) {
+            const userBackgroundsSnapshot = await db.collection('users').doc(userId).collection('backgrounds').get();
+            const availableBackgrounds = [];
+            if (!userBackgroundsSnapshot.empty) {
             userBackgroundsSnapshot.forEach(doc => {
                 availableBackgrounds.push({
                     id: doc.id,
@@ -1847,9 +1841,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                     `ID: "${bg.id}", Name: "${bg.name}", Description: "${bg.description || 'No description'}"`
                 ).join('\n');
                 expectedJsonResponseFormat.selected_background_id = "string"; // AI must return this
-
-                textGenPrompt = `
-                    ${coreTextInstruction}
+            
+            textGenPrompt = `
+                ${coreTextInstruction}
 
                     Available backgrounds for you to choose from:
                     ${backgroundOptionsForAI}
@@ -1865,9 +1859,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                 textGenPrompt = `
                     ${coreTextInstruction}
                     No specific background image will be used. Generate text that fits the theme.
-                    Return a JSON object like: ${JSON.stringify(expectedJsonResponseFormat)}. Ensure each key has a non-empty string value.`;
+                Return a JSON object like: ${JSON.stringify(expectedJsonResponseFormat)}. Ensure each key has a non-empty string value.`;
             }
-
+            
             logger.info(`Invoking AI. NeedText: ${needAiForText}, NeedBGSelect: ${needAiForBackgroundSelection}. Topic: "${effectiveTopic}", Lang: ${targetLanguage}`);
             const completion = await openai.chat.completions.create({
                 model: "gpt-4o",
@@ -1893,7 +1887,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                     selectedBackgroundImageName = chosenBgByAI.name;
                     actualBackgroundUsedForContext = chosenBgByAI; // Update the context object
                     logger.info(`AI selected background ID: "${aiSelectedBackgroundId}", Name: "${selectedBackgroundImageName}", URL: ${selectedBackgroundUrl}`);
-                } else {
+        } else {
                     logger.warn(`AI selected background ID "${aiResponse.selected_background_id}" which was not found in available list. Attempting fallback.`);
                     if (availableBackgrounds.length > 0) {
                         actualBackgroundUsedForContext = availableBackgrounds[0]; // Fallback to first
@@ -1955,7 +1949,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
                                 currentLine = word;
                             } else if ((currentLine + ' ' + word).length <= 30) {
                                 currentLine += ' ' + word;
-                            } else {
+            } else {
                                 processedSlideText += currentLine + '\n';
                                 currentLine = word;
                             }
@@ -2204,12 +2198,14 @@ exports.createStripeCheckoutSession = onCall(async (request) => { // Removed sec
       line_items: [
         { price: priceId, quantity: 1 },
       ],
-      allow_promotion_codes: true, // Allow discount codes
+      discounts: [{ 
+        promotion_code: 'lungolnch25',
+      }],
       success_url: process.env.STRIPE_SUCCESS_URL, // Use configured success URL
       cancel_url: process.env.STRIPE_CANCEL_URL,   // Use configured cancel URL
     });
 
-    logger.info(`Created Stripe Checkout session ${session.id} for user ${userId}, customer ${stripeCustomerId}`);
+    logger.info(`Created Stripe Checkout session ${session.id} for user ${userId}, customer ${stripeCustomerId} with discount 'lungolnch25'.`); // MODIFIED log message
     // Return the Session ID or URL
     // Using session.id is standard for redirecting with stripe.js
     // If you want to redirect directly from server, use session.url
@@ -2219,6 +2215,7 @@ exports.createStripeCheckoutSession = onCall(async (request) => { // Removed sec
     throw new HttpsError('internal', `Failed to create checkout session: ${error.message}`);
   }
 });
+
 
 // --- NEW: Function to Create Stripe Billing Portal Session ---
 exports.createStripePortalSession = onCall(async (request) => { // Removed secrets option
@@ -2679,28 +2676,43 @@ exports.refreshMonthlyCredits = onSchedule(
 // --- END Scheduled Function ---
 
 // --- NEW: Video Concatenation Function (HTTP Triggered by Cloud Task) ---
-exports.performVideoConcatenation = onRequest(
+exports.performVideoConcatenation = onCall( // MODIFIED from onRequest
     { region: 'us-central1', timeoutSeconds: VIDEO_CONCAT_TIMEOUT_SECONDS, memory: '2GiB' }, 
-    async (request, response) => {
+    async (request) => { // MODIFIED: (request, response) -> (request)
         const ffmpeg = require('fluent-ffmpeg');
         const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
         ffmpeg.setFfmpegPath(ffmpegPath);
         const fsPromises = require('fs').promises; 
 
-        logger.info("performVideoConcatenation request received:", request.body);
+        // MODIFIED: Get userId from auth context
+        const callingUserId = request.auth?.uid;
+        if (!callingUserId) {
+            logger.error("performVideoConcatenation: Authentication Error. User not authenticated.");
+            throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+        }
 
+        // MODIFIED: Get data from request.data
         const {
-            userId,
+            userId, // Keep userId from data for now, but verify against callingUserId
             firestoreDocId,
             runwayVideoUrl,
             productToAppendUrl, 
             productToAppendType, 
-        } = request.body;
+        } = request.data;
+
+        // Verification: Ensure the authenticated user matches the userId in the data
+        if (callingUserId !== userId) {
+            logger.error(`performVideoConcatenation: Authenticated user (${callingUserId}) does not match userId in data (${userId}).`);
+            throw new HttpsError('permission-denied', 'Authenticated user does not match the user ID for this operation.');
+        }
+        
+        logger.info("performVideoConcatenation onCall request received for user:", userId, "Data:", request.data);
+
 
         if (!userId || !firestoreDocId || !runwayVideoUrl) {
-            logger.error("Missing required parameters for video concatenation.", request.body);
-            response.status(400).send("Bad Request: Missing userId, firestoreDocId, or runwayVideoUrl.");
-            return;
+            logger.error("Missing required parameters for video concatenation.", request.data);
+            // MODIFIED: Throw HttpsError instead of response.send
+            throw new HttpsError('invalid-argument', "Bad Request: Missing userId, firestoreDocId, or runwayVideoUrl.");
         }
 
         const postDocRef = db.collection('users').doc(userId).collection('tiktok-posts').doc(firestoreDocId);
@@ -2709,7 +2721,7 @@ exports.performVideoConcatenation = onRequest(
         let currentVideoPath; 
         let finalVideoToUploadPath; 
         let filesToCleanup = [];
-        let postDataForLogging = {}; // Defined to be accessible in catch/finally
+        let postDataForLogging = {};
 
         try {
             logger.info(`Starting video processing for doc ${firestoreDocId}. Runway Video URL: ${runwayVideoUrl}`);
@@ -2726,7 +2738,7 @@ exports.performVideoConcatenation = onRequest(
             if (!postSnapshot.exists) {
                 throw new Error(`Firestore document ${firestoreDocId} not found.`);
             }
-            postDataForLogging = postSnapshot.data(); // Assign data for potential use in catch block
+            postDataForLogging = postSnapshot.data();
             const hookText = postDataForLogging?.hookText;
 
             if (!hookText) {
@@ -2762,13 +2774,12 @@ exports.performVideoConcatenation = onRequest(
                     }
                 processedHookTextForDrawtext += currentLine;
                 
-                // More robust escaping for FFmpeg drawtext filter
                 const escapedHookText = processedHookTextForDrawtext
-                                        .replace(/\\/g, '\\\\')      // 1. Escape backslashes first
-                                        .replace(/'/g, "\\'\\\'")    // 2. Escape single quotes (e.g., text='isn\'\'t it')
-                                        .replace(/%/g, '\\%')        // 3. Escape percent signs
-                                        .replace(/:/g, '\\:')        // 4. Escape colons
-                                        .replace(/\n/g, '\\\\N');    // 5. Convert \n to FFmpeg\'s \\N for newlines in drawtext
+                                        .replace(/\\/g, '\\\\')
+                                        .replace(/'/g, "\\\'\\\'")
+                                        .replace(/%/g, '\\%')
+                                        .replace(/:/g, '\\:')
+                                        .replace(/\n/g, '\\\\N');
 
                 try {
                     await new Promise((resolve, reject) => {
@@ -2958,7 +2969,8 @@ exports.performVideoConcatenation = onRequest(
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
             logger.info(`Firestore document ${firestoreDocId} updated to status 'completed' with finalVideoUrl.`);
-            response.status(200).send("Video processing completed successfully.");
+            // MODIFIED: Return success object
+            return { success: true, message: "Video processing completed successfully.", finalVideoUrl: finalPublicUrl };
 
         } catch (error) {
             logger.error(`Critical error in performVideoConcatenation for doc ${firestoreDocId}:`, error.message, error.stack);
@@ -2973,7 +2985,8 @@ exports.performVideoConcatenation = onRequest(
             } catch (dbUpdateError) {
                 logger.error(`Failed to update Firestore with critical failed status for doc ${firestoreDocId}:`, dbUpdateError);
             }
-            response.status(500).send(`Internal Server Error during video processing: ${error.message}`);
+            // MODIFIED: Throw HttpsError
+            throw new HttpsError('internal', `Internal Server Error during video processing: ${error.message}`);
         } finally {
             if (tempDir) {
                 logger.info(`Cleaning up temporary files in: ${tempDir}`);
@@ -3157,19 +3170,19 @@ exports.performImageGenerationTask = onRequest(
                 }
 
                 // Construct the new detailed prompt for images.edit
-                generatedImagePrompt = `This image features a hyper-realistic, AI-generated character. This is not a real person.
-Please change ${possessivePronoun} outfit to: "${clothingToUse}".
-And place ${pronoun} in the background setting of: "${settingToUse}".
+                generatedImagePrompt = `This image depicts a highly detailed, AI-generated person. This is not a real individual.
+Please change ${possessivePronoun} clothing to: "${clothingToUse}".
+And place ${pronoun} in the following background setting: "${settingToUse}".
 
-IMPORTANT: You MUST keep ${possessivePronoun} face, facial expression, hair, body shape, and pose EXACTLY the same as in the original image. Only change the clothing and the background environment. Do not alter the character in any other way.
+It is important to maintain ${possessivePronoun} original facial features, hairstyle, body shape, and general pose as seen in the input image. Only the outfit and background should be adjusted. The core appearance of the subject should remain consistent.
 
-The edited image style should be: "${finalImageStyle}".
-- The ENTIRE image, including the new background and all its elements, MUST be in SHARP FOCUS. No depth of field, bokeh, or artificial background blur.
-- Lighting in the new scene must be NATURAL and DYNAMIC, specific to '${settingToUse}'. It must realistically illuminate both the character and the new background, creating a cohesive scene. Detail light direction, quality (soft, harsh, diffused), and color temperature.
-- Emulate a HIGH-QUALITY MODERN SMARTPHONE PHOTO: natural color balance (often warm), good contrast roll-off. Subtle digital textures (minor compression artifacts, faint sensor noise in shadows) are acceptable for realism.
-- Apply CINEMATIC COLOR GRADING: natural, not overly saturated colors.
-- CRITICAL REITERATION: The character's original facial features, skin texture, hairstyle, expression, pose, and body proportions must be IDENTICALLY PRESERVED. NO changes to the character itself.
-`;
+The visual style of the final image should be: "${finalImageStyle}".
+- The full image, including the subject and background, should be rendered in sharp focus. Please avoid depth-of-field blur, artificial bokeh, or low-detail areas.
+- Lighting should appear natural and dynamic, matching the characteristics of '${settingToUse}'. Please reflect realistic light direction, softness or hardness, and an appropriate color temperature.
+- The final image should resemble a high-quality modern smartphone photo, with balanced natural colors, soft digital texture, and subtle detail in both highlights and shadows.
+- Apply cinematic-style color grading with moderate contrast and realistic tones.
+
+Please ensure the subject's identity — including their face, hair, expression, and pose — is preserved clearly and accurately.`;
                 
                 logger.info(`[Task ${firestoreDocId}] Using new detailed prompt for images.edit: "${generatedImagePrompt}"`);
 
@@ -3463,15 +3476,15 @@ Generate the hook text now. Output ONLY the text itself, no quotes or labels.`;
             
             await db.runTransaction(async (transaction) => {
                 const userSnapshot = await transaction.get(userRef);
-                const currentCredits = parseInt(userSnapshot.data()?.video_credit, 10) || 0;
-                if (currentCredits <= 0) {
+                const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0; // MODIFIED to general_credits
+                if (currentCredits < 175) { // MODIFIED to 175
                     // This specific HttpsError will be caught by the main try-catch block
-                    throw new HttpsError('resource-exhausted', 'Insufficient video credits during transaction in startVideoPipeline.');
+                    throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 175).'); // MODIFIED message
                 }
                 transaction.update(postDocRef, updatePayload);
-                transaction.update(userRef, { video_credit: admin.firestore.FieldValue.increment(-1) });
+                transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-175) }); // MODIFIED to general_credits and -175
             });
-            logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (status, hook, runwayId, product) & decremented video_credit.`);
+            logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (status, hook, runwayId, product) & decremented general_credits by 175.`); // MODIFIED log
 
             const pollTaskPayload = { userId, firestoreDocId, runwayTaskId, startTime, attempt: 1 };
             const task = {
@@ -3493,7 +3506,7 @@ Generate the hook text now. Output ONLY the text itself, no quotes or labels.`;
                     let errorToStore = (error instanceof HttpsError && error.code === 'resource-exhausted') ? error.message : `Video pipeline internal error: ${error.message}`;
                     await postDocRef.update({
                         status: (error instanceof HttpsError && error.code === 'resource-exhausted') ? 'pipeline_error_credits' : 'pipeline_internal_error',
-                        error: errorToStore,
+                        error: errorToStore, // errorToStore will contain "Insufficient general credits..."
                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
                     });
                 }
@@ -4210,5 +4223,139 @@ exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) 
         }
         if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', `Failed to fetch TikTok post status: ${error.message}`);
+    }
+});
+
+// --- NEW FUNCTION: Render text on an image and update a specific generation document ---
+exports.renderAndReplaceGenerationImage = onCall({ region: 'us-central1', timeoutSeconds: 300, memory: '1GB' }, async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+        logger.error('renderAndReplaceGenerationImage: Authentication required.');
+        throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const { backgroundUrl, textToRender, targetGenerationId } = request.data;
+
+    if (!backgroundUrl || typeof textToRender === 'undefined' || !targetGenerationId) {
+        logger.error(`renderAndReplaceGenerationImage: Missing required parameters for user ${userId}.`, 
+            { 
+                backgroundUrlProvided: !!backgroundUrl, 
+                textToRenderProvided: typeof textToRender !== 'undefined', 
+                targetGenerationIdProvided: !!targetGenerationId 
+            }
+        );
+        throw new HttpsError('invalid-argument', 'Missing required parameters: backgroundUrl, textToRender, and targetGenerationId.');
+    }
+
+    logger.info(`[${targetGenerationId}] User ${userId} initiated renderAndReplaceGenerationImage. Background: ${backgroundUrl}`);
+
+    // Assuming os, path, fs (fs.promises), downloadFile, ffmpeg, admin, db, logger, HttpsError are available in the global scope
+    const tempDir = os.tmpdir();
+    const operationSuffix = `replaced_${targetGenerationId}_${Date.now()}`;
+    const backgroundFileName = `background_${operationSuffix}.png`; // Output of downloadFile should be controllable or checked
+    const backgroundFilePath = path.join(tempDir, backgroundFileName);
+    const outputSlideFileName = `rendered_output_${operationSuffix}.png`;
+    const outputSlideFilePath = path.join(tempDir, outputSlideFileName);
+
+    try {
+        // 1. Download the background image
+        logger.info(`[${targetGenerationId}] Downloading background image: ${backgroundUrl} to ${backgroundFilePath}`);
+        await downloadFile(backgroundUrl, backgroundFilePath); 
+        logger.info(`[${targetGenerationId}] Background image downloaded successfully to ${backgroundFilePath}`);
+
+        // 2. Process text (split into lines)
+        let processedSlideText = '';
+        if (textToRender) {
+            const words = textToRender.split(' ');
+            let currentLine = '';
+            for (const word of words) {
+                if (currentLine === '') {
+                    currentLine = word;
+                } else if ((currentLine + ' ' + word).length <= 35) { // Approx 35 chars per line
+                    currentLine += ' ' + word;
+                } else {
+                    processedSlideText += currentLine + '\n';
+                    currentLine = word;
+                }
+            }
+            processedSlideText += currentLine;
+            if (processedSlideText.endsWith('\n')) {
+                processedSlideText = processedSlideText.slice(0, -1); // Remove trailing newline
+            }
+        }
+        logger.info(`[${targetGenerationId}] Processed text for rendering: "${processedSlideText}"`);
+
+        // 3. Escape text for FFmpeg command
+        const escapedText = processedSlideText
+                        .replace(/\\/g, '\\\\') // Escape actual backslashes first
+                        .replace(/%/g, '%%')
+                        .replace(/'/g, "\\'")
+                        .replace(/:/g, '\\:'); 
+
+        // 4. Define FFmpeg drawtext filter
+        const fontPath = '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf'; // Ensure this font exists in the environment
+        const drawTextFilter = `drawtext=text='${escapedText}':fontfile='${fontPath}':fontcolor=white:fontsize=50:borderw=2:bordercolor=black@0.7:x=(w-text_w)/2:y=(h-text_h)/2`;
+
+        // 5. Execute FFmpeg to render text on image
+        logger.info(`[${targetGenerationId}] Starting FFmpeg rendering. Input: ${backgroundFilePath}, Output: ${outputSlideFilePath}`);
+        await new Promise((resolve, reject) => {
+            ffmpeg(backgroundFilePath)
+                .outputOptions('-y') 
+                .videoFilter(drawTextFilter)
+                .save(outputSlideFilePath) 
+                .on('end', () => {
+                    logger.info(`[${targetGenerationId}] FFmpeg successfully rendered image to ${outputSlideFilePath}`);
+                    resolve();
+                })
+                .on('error', (err, stdout, stderr) => {
+                    logger.error(`[${targetGenerationId}] FFmpeg error during rendering: ${err.message}`);
+                    if (stdout) logger.error(`[${targetGenerationId}] FFmpeg stdout: ${stdout}`);
+                    if (stderr) logger.error(`[${targetGenerationId}] FFmpeg stderr: ${stderr}`);
+                    reject(new Error(`FFmpeg error: ${err.message}`));
+                });
+        });
+
+        // 6. Upload the rendered image to Firebase Storage
+        const storagePath = `generations/${userId}/${targetGenerationId}/replaced_image_${Date.now()}.png`;
+        const currentBucket = admin.storage().bucket(); 
+        const [file] = await currentBucket.upload(outputSlideFilePath, {
+            destination: storagePath,
+            metadata: { contentType: 'image/png' }, // Explicitly set content type
+            public: true,
+        });
+        const newImageUrl = file.publicUrl();
+        logger.info(`[${targetGenerationId}] Uploaded new image to ${storagePath}. URL: ${newImageUrl}`);
+
+        // 7. Update Firestore document
+        const generationDocRef = db.collection('users').doc(userId).collection('generations').doc(targetGenerationId);
+        await generationDocRef.update({
+            processedImageUrls: [newImageUrl], 
+            lastModified: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'updated_with_new_render' // Optional: a status field indicating this change
+        });
+        logger.info(`[${targetGenerationId}] Firestore document ${generationDocRef.path} updated with new image URL.`);
+
+        return { success: true, message: "Image rendered and generation document updated successfully.", imageUrl: newImageUrl };
+
+    } catch (error) {
+        logger.error(`[${targetGenerationId}] Error in renderAndReplaceGenerationImage for user ${userId}: ${error.message}`, { stack: error.stack, details: error });
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', `Failed to render and replace image: ${error.message}`);
+    } finally {
+        // 8. Cleanup temporary files
+        try {
+            if (await fs.stat(backgroundFilePath).catch(() => false)) {
+                await fs.unlink(backgroundFilePath);
+                logger.info(`[${targetGenerationId}] Deleted temp background file: ${backgroundFilePath}`);
+            }
+            if (await fs.stat(outputSlideFilePath).catch(() => false)) {
+                await fs.unlink(outputSlideFilePath);
+                logger.info(`[${targetGenerationId}] Deleted temp output file: ${outputSlideFilePath}`);
+            }
+        } catch (unlinkError) {
+            logger.warn(`[${targetGenerationId}] Warning: Could not delete one or more temporary files: ${unlinkError.message}`);
+        }
     }
 });

@@ -1118,7 +1118,7 @@ const SlideshowResultNode = React.memo(({ data }) => {
 });
 
 const CanvasWorkspace = () => {
-	const { user } = useOutletContext() || {};
+	const { user, setCanvasStatus } = useOutletContext() || {};
 	const [nodes, setNodes] = useState(initialNodes);
 	const [edges, setEdges] = useState([]);
 	const [menu, setMenu] = useState(null);
@@ -1387,19 +1387,60 @@ const CanvasWorkspace = () => {
 
 					setNodes(migratedNodes);
 					setEdges(savedEdges);
-					setLastSaved(new Date(timestamp));
+					const savedTime = new Date(timestamp);
+					setLastSaved(savedTime);
+					
+					// Initialize canvas status
+					if (setCanvasStatus) {
+						setCanvasStatus({
+							isAutoSaving: false,
+							lastSaved: savedTime,
+							nodeCount: migratedNodes.length,
+							edgeCount: savedEdges.length
+						});
+					}
+				}
+			} else {
+				// No saved state, initialize with empty status
+				if (setCanvasStatus) {
+					setCanvasStatus({
+						isAutoSaving: false,
+						lastSaved: null,
+						nodeCount: 0,
+						edgeCount: 0
+					});
 				}
 			}
 		} catch (error) {
 			console.warn('Failed to load or migrate canvas state:', error);
 			localStorage.removeItem('lungoai-canvas-state'); // Clear corrupted state
+			
+			// Initialize with empty status on error
+			if (setCanvasStatus) {
+				setCanvasStatus({
+					isAutoSaving: false,
+					lastSaved: null,
+					nodeCount: 0,
+					edgeCount: 0
+				});
+			}
 		}
-	}, []);
+	}, [setCanvasStatus]);
 
 	// Auto-save canvas state
 	useEffect(() => {
 		// Don't save empty canvas or during initial load
 		if (nodes.length === 0 && edges.length === 0) return;
+		
+		// Update Layout with saving status immediately
+		if (setCanvasStatus) {
+			setCanvasStatus(prev => ({
+				...prev,
+				isAutoSaving: true,
+				nodeCount: nodes.length,
+				edgeCount: edges.length
+			}));
+		}
 		
 		setIsAutoSaving(true);
 		
@@ -1412,36 +1453,49 @@ const CanvasWorkspace = () => {
 				};
 				
 				localStorage.setItem('lungoai-canvas-state', JSON.stringify(stateToSave));
-				setLastSaved(new Date());
+				const now = new Date();
+				setLastSaved(now);
+				
+				// Send completed status to Layout
+				if (setCanvasStatus) {
+					setCanvasStatus({
+						isAutoSaving: false,
+						lastSaved: now,
+						nodeCount: nodes.length,
+						edgeCount: edges.length
+					});
+				}
+				
+				setIsAutoSaving(false);
 			} catch (error) {
 				console.warn('Failed to save canvas state:', error);
-			} finally {
+				
+				// Clear saving status on error
+				if (setCanvasStatus) {
+					setCanvasStatus(prev => ({
+						...prev,
+						isAutoSaving: false,
+						nodeCount: nodes.length,
+						edgeCount: edges.length
+					}));
+				}
+				
 				setIsAutoSaving(false);
 			}
-		}, 1000); // 1 second debounce
-
-		return () => clearTimeout(saveTimeout);
-	}, [nodes, edges]);
-
-	// Disable browser back/forward navigation on two-finger swipe
-	useEffect(() => {
-		const wrapper = reactFlowWrapper.current;
-		if (!wrapper) return;
-
-		const handleWheel = (event) => {
-			// A horizontal swipe has a larger deltaX than deltaY
-			if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-				event.preventDefault();
-			}
-		};
-
-		// The listener must be non-passive to allow preventDefault()
-		wrapper.addEventListener('wheel', handleWheel, { passive: false });
+		}, 500); // 500ms debounce for faster feedback
 
 		return () => {
-			wrapper.removeEventListener('wheel', handleWheel);
+			clearTimeout(saveTimeout);
+			// Clear saving status if component unmounts during save
+			setIsAutoSaving(false);
+			if (setCanvasStatus) {
+				setCanvasStatus(prev => ({
+					...prev,
+					isAutoSaving: false
+				}));
+			}
 		};
-	}, []);
+	}, [nodes, edges, setCanvasStatus]);
 
 	// Clear canvas function
 	const clearCanvas = useCallback(() => {
@@ -1691,10 +1745,19 @@ const CanvasWorkspace = () => {
 		setDeleteMenu(null);
 	}, [deleteMenu]);
 
+
+
+
+
 	// ... rest of CanvasWorkspace
 
 	return (
-		<div className="w-full h-screen relative" ref={reactFlowWrapper}>
+		<div 
+			className="w-full h-screen relative" 
+			ref={reactFlowWrapper}
+		>
+
+
 			<ReactFlow
 				nodes={nodes}
 				edges={edges}
@@ -1711,12 +1774,11 @@ const CanvasWorkspace = () => {
 				onNodeContextMenu={onNodeContextMenu}
 				className="bg-neutral-900"
 				style={{ width: '100%', height: '100vh' }}
-				zoomOnScroll={false}
+				zoomOnScroll={true}
 				zoomOnPinch={true}
-				panOnScroll={true}
-				panOnScrollMode="free"
+				panOnScroll={false}
 				selectionOnDrag={true}
-				panOnDrag={[1, 2]}
+				panOnDrag={true}
 				selectionKeyCode={null}
 				minZoom={0.1}
 				snapToGrid={true}

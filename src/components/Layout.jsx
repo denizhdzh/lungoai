@@ -113,6 +113,14 @@ function Layout() {
   const [creditPurchaseError, setCreditPurchaseError] = useState(null);
   // --- End Billing Modal States ---
 
+  // --- Canvas Status State ---
+  const [canvasStatus, setCanvasStatus] = useState({
+    isAutoSaving: false,
+    lastSaved: null,
+    nodeCount: 0,
+    edgeCount: 0
+  });
+
   // --- NEW: Load state from localStorage on component mount ---
   useEffect(() => {
     try {
@@ -1212,6 +1220,7 @@ function Layout() {
     notifyGenerationComplete, // <-- ADDED
     slideshowTypeOptions, // Pass down slideshow options
     languageOptions, // Pass down language options
+    setCanvasStatus, // <-- ADDED for canvas status
   }), [
     dashboardRefreshKey,
     generatingItem, // If generatingItem is an object, its reference changing will still trigger this
@@ -1311,8 +1320,44 @@ function Layout() {
                 />
               </div>
               
-              {/* Sağ Taraf: Dark Mode Toggle */}
+              {/* Sağ Taraf: Status + Dark Mode Toggle */}
               <div className="flex items-center gap-4">
+                {/* Canvas Status - Only show on canvas page */}
+                {isCanvasPage && (
+                  <div className="flex items-center gap-3 text-sm">
+                    {/* Save Status */}
+                    <div className="flex items-center gap-2 px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+                      {canvasStatus.isAutoSaving ? (
+                        <>
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
+                            Saving...
+                          </span>
+                        </>
+                      ) : canvasStatus.lastSaved ? (
+                        <>
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
+                            Saved {canvasStatus.lastSaved.toLocaleTimeString()}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2 h-2 bg-neutral-500 rounded-full"></div>
+                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
+                            Ready
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Canvas Stats */}
+                    <div className="hidden lg:flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                      <span>{canvasStatus.nodeCount} nodes • {canvasStatus.edgeCount} connections</span>
+                    </div>
+                  </div>
+                )}
+                
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}

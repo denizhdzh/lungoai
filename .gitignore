@@ -145,3 +145,4 @@ dynamodb_local_latest/
 .Trashes
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+functions/.runtimeconfig.json

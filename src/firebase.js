@@ -5,7 +5,7 @@ import { getFirestore } from "@firebase/firestore"; // Import Firestore
 import { getAuth } from "firebase/auth"; // Import Auth
 // Import Storage
 import { getStorage } from "firebase/storage";
-import { getFunctions } from "firebase/functions"; // Import Functions
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions"; // Import Functions
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -31,6 +31,11 @@ const db = getFirestore(app); // Initialize Firestore
 // Initialize Storage
 const storage = getStorage(app);
 const functions = getFunctions(app); // Initialize Functions
+
+// Connect to emulator in development
+if (import.meta.env.DEV) {
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+}
 
 // Export Firebase app instance and other services if needed
 export default app; // Exporting app might not be necessary if services are exported

@@ -5,11 +5,8 @@ const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import
 const { onObjectFinalized } = require("firebase-functions/v2/storage"); // <<< ADDED THIS LINE
 const { logger } = require("firebase-functions");
 const { OpenAI, toFile } = require("openai");
-// const { GoogleGenerativeAI } = require("@google/generative-ai"); // Removed - using Vertex AI instead
-// Using direct API calls instead of VertexAI constructor
 const admin = require("firebase-admin");
 const { getStorage } = require('firebase-admin/storage');
-const { FieldValue } = require('firebase-admin/firestore');
 const axios = require('axios');
 const { CloudTasksClient } = require('@google-cloud/tasks'); // <-- ADD Cloud Tasks Client
 const fs = require('fs').promises; // For async file operations
@@ -26,11 +23,6 @@ const db = admin.firestore(); // Firestore instance
 const bucket = getStorage().bucket(); // Default Firebase Storage bucket
 const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
 
-// --- OpenAI and Google AI Initialization ---
-// Vertex AI API configuration
-const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'ugcai-f429e';
-const VERTEX_AI_LOCATION = 'us-central1';
-const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
   // Basic Plan
@@ -528,7 +520,7 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
         "in a cropped leather moto jacket (black) over a red lace cami with deep neckline and ripped jeans",
         "in a distressed denim zip-up jacket over a white ribbed crop tank showing bust, with biker shorts",
         "in a lightweight bomber hoodie in slate grey with sheer paneling and strappy low-cut crop top",
-        "in an oversized varsity zip jacket in black over a lace-trimmed bralette, revealing cleavage, paired with denim cutoffs",
+        "in an oversized varsity zip jacket in black over a bralette trimmed with lace, revealing cleavage, paired with denim cutoffs",
         "in a tech-fabric zip hoodie in deep grey over a mesh reflective crop top with visible bustline and cargo pants",
         "in a sporty black mesh-panel zip hoodie over a bandeau top with cleavage, paired with leggings",
         "in a cropped black track jacket by Nike, paired with a ribbed tube top showing bust and matching pants",
@@ -561,7 +553,7 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
         "pants", "gym tights", "ripped skinny jeans", "high-waisted cargo pants", "denim cutoffs",
         "joggers", "track pants", "straight-leg jeans", "high-waisted midi skirt"
         // Sundress/minidress/gown examples removed as they are full outfits
-      ];
+    ];
 
     // --- NEW: Combined Male Clothing Examples ---
     const maleClothingExamples = [
@@ -960,9 +952,9 @@ async function generateEnvironmentDetailsPrompt(baseSettingDescription, requeste
     }
 }
 
-// --- generateImage Function (Updated for Vertex AI Imagen 4) ---
+// --- generateImage Function (Reverted to Synchronous Direct Call) ---
 exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-    logger.info("[generateImage ENTRY] Received request. Auth:", JSON.stringify(request.auth), "Data:", JSON.stringify(request.data));
+    logger.info("[generateImage ENTRY] Received request. Auth:", JSON.stringify(request.auth), "Data:", JSON.stringify(request.data)); // DETAILED ENTRY LOG
     const userId = request.auth?.uid;
     if (!userId) {
         logger.error("[generateImage] Called without authentication.");
@@ -971,15 +963,11 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
 
     const data = request.data;
     
-    // --- Dynamic Credit Check Based on Quality ---
+    // --- NEW: Dynamic Credit Check Based on Quality ---
     const userRef = db.collection('users').doc(userId);
     let requiredCredits = 90; // Default high quality
-    if (data.quality === 'low') {
-        requiredCredits = 30;
-    } else if (data.quality === 'medium') {
-        requiredCredits = 60;
-    } else {
-        requiredCredits = 90; // high quality
+    if (data.quality === 'standard') {
+        requiredCredits = 50; // Medium quality
     }
     
     try {
@@ -1000,7 +988,7 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', 'Failed to perform credit check.');
     }
-    
+    // --- END NEW: Dynamic Credit Check ---
     if (!data || !data.commandCode) {
         logger.error(`[generateImage User: ${userId}] Missing commandCode in request data.`);
         throw new HttpsError('invalid-argument', 'Missing commandCode in request.');
@@ -1008,7 +996,6 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
 
     logger.info(`[generateImage User: ${userId}] Initialized. Command code: ${data.commandCode}.`);
 
-    // Initialize OpenAI for prompt generation (still needed for UGC prompts)
     let openai;
     try {
         const apiKey = process.env.OPENAI_KEY;
@@ -1017,7 +1004,11 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             throw new HttpsError('internal', 'OpenAI service configuration error.');
         }
         openai = new OpenAI({ apiKey: apiKey });
-        logger.info(`[generateImage User: ${userId}] OpenAI client initialized for prompt generation.`);
+        logger.info(`[generateImage User: ${userId}] OpenAI client initialized. typeof openai: ${typeof openai}. openai is null: ${openai === null}`);
+        if (!openai || !openai.images || !openai.images.generate) {
+            logger.error(`[generateImage User: ${userId}] OpenAI client or images.generate method is not properly initialized!`, openai);
+            throw new HttpsError('internal', 'OpenAI client critical component missing post-initialization.');
+        }
     } catch (error) {
         logger.error(`[generateImage User: ${userId}] Failed to initialize OpenAI service:`, error);
         throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
@@ -1031,114 +1022,81 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
 
         logger.info(`[generateImage User: ${userId}] Processing command code: ${commandCode}, Params:`, data);
 
-        // Check if enhanced prompt is provided from frontend (using image rules)
-        if (data.enhancedPrompt) {
-            logger.info(`[generateImage User: ${userId}] Using enhanced prompt from frontend with image rules. Length: ${data.enhancedPrompt.length}`);
-            finalPromptToUse = data.enhancedPrompt;
-            imageStyle = imageStyle || 'photorealistic';
+        if (commandCode === 202) {
+            logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Calling generateDetailedUgcPrompt...`);
+            if (!data.subject_description) {
+                logger.error(`[generateImage User: ${userId}] Missing subject_description for command 202.`);
+                throw new HttpsError('invalid-argument', "Please provide a description for the subject of the UGC image.");
+            }
+            const promptResult = await generateDetailedUgcPrompt({
+                subject_description: data.subject_description,
+                clothing: data.clothing_description,
+                setting: data.setting_description,
+                style: data.image_style,
+                age: data.age,
+                gender: data.gender
+            }, openai);
+            logger.info(`[generateImage User: ${userId}] generateDetailedUgcPrompt returned. promptResult is null: ${promptResult === null}`);
+            if (!promptResult || !promptResult.detailedPrompt) {
+                logger.error(`[generateImage User: ${userId}] generateDetailedUgcPrompt failed to return a detailed prompt. Result:`, promptResult);
+                throw new HttpsError('internal', 'Failed to generate detailed prompt for UGC image.');
+            }
+            finalPromptToUse = promptResult.detailedPrompt;
+            detectedGender = promptResult.subjectTerm;
+            imageStyle = imageStyle || 'ultra-realistic photograph, UGC style';
+            logger.info(`[generateImage User: ${userId}] Detailed prompt generated for command 202. Length: ${finalPromptToUse?.length}`);
+        } else if (commandCode === 201) {
+             if (!data.scene_description) {
+                throw new HttpsError('invalid-argument', "Please describe the scene for the background image.");
+             }
+             finalPromptToUse = data.scene_description;
+             imageStyle = imageStyle || 'photorealistic'; 
+            logger.info(`[generateImage User: ${userId}] Using direct prompt for command 201: "${finalPromptToUse}"`);
+        } else if (commandCode === 203) {
+             if (!data.image_subject) {
+                throw new HttpsError('invalid-argument', "Please provide a subject for the image.");
+             }
+             finalPromptToUse = data.image_subject;
+             imageStyle = imageStyle || 'photorealistic';
+            logger.info(`[generateImage User: ${userId}] Using direct prompt for command 203: "${finalPromptToUse}"`);
         } else {
-            // Fallback to original prompt generation logic
-            if (commandCode === 202) {
-                logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Calling generateDetailedUgcPrompt...`);
-                if (!data.subject_description) {
-                    logger.error(`[generateImage User: ${userId}] Missing subject_description for command 202.`);
-                    throw new HttpsError('invalid-argument', "Please provide a description for the subject of the UGC image.");
-                }
-                const promptResult = await generateDetailedUgcPrompt({
-                    subject_description: data.subject_description,
-                    clothing: data.clothing_description,
-                    setting: data.setting_description,
-                    style: data.image_style,
-                    age: data.age,
-                    gender: data.gender
-                }, openai);
-                logger.info(`[generateImage User: ${userId}] generateDetailedUgcPrompt returned. promptResult is null: ${promptResult === null}`);
-                if (!promptResult || !promptResult.detailedPrompt) {
-                    logger.error(`[generateImage User: ${userId}] generateDetailedUgcPrompt failed to return a detailed prompt. Result:`, promptResult);
-                    throw new HttpsError('internal', 'Failed to generate detailed prompt for UGC image.');
-                }
-                finalPromptToUse = promptResult.detailedPrompt;
-                detectedGender = promptResult.subjectTerm;
-                imageStyle = imageStyle || 'ultra-realistic photograph, UGC style';
-                logger.info(`[generateImage User: ${userId}] Detailed prompt generated for command 202. Length: ${finalPromptToUse?.length}`);
-            } else if (commandCode === 201) {
-                if (!data.scene_description) {
-                    throw new HttpsError('invalid-argument', "Please describe the scene for the background image.");
-                }
-                finalPromptToUse = data.scene_description;
-                imageStyle = imageStyle || 'photorealistic'; 
-                logger.info(`[generateImage User: ${userId}] Using direct prompt for command 201: "${finalPromptToUse}"`);
-            } else if (commandCode === 203) {
-                if (!data.image_subject) {
-                    throw new HttpsError('invalid-argument', "Please provide a subject for the image.");
-                }
-                finalPromptToUse = data.image_subject;
-                imageStyle = imageStyle || 'photorealistic';
-                logger.info(`[generateImage User: ${userId}] Using direct prompt for command 203: "${finalPromptToUse}"`);
-            } else {
-                logger.error(`[generateImage User: ${userId}] Unsupported command code: ${commandCode}`);
-                throw new HttpsError('invalid-argument', `Unsupported command code (${commandCode}) for direct image generation.`);
-            }
+            logger.error(`[generateImage User: ${userId}] Unsupported command code: ${commandCode}`);
+            throw new HttpsError('invalid-argument', `Unsupported command code (${commandCode}) for direct image generation.`);
         }
         
-        logger.info(`[generateImage User: ${userId}] Preparing to call Vertex AI Imagen 4. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
-
-        // Determine aspect ratio for Imagen 4
-        let aspectRatio = "9:16"; // Default
-        if (data.aspectRatio === "1:1") {
-            aspectRatio = "1:1";
-        } else if (data.aspectRatio === "16:9") {
-            aspectRatio = "16:9";
+        logger.info(`[generateImage User: ${userId}] Preparing to call openai.images.generate. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
+        if (!openai || !openai.images || typeof openai.images.generate !== 'function') {
+            logger.error(`[generateImage User: ${userId}] CRITICAL: openai.images.generate is not a function before calling! typeof openai.images.generate: ${typeof openai.images?.generate}`);
+            throw new HttpsError('internal', 'OpenAI images.generate is not available.');
         }
 
-        // Get access token for Vertex AI API
-        const { GoogleAuth } = require('google-auth-library');
-        const auth = new GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+        const imageGenResponse = await openai.images.generate({
+            model: "gpt-image-1", 
+            prompt: finalPromptToUse,
+            n: 1,
+            size: "1024x1536",
+            quality: data.quality === 'standard' ? 'medium' : (data.quality || 'high'),
         });
-        const accessToken = await auth.getAccessToken();
+        logger.info(`[generateImage User: ${userId}] openai.images.generate call completed. Response received.`);
+        // logger.debug(`[generateImage User: ${userId}] Full imageGenResponse:`, JSON.stringify(imageGenResponse)); // Potentially very verbose
 
-        // Prepare the request for Imagen 4
-        const requestBody = {
-            instances: [{
-                prompt: finalPromptToUse
-            }],
-            parameters: {
-                aspectRatio: aspectRatio,
-                safetyFilterLevel: 'BLOCK_FEW',
-                personGeneration: 'ALLOW_ADULT'
-            }
-        };
-
-        const apiUrl = `https://${VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_AI_PROJECT}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/${IMAGEN_MODEL}:predict`;
-
-        logger.info(`[generateImage User: ${userId}] Calling Vertex AI Imagen 4 API directly`);
-        
-        const imageGenResponse = await axios.post(apiUrl, requestBody, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        logger.info(`[generateImage User: ${userId}] Vertex AI Imagen 4 API call completed. Response received.`);
-
-        // Extract the image data from the response
-        const predictions = imageGenResponse.data.predictions;
-        if (!predictions || predictions.length === 0 || !predictions[0].bytesBase64Encoded) {
-            logger.error(`[generateImage User: ${userId}] Vertex AI response did not contain image data.`, imageGenResponse.data);
-            throw new HttpsError('internal', "AI did not return image data.");
+        const base64Data = imageGenResponse.data && imageGenResponse.data.length > 0 ? imageGenResponse.data[0]?.b64_json : null;
+        if (!base64Data) {
+            logger.error(`[generateImage User: ${userId}] AI response did not contain base64 image data. imageGenResponse.data:`, imageGenResponse.data);
+            throw new HttpsError('internal', "AI did not return base64 image data.");
         }
+        logger.info(`[generateImage User: ${userId}] Base64 data extracted. Length: ${base64Data.length}`);
 
-        const base64ImageData = predictions[0].bytesBase64Encoded;
-        logger.info(`[generateImage User: ${userId}] Image data extracted. Length: ${base64ImageData.length}`);
-
-        const imageBuffer = Buffer.from(base64ImageData, 'base64');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
         logger.info(`[generateImage User: ${userId}] Image buffer created. Length: ${imageBuffer.length}`);
 
         const fileName = `direct_generations/${userId}/${Date.now()}_${commandCode}.png`; 
         const file = bucket.file(fileName);
-        logger.info(`[generateImage User: ${userId}] Firebase Storage file object created for: ${fileName}`);
+        logger.info(`[generateImage User: ${userId}] Firebase Storage file object created for: ${fileName}. typeof file: ${typeof file}. file is null: ${file === null}`);
+        if (!file || typeof file.save !== 'function') {
+            logger.error(`[generateImage User: ${userId}] CRITICAL: Firebase Storage file.save is not a function! typeof file.save: ${typeof file?.save}`);
+            throw new HttpsError('internal', 'Storage file.save method not available.');
+        }
 
         logger.info(`[generateImage User: ${userId}] Uploading image to Storage: ${fileName}`);
         await file.save(imageBuffer, { metadata: { contentType: 'image/png' }, public: true });
@@ -1147,11 +1105,13 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         const publicUrl = file.publicUrl();
         logger.info(`[generateImage User: ${userId}] Image uploaded successfully. Public URL: ${publicUrl}`);
 
-        // Save generation metadata to Firestore
+        // Firestore generations koleksiyonuna kaydet
         try {
             logger.info(`[generateImage User: ${userId}] Attempting to save generation metadata to Firestore.`);
             const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
             let typeString = 'image';
+            if (commandCode === 202) typeString = 'image'; // Note: Command code for UGC was 202 in your definitions
+            else if (commandCode === 201) typeString = 'image'; // Note: Command code for Background was 201
 
             const generationData = {
                 userId: userId,
@@ -1162,8 +1122,7 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
                 originalParameters: data,
                 commandCode: commandCode,
                 quality: data.quality || "high",
-                source: 'direct_generateImage_call_imagen4',
-                model: 'imagen-4.0-generate-preview-06-06',
+                source: 'direct_generateImage_call',
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 gender: commandCode === 202 ? detectedGender : null
             };
@@ -1182,38 +1141,42 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             });
 
             logger.info(`[generateImage User: ${userId}] Successfully wrote to generations collection (ID: ${generationDocRef.id}) and decremented general_credits by ${requiredCredits}.`);
-            
             return {
                 success: true,
-                message: "Image generated and uploaded successfully using Imagen 4.",
+                message: "Image generated and uploaded successfully.",
                 imageUrl: publicUrl,
                 firestoreDocId: generationDocRef.id,
                 finalPrompt: finalPromptToUse,
-                originalParameters: data,
-                model: 'imagen-4.0-generate-preview-06-06'
+                originalParameters: data
             };
 
         } catch (firestoreError) {
             logger.error(`[generateImage User: ${userId}] Failed to write to generations collection or run transaction:`, firestoreError);
-            return { 
-                success: true, 
-                message: "Image generated using Imagen 4, but failed to save metadata to Firestore.",
+            return {
+                success: true,
+                message: "Image generated, but failed to save metadata to Firestore.",
                 imageUrl: publicUrl,
                 firestoreDocId: null,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                model: 'imagen-4.0-generate-preview-06-06',
                 errorSavingMetadata: true
             };
         }
 
     } catch (error) {
         logger.error(`[generateImage User: ${userId}] Error in main try block of generateImage:`, error);
-        if (error.message && error.message.includes('Vertex AI')) {
-            logger.error(`[generateImage User: ${userId}] Vertex AI Error:`, error);
-            throw new HttpsError('internal', `Vertex AI Error: ${error.message}`);
+        if (error instanceof OpenAI.APIError) {
+            logger.error(`[generateImage User: ${userId} OpenAI API Error]:`, error.status, error.name, error.message, error.headers);
+            // Attempt to refund credit if OpenAI API call fails (ensure this logic is sound or remove if problematic)
+            // try {
+            //     await userRef.update({ image_credit: admin.firestore.FieldValue.increment(1) });
+            //     logger.info(`[generateImage User: ${userId}] Image credit potentially refunded due to OpenAI API error.`);
+            // } catch (refundError) {
+            //     logger.error(`[generateImage User: ${userId}] Failed to refund image credit after OpenAI API error:`, refundError);
+            // }
+            throw new HttpsError('internal', `OpenAI API Error: ${error.name} - ${error.message}`);
         }
-        throw new HttpsError('internal', `Failed to generate image with Imagen 4: ${error.message}`);
+        throw new HttpsError('internal', `Failed to generate image directly: ${error.message}`);
     }
 });
 
@@ -1463,6 +1426,7 @@ exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds:
     }
 });
 
+
 // --- handleVideoPollingTask Function (MODIFIED) ---
 // --- handleVideoPollingTask Function (MODIFIED) ---
 exports.handleVideoPollingTask = onRequest(
@@ -1624,7 +1588,7 @@ exports.handleVideoPollingTask = onRequest(
                 response.status(200).send('Task still processing, poll rescheduled.');
                 return;
              }
-        } catch (error) {
+    } catch (error) {
             logger.error(`Error in handleVideoPollingTask for ${firestoreDocId} (Runway Task: ${runwayTaskId}):`, error);
             try {
              await postDocRef.update({
@@ -1771,8 +1735,8 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
     }
     // --- End OpenAI Client Initialization ---
 
-        // --- Check User Credits ---
-        const userRef = db.collection('users').doc(userId);
+    // --- Check User Credits ---
+    const userRef = db.collection('users').doc(userId);
     try {
         const userDoc = await userRef.get();
         if (!userDoc.exists) {
@@ -1934,7 +1898,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
             
             logger.info(`Invoking AI. NeedText: ${needAiForText}, NeedBGSelect: ${needAiForBackgroundSelection}. Topic: "${effectiveTopic}", Lang: ${targetLanguage}`);
             const completion = await openai.chat.completions.create({
-                model: "gpt-4.1-nano",
+                model: "gpt-4o",
                 messages: [{ role: "user", content: textGenPrompt }],
                 temperature: 0.7,
                 response_format: { type: "json_object" },
@@ -2099,7 +2063,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
             imageStyle: image_style || null,
             language: targetLanguage,
             processedImageUrls: processedImageUrls.length > 0 ? processedImageUrls : null,
-            timestamp: FieldValue.serverTimestamp(),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
         };
 
         // Transaction for saving generation and decrementing credits
@@ -2109,7 +2073,7 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
             if (currentCredits < 50) { // CHECK if enough credits for slideshow
                 throw new HttpsError('resource-exhausted', 'Insufficient general credits for slideshow (needs 50).');
             }
-            transaction.update(userRef, { general_credits: FieldValue.increment(-50) }); // DECREMENT by 50
+            transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-50) }); // DECREMENT by 50
             transaction.set(generationDocRef, generationData);
         });
 
@@ -2148,7 +2112,7 @@ exports.saveCreatorFromGeneration = onCall({ region: 'us-central1', timeoutSecon
     try {
         const creatorData = {
             name: creator_name,
-        imageUrl: imageUrl,
+            imageUrl: imageUrl,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             sourceGeneration: original_generation_data || null 
         };
@@ -2233,7 +2197,7 @@ exports.saveBackgroundFromGeneration = onCall({ region: 'us-central1', timeoutSe
         await db.collection('users').doc(userId).collection('backgrounds').add(backgroundData);
         logger.info(`Background "${background_name}" (with description) saved for user ${userId} from generation.`);
         return { success: true, message: 'Background saved successfully with description.' };
-  } catch (error) {
+    } catch (error) {
         logger.error(`Error saving background from generation for user ${userId}:`, error);
         throw new HttpsError('internal', 'Failed to save background.');
     }
@@ -2280,7 +2244,7 @@ exports.createStripeCheckoutSession = onCall(async (request) => { // Removed sec
     // Using session.id is standard for redirecting with stripe.js
     // If you want to redirect directly from server, use session.url
     return { sessionId: session.id }; 
-    } catch (error) {
+  } catch (error) {
     logger.error(`Error creating Stripe Checkout session for user ${userId}:`, error);
     throw new HttpsError('internal', `Failed to create checkout session: ${error.message}`);
   }
@@ -2386,7 +2350,7 @@ exports.generateImageDescription = onCall({ region: 'us-central1', timeoutSecond
       logger.error('OpenAI API Error for description:', error.status, error.name, error.message);
       throw new HttpsError('internal', `OpenAI API Error generating description: ${error.name}`);
     }
-        if (error instanceof HttpsError) throw error;
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError('internal', `Failed to generate image description: ${error.message}`);
   }
 });
@@ -2599,10 +2563,10 @@ exports.stripeWebhookHandler = onRequest(
                                 });
                                 
                                 logger.info(`Added ${creditQuantity} credits to user ${userId}. New total: ${newCredits}`);
-            } else {
+                            } else {
                                 logger.error(`User ${userId} not found for credit purchase`);
-            }
-        } catch (error) {
+                            }
+                        } catch (error) {
                             logger.error(`Error processing credit purchase for user ${userId}:`, error);
                         }
                     } else {
@@ -3829,7 +3793,7 @@ async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, no
 
         // NEW GET REQUEST:
         const response = await axios.get(TIKTOK_USER_INFO_ENDPOINT, {
-          headers: {
+            headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 // 'Content-Type': 'application/json', // Not needed for GET typically
             },
@@ -4558,9 +4522,9 @@ Return ONLY the topics, one per line, nothing else. Each topic must be 1-2 words
         });
 
         logger.info(`generateProductTopics: Successfully saved topics to Firestore for product ${productId}`);
-        
-                         return {
-            success: true,
+
+        return { 
+            success: true, 
             topics: topics,
             message: `Generated ${topics.length} marketing topics for ${productName}` 
         };
@@ -4744,7 +4708,7 @@ exports.postToTikTok = onCall({ region: 'us-central1', timeoutSeconds: 540 }, as
             tiktokUrl: confirmResponse.data?.data?.share_url || null
         };
 
-                       } catch (error) {
+    } catch (error) {
         logger.error(`postToTikTok: Error for user ${userId}:`, error.response?.data || error.message, error.stack);
         
         if (error.response?.data) {
@@ -4819,166 +4783,3 @@ exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) 
         throw new HttpsError('internal', `Failed to get TikTok post status: ${error.message}`);
     }
 });
-
-// --- NEW: General Video Generation using Replicate API (Text-to-Video) ---
-exports.generateGeneralVideo = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { prompt, model = 'default', duration = 5, aspectRatio = '16:9' } = request.data;
-    
-    if (!prompt || prompt.trim() === '') {
-        throw new HttpsError('invalid-argument', 'Video prompt is required.');
-    }
-
-    logger.info(`generateGeneralVideo called by user: ${userId} with prompt: "${prompt}"`);
-
-    // Check user credits
-    const userRef = db.collection('users').doc(userId);
-    try {
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
-            throw new HttpsError('not-found', 'User profile not found.');
-        }
-        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
-        if (currentCredits < 100) { // General video costs 100 credits
-            throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 100).');
-        }
-    } catch (error) {
-        logger.error(`Error fetching user credits for video generation (user ${userId}):`, error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Could not verify user credits for video generation.');
-    }
-
-    try {
-        // Get Replicate token from config
-        const replicateToken = functions.config().replicate.token;
-        if (!replicateToken) {
-            logger.error("generateGeneralVideo: Replicate token not found.");
-            throw new HttpsError('internal', 'Replicate service configuration error.');
-        }
-
-        // Define available models
-        const availableModels = {
-            'default': 'minimax/video-01',
-            'minimax': 'minimax/video-01',
-            'seedance': 'bytedance/seedance-1-pro',
-            'kling': 'kwaivgi/kling-v2.1',
-            'veo': 'google/veo-3'
-        };
-
-        const selectedModel = availableModels[model] || availableModels['default'];
-        
-        // Create Replicate prediction
-        const replicateResponse = await axios.post('https://api.replicate.com/v1/predictions', {
-            version: selectedModel,
-            input: {
-                       prompt: prompt,
-                duration: duration,
-                aspect_ratio: aspectRatio
-            }
-        }, {
-            headers: {
-                'Authorization': `Token ${replicateToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const predictionId = replicateResponse.data.id;
-        logger.info(`Replicate prediction created with ID: ${predictionId}`);
-
-        // Start polling for results
-        let attempts = 0;
-        const maxAttempts = 60; // 5 minutes with 5-second intervals
-        let videoUrl = null;
-
-        while (attempts < maxAttempts && !videoUrl) {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-            
-            try {
-                const statusResponse = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-                    headers: {
-                        'Authorization': `Token ${replicateToken}`
-                    }
-                });
-
-                const status = statusResponse.data.status;
-                logger.info(`Prediction ${predictionId} status: ${status}`);
-
-                if (status === 'succeeded') {
-                    videoUrl = statusResponse.data.output;
-                    if (Array.isArray(videoUrl)) {
-                        videoUrl = videoUrl[0]; // Take first video if array
-                    }
-                    break;
-                } else if (status === 'failed') {
-                    throw new Error(`Replicate prediction failed: ${statusResponse.data.error || 'Unknown error'}`);
-                }
-            } catch (pollError) {
-                logger.error(`Error polling prediction ${predictionId}:`, pollError);
-                attempts++;
-                continue;
-            }
-            
-            attempts++;
-        }
-
-        if (!videoUrl) {
-            throw new Error('Video generation timed out');
-        }
-
-        // Save generation record and decrement credits
-        const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
-        const generationData = {
-            userId: userId,
-            type: 'general_video',
-            prompt: prompt,
-            model: selectedModel,
-            duration: duration,
-            aspectRatio: aspectRatio,
-            videoUrl: videoUrl,
-            predictionId: predictionId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        };
-
-        // Transaction for saving generation and decrementing credits
-        await db.runTransaction(async (transaction) => {
-            const userSnapshot = await transaction.get(userRef);
-            const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
-            if (currentCredits < 100) {
-                throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 100).');
-            }
-            transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-100) });
-            transaction.set(generationDocRef, generationData);
-        });
-
-        logger.info(`General video generation completed for user ${userId}. Video URL: ${videoUrl}`);
-        
-        return {
-            success: true,
-            message: "General video generated successfully.",
-            data: {
-                generationId: generationDocRef.id,
-                videoUrl: videoUrl,
-                predictionId: predictionId,
-                creditsUsed: 100
-            }
-        };
- 
-                 } catch (error) {
-        logger.error(`Error in generateGeneralVideo for user ${userId}:`, error);
-        
-        if (error.response && error.response.data) {
-            logger.error('Replicate API Error Details:', error.response.data);
-        }
-        
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        
-        throw new HttpsError('internal', `Failed to generate video: ${error.message}`);
-    }
-});
-

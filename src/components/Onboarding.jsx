@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, collection, writeBatch, serverTimestamp, updateDoc } from "@firebase/firestore"; // Import Firestore functions
+import { doc, setDoc, collection, writeBatch, serverTimestamp, updateDoc, getDoc } from "@firebase/firestore"; // Import Firestore functions
 import { updateProfile } from "firebase/auth"; // <-- ADD THIS IMPORT
 import { auth, db, storage } from '../firebase'; // Import auth, db, and storage
 import { getFunctions, httpsCallable } from 'firebase/functions'; // NEW: Import Firebase Functions
@@ -339,11 +339,17 @@ function Onboarding({ setOnboardingComplete }) {
     // This function now only needs to mark onboarding as completed and navigate.
     try {
       const userDocRef = doc(db, "users", user.uid);
+      
+      // Get current user data to check existing credits
+      const userDoc = await getDoc(userDocRef);
+      const currentCredits = userDoc.exists() ? (userDoc.data().general_credits || 0) : 0;
+      
       await updateDoc(userDocRef, {
         onboardingCompleted: true,
+        general_credits: currentCredits + 200, // Add 50 credits for completing onboarding
         // Other fields like lastOnboardingFinalizedAt: serverTimestamp() could be added here if needed.
       });
-      console.log('User onboarding status marked as completed.');
+      console.log('User onboarding status marked as completed. Added 50 credits.');
       
       setOnboardingComplete(); 
       navigate('/'); 
@@ -460,7 +466,7 @@ function Onboarding({ setOnboardingComplete }) {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border ${errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`w-full px-3 py-2 border ${errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="Your first name"
                 />
                 {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
@@ -474,7 +480,7 @@ function Onboarding({ setOnboardingComplete }) {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border ${errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`w-full px-3 py-2 border ${errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="Your last name"
                 />
                 {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
@@ -496,7 +502,7 @@ function Onboarding({ setOnboardingComplete }) {
                   name="jobTitle"
                   value={formData.jobTitle}
                   onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border ${errors.jobTitle ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`w-full px-3 py-2 border ${errors.jobTitle ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="Your title or role"
                 />
                 {errors.jobTitle && <p className="text-xs text-red-500 mt-1">{errors.jobTitle}</p>}
@@ -510,7 +516,7 @@ function Onboarding({ setOnboardingComplete }) {
                   name="company"
                   value={formData.company}
                   onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border ${errors.company ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`w-full px-3 py-2 border ${errors.company ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="Where you work"
                 />
                 {errors.company && <p className="text-xs text-red-500 mt-1">{errors.company}</p>}
@@ -542,11 +548,11 @@ function Onboarding({ setOnboardingComplete }) {
                         setFormData({...formData, referralSource: source.value});
                         if (errors.referralSource) setErrors(prev => ({...prev, referralSource: ''}));
                       }}
-                      className={`px-4 py-5 border ${formData.referralSource === source.value ? 'border-black dark:border-white ring-1 ring-black dark:ring-white' : 'border-gray-300 dark:border-neutral-600'} rounded-lg cursor-pointer hover:border-gray-500 dark:hover:border-neutral-500 transition-all bg-white dark:bg-neutral-800`}
+                      className={`px-4 py-5 border ${formData.referralSource === source.value ? 'border-emerald-500 dark:border-emerald-400 ring-1 ring-emerald-500 dark:ring-emerald-400' : 'border-gray-300 dark:border-neutral-600'} rounded-lg cursor-pointer hover:border-gray-500 dark:hover:border-neutral-500 transition-all bg-white dark:bg-neutral-800`}
                     >
                       <div className="flex items-center">
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.referralSource === source.value ? 'bg-black dark:bg-white border-black dark:border-white' : 'border-gray-400 dark:border-neutral-500'}`}>
-                          {formData.referralSource === source.value && <div className="w-2 h-2 bg-white dark:bg-black rounded-full"></div>}
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.referralSource === source.value ? 'bg-emerald-500 dark:bg-emerald-400 border-emerald-500 dark:border-emerald-400' : 'border-gray-400 dark:border-neutral-500'}`}>
+                          {formData.referralSource === source.value && <div className="w-2 h-2 bg-white dark:bg-white rounded-full"></div>}
                         </div>
                         <span className="ml-3 text-sm text-black dark:text-white">
                           <span className="font-medium">{source.label}</span> <span className="text-gray-500 dark:text-neutral-400">{source.description}</span>
@@ -571,7 +577,7 @@ function Onboarding({ setOnboardingComplete }) {
                 <label className="block text-sm text-gray-700 dark:text-neutral-300">Product Name <span className="text-red-500">*</span></label>
                 <input 
                   type="text" name="productName" value={formData.productName} onChange={handleInputChange}
-                  className={`mt-1 w-full px-3 py-2 border ${errors.productName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`mt-1 w-full px-3 py-2 border ${errors.productName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="e.g., Super Widget"
                 />
                 {errors.productName && <p className="text-xs text-red-500 mt-1">{errors.productName}</p>}
@@ -581,7 +587,7 @@ function Onboarding({ setOnboardingComplete }) {
                 <textarea 
                   name="productDescription" value={formData.productDescription} onChange={handleInputChange}
                   rows={3}
-                  className={`mt-1 w-full px-3 py-2 border ${errors.productDescription ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                  className={`mt-1 w-full px-3 py-2 border ${errors.productDescription ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-800 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                   placeholder="Describe the product, its benefits, target audience..."
                 />
                 {errors.productDescription && <p className="text-xs text-red-500 mt-1">{errors.productDescription}</p>}
@@ -650,11 +656,11 @@ function Onboarding({ setOnboardingComplete }) {
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, backgroundChoice: 'upload', selectedLibraryBackgroundUrl: '' }))}
-                  className={`w-full p-4 rounded-lg text-left transition-all ${formData.backgroundChoice === 'upload' ? 'bg-gray-100 dark:bg-neutral-700 ring-1 ring-black dark:ring-white' : 'hover:bg-gray-50 dark:hover:bg-neutral-800'} bg-white dark:bg-neutral-800`}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${formData.backgroundChoice === 'upload' ? 'bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500 dark:ring-emerald-400' : 'hover:bg-gray-50 dark:hover:bg-neutral-800'} bg-white dark:bg-neutral-800`}
                 >
                   <div className="flex items-center">
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.backgroundChoice === 'upload' ? 'bg-black dark:bg-white border-black dark:border-white' : 'border-gray-400 dark:border-neutral-500'}`}>
-                      {formData.backgroundChoice === 'upload' && <div className="w-2 h-2 bg-white dark:bg-black rounded-full"></div>}
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.backgroundChoice === 'upload' ? 'bg-emerald-500 dark:bg-emerald-400 border-emerald-500 dark:border-emerald-400' : 'border-gray-400 dark:border-neutral-500'}`}>
+                      {formData.backgroundChoice === 'upload' && <div className="w-2 h-2 bg-white dark:bg-white rounded-full"></div>}
                     </div>
                     <span className="ml-3 text-sm font-medium text-black dark:text-white">Upload Custom Background</span>
                   </div>
@@ -665,7 +671,7 @@ function Onboarding({ setOnboardingComplete }) {
                       <label className="block text-xs text-gray-600 dark:text-neutral-400">Background Name <span className="text-red-500">*</span></label>
                       <input 
                         type="text" name="backgroundName" value={formData.backgroundName} onChange={handleInputChange}
-                        className={`mt-1 w-full px-3 py-1.5 border text-sm ${errors.backgroundName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white bg-white dark:bg-neutral-700 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
+                        className={`mt-1 w-full px-3 py-1.5 border text-sm ${errors.backgroundName ? 'border-red-300 bg-red-50' : 'border-gray-300 dark:border-neutral-600'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:focus:ring-emerald-400 bg-white dark:bg-neutral-700 text-black dark:text-white placeholder-gray-400 dark:placeholder-neutral-500`}
                         placeholder="e.g., Office Desk"
                       />
                       {errors.backgroundName && <p className="text-xs text-red-500 mt-0.5">{errors.backgroundName}</p>}
@@ -701,11 +707,11 @@ function Onboarding({ setOnboardingComplete }) {
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, backgroundChoice: 'library', backgroundName: '', backgroundFile: null }))}
-                  className={`w-full p-4 rounded-lg text-left transition-all ${formData.backgroundChoice === 'library' ? 'bg-gray-100 dark:bg-neutral-700 ring-1 ring-black dark:ring-white' : 'hover:bg-gray-50 dark:hover:bg-neutral-800'} bg-white dark:bg-neutral-800`}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${formData.backgroundChoice === 'library' ? 'bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-500 dark:ring-emerald-400' : 'hover:bg-gray-50 dark:hover:bg-neutral-800'} bg-white dark:bg-neutral-800`}
                 >
                   <div className="flex items-center">
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.backgroundChoice === 'library' ? 'bg-black dark:bg-white border-black dark:border-white' : 'border-gray-400 dark:border-neutral-500'}`}>
-                      {formData.backgroundChoice === 'library' && <div className="w-2 h-2 bg-white dark:bg-black rounded-full"></div>}
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.backgroundChoice === 'library' ? 'bg-emerald-500 dark:bg-emerald-400 border-emerald-500 dark:border-emerald-400' : 'border-gray-400 dark:border-neutral-500'}`}>
+                      {formData.backgroundChoice === 'library' && <div className="w-2 h-2 bg-white dark:bg-white rounded-full"></div>}
                     </div>
                     <span className="ml-3 text-sm font-medium text-black dark:text-white">Select from Library</span>
                   </div>
@@ -729,12 +735,12 @@ function Onboarding({ setOnboardingComplete }) {
                               if (errors.selectedLibraryBackgroundUrl) setErrors(prevErrors => ({...prevErrors, selectedLibraryBackgroundUrl: ''}));
                             }}
                             className={`relative aspect-[4/5] rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-all
-                                        ${formData.selectedLibraryBackgroundUrl === img.url ? 'ring-2 ring-black dark:ring-white ring-offset-1 dark:ring-offset-neutral-800' : ''}`}
+                                        ${formData.selectedLibraryBackgroundUrl === img.url ? 'ring-2 ring-emerald-500 dark:ring-emerald-400 ring-offset-1 dark:ring-offset-neutral-800' : ''}`}
                           >
                             <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
                             {formData.selectedLibraryBackgroundUrl === img.url && (
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <CheckCircle size={24} weight="fill" className="text-white" />
+                              <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                                <CheckCircle size={24} weight="fill" className="text-emerald-500" />
                               </div>
                             )}
                           </div>
@@ -760,7 +766,7 @@ function Onboarding({ setOnboardingComplete }) {
                 <input 
                   type="checkbox" id="notifications" name="notifications"
                   checked={formData.notifications} onChange={handleInputChange}
-                  className="mt-1 h-4 w-4 text-black dark:text-white border-gray-300 dark:border-neutral-500 rounded focus:ring-black dark:focus:ring-white"
+                  className="mt-1 h-4 w-4 text-emerald-500 border-gray-300 dark:border-neutral-500 rounded focus:ring-emerald-500 dark:focus:ring-emerald-400"
                 />
                 <label htmlFor="notifications" className="ml-3 text-sm text-gray-700 dark:text-neutral-200">
                   I'd like to receive notifications about new features, updates, and events
@@ -771,7 +777,7 @@ function Onboarding({ setOnboardingComplete }) {
                 <input 
                   type="checkbox" id="dataCollection" name="dataCollection"
                   checked={formData.dataCollection} onChange={handleInputChange}
-                  className="mt-1 h-4 w-4 text-black dark:text-white border-gray-300 dark:border-neutral-500 rounded focus:ring-black dark:focus:ring-white"
+                  className="mt-1 h-4 w-4 text-emerald-500 border-gray-300 dark:border-neutral-500 rounded focus:ring-emerald-500 dark:focus:ring-emerald-400"
                 />
                 <label htmlFor="dataCollection" className="ml-3 text-sm text-gray-700 dark:text-neutral-200">
                   I allow Lungo AI to collect usage data to improve my experience
@@ -841,8 +847,8 @@ function Onboarding({ setOnboardingComplete }) {
               <div 
                 key={i+1} 
                 className={`h-1 rounded-full ${
-                  (i + 1) === step ? 'w-8 bg-black' : 
-                  (i + 1) < step ? 'w-6 bg-gray-300' : 'w-6 bg-gray-100'
+                  (i + 1) === step ? 'w-8 bg-emerald-500' : 
+                  (i + 1) < step ? 'w-6 bg-emerald-300' : 'w-6 bg-gray-100'
                 } transition-all duration-300`}
               ></div>
             ))}
@@ -878,7 +884,7 @@ function Onboarding({ setOnboardingComplete }) {
                 <button
                   onClick={handleComplete}
                   disabled={isLoading}
-                  className="px-5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-neutral-200 text-sm shadow-sm hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center min-w-[120px]"
+                  className="px-5 py-2 bg-emerald-500 dark:bg-emerald-500 text-white dark:text-white rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-600 text-sm shadow-sm hover:shadow-md transition-all disabled:opacity-50 flex items-center justify-center min-w-[120px]"
                 >
                   {isLoading ? <CircleNotch className="animate-spin h-4 w-4" /> : 'Complete Setup'}
                 </button>

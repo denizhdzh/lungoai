@@ -30,3 +30,53 @@
     scrollbar-width: none;  /* Firefox */
   }
 }
+
+@keyframes loading {
+  0% { width: 0%; }
+  50% { width: 60%; }
+  100% { width: 100%; }
+}
+
+/* Loading animation for frames */
+@keyframes fillFrame {
+	0% {
+		transform: translateX(-100%);
+		opacity: 0.3;
+	}
+	50% {
+		transform: translateX(0%);
+		opacity: 0.6;
+	}
+	100% {
+		transform: translateX(0%);
+		opacity: 0.8;
+	}
+}
+
+/* React Flow Custom Selection - Simple Green */
+.react-flow__node.selected {
+  outline: none !important;
+  box-shadow: 0 0 0 2px #10b981 !important;
+  border-radius: 16px !important;
+}
+
+/* Custom Cursors for React Flow - Soft & Natural */
+.react-flow__pane {
+  cursor: default !important;
+}
+
+.react-flow__pane:active {
+  cursor: all-scroll !important;
+}
+
+.react-flow__node {
+  cursor: default !important;
+}
+
+.react-flow__node:hover {
+  cursor: all-scroll !important;
+}
+
+.react-flow__node.selected {
+  cursor: all-scroll !important;
+}

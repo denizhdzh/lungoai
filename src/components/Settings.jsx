@@ -1,139 +1,193 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { auth, db, storage } from '../firebase';
-import { collection, query, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc, serverTimestamp, writeBatch, Timestamp, getDoc, increment, orderBy, onSnapshot, where } from "@firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage";
-import { updateProfile, signOut, deleteUser } from "firebase/auth";
-import { useNavigate, useOutletContext, useLocation } from 'react-router-dom'; // Import useNavigate, useOutletContext, and useLocation
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
+import { auth, db, storage, functions } from '../firebase';
+import { updateProfile, updatePassword as firebaseUpdatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser as firebaseDeleteUser } from 'firebase/auth';
+import { doc, collection, addDoc, getDocs, updateDoc, deleteDoc, setDoc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, getDoc } from '@firebase/firestore';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from '@firebase/storage';
 // Import Firebase Functions
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
-import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut } from '@phosphor-icons/react';
+import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash } from '@phosphor-icons/react';
 import PricingSection from './PricingSection'; // Import the PricingSection component
 
-// Initialize Firebase Functions
-const functions = getFunctions();
-const createStripePortalSession = httpsCallable(functions, 'createStripePortalSession');
-const generateImageDescription = httpsCallable(functions, 'generateImageDescription'); // <-- Add reference
-const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo'); // <-- ADD THIS
-const getTikTokAuthUrl = httpsCallable(functions, 'getTikTokAuthUrl'); // <-- ADD THIS FOR TIKTOK
-const updateTikTokUserDetails = httpsCallable(functions, 'updateTikTokUserDetails'); // <<< ADD THIS LINE
+// Helper to format bytes
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
-// --- NEW: Fixed Descriptions for Library Images ---
-const libraryImageDescriptions = {
-  "Afterglow Desk.png": "A dark room with a view of a lit-up city skyline through the window; calm, solitary atmosphere.",
-  "Canal Breather.png": "A cozy wooden table on a balcony or terrace surrounded by trees, with a book and coffee cup.",
-  "City Pulse.png": "Aerial view of a city bridge packed with cars, surrounded by tall skyscrapers at sunset.",
-  "Fog Curve.png": "A wet, winding road cutting through tall pine trees; moody and quiet.",
-  "Green Spine.png": "A narrow dirt trail winding along a lush green ridge, high above the surrounding forest.",
-  "Late Hours.png": "A dimly lit room with someone working intensely in front of a glowing computer screen.",
-  "Quiet Cosmos.png": "A serene night sky filled with stars, silhouetted by the tips of trees on the horizon.",
-  "Quiet Stack.png": "A warmly lit, classic library filled with bookshelves and wooden furniture.",
-  "Sky Office.png": "A clean, modern desk setup by a window overlooking the ocean and green landscape.",
-  "Spark.png": "A glowing bonfire with sparks flying upward, set against a black background.",
-  "Still Spin.png": "A record player sitting in a sun-drenched corner, casting soft shadows.",
-  "Stone Alley.png": "A narrow, cobblestone street in a quiet European town, with warm light and one person walking.",
-  "Tether Drift.png": "A top-down view of a person in a yellow kayak on calm, greenish water.",
-  "Window & Words.png": "A person working on a laptop inside a cafe with large windows looking out onto a city street."
-};
-// --- END NEW ---
+// Initialize Firebase Functions (if not already initialized in firebase.js)
+// const functions = getFunctions(); // Assuming functions is already exported from firebase.js
+const createStripePortalSessionCallable = httpsCallable(functions, 'createStripePortalSession');
+const connectTikTokAccountCallable = httpsCallable(functions, 'connectTikTokAccount');
+const getTikTokUserDetailsCallable = httpsCallable(functions, 'getTikTokUserDetails');
+const requestTikTokVideoUploadCallable = httpsCallable(functions, 'requestTikTokVideoUpload');
+const getPexelsImagesCallable = httpsCallable(functions, 'getPexelsImages'); 
+const submitFeatureRequestCallable = httpsCallable(functions, 'submitFeatureRequest');
+const voteFeatureRequestCallable = httpsCallable(functions, 'voteFeatureRequest');
+const deleteTikTokIntegrationCallable = httpsCallable(functions, 'deleteTikTokIntegration');
+const generateProductTopicsCallable = httpsCallable(functions, 'generateProductTopics');
+const generateImageDescription = httpsCallable(functions, 'generateImageDescription');
+const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo');
 
 function Settings() {
-  const user = auth.currentUser;
+  const { user, isDarkMode, products, creators, backgrounds, refreshLayoutData, firestoreUserData: layoutFirestoreUserData, handleManageBilling: layoutHandleManageBilling, setIsPricingModalOpen: layoutSetIsPricingModalOpen } = useOutletContext() || {};
   const navigate = useNavigate();
-  const location = useLocation(); // Get location object
-  const { refreshLayoutData } = useOutletContext();
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState('user'); // Default tab
-  const [isLoading, setIsLoading] = useState(false);
+  const location = useLocation();
+
+  const [activeTab, setActiveTab] = useState('user'); // Default to user tab
+  
+  // --- Profile States ---
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [previewURL, setPreviewURL] = useState('');
+  
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  
+  // --- Modal States ---
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [showDeleteProductConfirmModal, setShowDeleteProductConfirmModal] = useState(false);
+  const [showDeleteAccountConfirmModal, setShowDeleteAccountConfirmModal] = useState(false);
+  const [showDeleteTikTokConfirmModal, setShowDeleteTikTokConfirmModal] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(true); // For initial data loading
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('info'); // 'info', 'success', 'error', 'warning'
+
+  // --- Product States ---
+  const [userProducts, setUserProducts] = useState([]);
+  const [showAddProductForm, setShowAddProductForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productToDelete, setProductToDelete] = useState(null);
   const [shouldOpenAddProductForm, setShouldOpenAddProductForm] = useState(false);
   
-  // User settings states
-  const [firstName, setFirstName] = useState(''); // New state for first name
-  const [lastName, setLastName] = useState('');   // New state for last name
-  const [photoURL, setPhotoURL] = useState('');     // Initialize photoURL state properly
-  const [photoFile, setPhotoFile] = useState(null);
-  const [previewURL, setPreviewURL] = useState(null); // New state for image preview
-  
-  // Products state
-  const [products, setProducts] = useState([]);
-  // Rename states for the product form to be generic
+  // --- Form-specific states for Product ---
   const [productNameForForm, setProductNameForForm] = useState('');
   const [productDescriptionForForm, setProductDescriptionForForm] = useState('');
   const [productLogoFileForForm, setProductLogoFileForForm] = useState(null);
   const [productMediaFileForForm, setProductMediaFileForForm] = useState(null);
-  const [showAddProductForm, setShowAddProductForm] = useState(false);
-  const productLogoInputRef = useRef(null);
-  const productMediaInputRef = useRef(null);
-  
-  // State for Product Editing
-  const [editingProduct, setEditingProduct] = useState(null); // Stores the product object being edited
-  // No separate modal for edit, we reuse the add form
-  // States to hold current URLs when editing, to display them and help with update logic
   const [currentLogoUrlInForm, setCurrentLogoUrlInForm] = useState(null);
   const [currentMediaUrlInForm, setCurrentMediaUrlInForm] = useState(null);
-  const [currentMediaTypeInForm, setCurrentMediaTypeInForm] = useState('image'); // To render video or image for current media
-  
-  // TikTok accounts state
-  // const [tiktokAccounts, setTiktokAccounts] = useState([]); // OLD: Expecting an array
-  const [tiktokAccounts, setTiktokAccounts] = useState([]);
-  const [isLoadingTikTok, setIsLoadingTikTok] = useState(false); // NEW For loading TikTok operations
-  
-  // UGC Creators state
-  const [creators, setCreators] = useState([]);
+  const [currentMediaTypeInForm, setCurrentMediaTypeInForm] = useState('image');
+  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false);
+  const [topicsForEditingProduct, setTopicsForEditingProduct] = useState([]);
+
+  // App Persona States (Formerly Creators)
+  const [userAppPersonas, setUserAppPersonas] = useState([]);
+  const [newAppPersonaName, setNewAppPersonaName] = useState('');
+  const [newAppPersonaImage, setNewAppPersonaImage] = useState(null);
+  const [newAppPersonaImagePreview, setNewAppPersonaImagePreview] = useState(null);
+  const [isUploadingAppPersona, setIsUploadingAppPersona] = useState(false);
+  const [isAddingAppPersona, setIsAddingAppPersona] = useState(false);
+  const [showDeleteAppPersonaModal, setShowDeleteAppPersonaModal] = useState(false);
+  const [appPersonaToDelete, setAppPersonaToDelete] = useState(null);
+  const [isDeletingAppPersona, setIsDeletingAppPersona] = useState(false);
+
+  // Creator States
+  const [userCreators, setUserCreators] = useState(creators || []);
   const [newCreatorName, setNewCreatorName] = useState('');
   const [newCreatorFile, setNewCreatorFile] = useState(null);
+  const [newCreatorImagePreview, setNewCreatorImagePreview] = useState(null);
+  const [isUploadingCreator, setIsUploadingCreator] = useState(false);
+  const [isAddingCreator, setIsAddingCreator] = useState(false);
+  const [showDeleteCreatorModal, setShowDeleteCreatorModal] = useState(false);
+  const [creatorToDelete, setCreatorToDelete] = useState(null);
+  const [isDeletingCreator, setIsDeletingCreator] = useState(false);
   const [showAddCreatorForm, setShowAddCreatorForm] = useState(false);
-  const creatorFileInputRef = useRef(null);
-  
-  // Background images state
-  const [backgrounds, setBackgrounds] = useState([]); // User's added backgrounds
-  const [newBackgroundName, setNewBackgroundName] = useState(''); // For custom upload
-  const [newBackgroundFile, setNewBackgroundFile] = useState(null); // For custom upload
-  const [showAddBackgroundForm, setShowAddBackgroundForm] = useState(false); // For custom upload form
-  const backgroundFileInputRef = useRef(null); // For custom upload
 
-  // NEW: Library Backgrounds State
-  const [showLibrary, setShowLibrary] = useState(false); // Toggle library view
-  const [libraryImages, setLibraryImages] = useState([]); // Array of { url: string, name: string }
+  // TikTok Background States (Formerly Backgrounds)
+  const [userTikTokBackgrounds, setUserTikTokBackgrounds] = useState([]);
+  const [newTikTokBackgroundName, setNewTikTokBackgroundName] = useState('');
+  const [newTikTokBackgroundImage, setNewTikTokBackgroundImage] = useState(null);
+  const [newTikTokBackgroundImagePreview, setNewTikTokBackgroundImagePreview] = useState(null);
+  const [isUploadingTikTokBackground, setIsUploadingTikTokBackground] = useState(false);
+  const [isAddingTikTokBackground, setIsAddingTikTokBackground] = useState(false);
+  const [showDeleteTikTokBackgroundModal, setShowDeleteTikTokBackgroundModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null); // Generic for background or library image deletion
+  const [isDeletingTikTokBackground, setIsDeletingTikTokBackground] = useState(false);
+  const [tikTokBackgroundSearchTerm, setTikTokBackgroundSearchTerm] = useState('');
+  
+  // --- Background States ---
+  const [userBackgrounds, setUserBackgrounds] = useState(backgrounds || []);
+  const [userBackgroundUrls, setUserBackgroundUrls] = useState(new Set());
+  const [newBackgroundName, setNewBackgroundName] = useState('');
+  const [newBackgroundFile, setNewBackgroundFile] = useState(null);
+  const [showAddBackgroundForm, setShowAddBackgroundForm] = useState(false);
+
+  // --- Library States ---
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryImages, setLibraryImages] = useState([]);
+  const [selectedLibraryImages, setSelectedLibraryImages] = useState([]);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
-  const [selectedLibraryImages, setSelectedLibraryImages] = useState([]); // Array of URLs
-  const [userBackgroundUrls, setUserBackgroundUrls] = useState(new Set()); // Set of URLs user already has
   
-  // Future requests state - Kept for now, might be removed if featureRequests handles it fully
-  const [requests, setRequests] = useState([]);
-  const [newRequest, setNewRequest] = useState({ title: '', description: '', priority: 'medium' });
+  const [libraryTikTokBackgrounds, setLibraryTikTokBackgrounds] = useState([]);
+  const [selectedLibraryTikTokImages, setSelectedLibraryTikTokImages] = useState([]);
+  const [isLoadingTikTokLibrary, setIsLoadingTikTokLibrary] = useState(false);
 
-  // NEW: Confirmation Modals State (Combined & Specific)
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false); // For Backgrounds & Creators
-  const [itemToDelete, setItemToDelete] = useState(null); // { id, imageUrl, isFromLibrary, name, type: 'background' | 'creator' }
-  const [showDeleteProductConfirmModal, setShowDeleteProductConfirmModal] = useState(false); // For Products
-  const [productToDelete, setProductToDelete] = useState(null); // { id, logoUrl, mediaUrl, name }
-  const [showDeleteAccountConfirmModal, setShowDeleteAccountConfirmModal] = useState(false); // For Account Deletion
+  // Billing & Plan States
+  const [userSubscription, setUserSubscription] = useState(null);
+  const [isFetchingSubscription, setIsFetchingSubscription] = useState(false);
+  const [isPortalLoading, setIsPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState(null);
+
+  // TikTok Accounts State
+  const [tiktokAccounts, setTiktokAccounts] = useState([]);
+  const [isLoadingTikTok, setIsLoadingTikTok] = useState(false);
+  const [isLoadingAction, setIsLoadingAction] = useState({}); // For individual account actions
+  const [showDeleteTikTokAccountModal, setShowDeleteTikTokAccountModal] = useState(false);
+  const [tikTokAccountToDelete, setTikTokAccountToDelete] = useState(null);
+  const [isDeletingTikTokAccount, setIsDeletingTikTokAccount] = useState(false);
 
   // Feature Requests State
   const [featureRequests, setFeatureRequests] = useState([]);
-  const [userUpvotedFeatures, setUserUpvotedFeatures] = useState(new Set()); // Set of feature titles/keys user has upvoted
-  const [votingCooldown, setVotingCooldown] = useState({}); // Key: featureTitle, Value: boolean (true if on cooldown)
+  const [newFeatureTitle, setNewFeatureTitle] = useState('');
+  const [newFeatureDescription, setNewFeatureDescription] = useState('');
+  const [newFeatureRequestText, setNewFeatureRequestText] = useState('');
+  const [isSubmittingFeature, setIsSubmittingFeature] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [userVotes, setUserVotes] = useState({}); // Store user's votes {requestId: true}
+  const [votingCooldown, setVotingCooldown] = useState({});
+  const [userPrivateRequests, setUserPrivateRequests] = useState([]);
   const [isFetchingRequests, setIsFetchingRequests] = useState(false);
 
-  // NEW: State for submitting new feature requests by the user
-  const [newFeatureRequestText, setNewFeatureRequestText] = useState('');
-  const [userPrivateRequests, setUserPrivateRequests] = useState([]);
-  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  // UI Refs
+  const toastTimeoutRef = useRef(null); 
 
-  // NEW: State for custom toast notifications
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const toastTimeoutRef = useRef(null); // To manage auto-hide timeout
+  // For managing image uploads and previews
+  const logoInputRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const productLogoInputRef = useRef(null);
+  const productMediaInputRef = useRef(null);
+  const personaImageInputRef = useRef(null);
+  const tikTokBgImageInputRef = useRef(null);
+  const creatorFileInputRef = useRef(null);
+  const backgroundFileInputRef = useRef(null);
 
-  // NEW: User Subscription State
-  const [userSubscription, setUserSubscription] = useState(null); // { stripeCustomerId, stripePriceId, subscriptionStatus, ... }
-  const [isFetchingSubscription, setIsFetchingSubscription] = useState(false);
-  const [isPortalLoading, setIsPortalLoading] = useState(false); // Loading state for portal button
-  const [portalError, setPortalError] = useState(null); // Error state for portal button
+  const showCustomToast = useCallback((message, type = 'info', duration = 3000) => {
+    setToastMessage({ text: message, type: type });
+    setShowToast(true);
 
-  // --- NEW: Add state for showing confirmation modal for TikTok account deletion ---
-  const [showDeleteTikTokConfirmModal, setShowDeleteTikTokConfirmModal] = useState(false);
-  const [tikTokAccountToDelete, setTikTokAccountToDelete] = useState(null); // { id, name }
+    // Clear existing timeout if any
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    // Auto-hide after 3 seconds (adjust as needed)
+    toastTimeoutRef.current = setTimeout(() => {
+      setShowToast(false);
+    }, duration);
+  }, []);
 
   // --- NEW: useEffect to load user data from Firestore for the profile form ---
   useEffect(() => {
@@ -144,6 +198,7 @@ function Settings() {
           const data = docSnap.data();
           setFirstName(data.firstName || '');
           setLastName(data.lastName || '');
+          setEmail(data.email || '');
           setPhotoURL(data.photoURL || user.photoURL || ''); // Fallback to auth user photoURL
           // If displayName was used to prefill and now we have specific fields:
           // No, displayName is constructed, so this is fine.
@@ -175,6 +230,7 @@ function Settings() {
       // No user, clear fields
       setFirstName('');
       setLastName('');
+      setEmail('');
       setPhotoURL('');
     }
   }, [user]); // Rerun if user object changes
@@ -216,32 +272,6 @@ function Settings() {
     navigate(`#${tabId}`); // Update URL hash
   };
   // --- END NEW useEffect ---
-
-  // Dark mode effect
-  useEffect(() => {
-    // Default to light mode unless explicitly set to dark in localStorage
-    const savedMode = localStorage.getItem('darkMode') === 'true';
-    setIsDarkMode(savedMode); 
-    
-    if (savedMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(prevMode => {
-      const newMode = !prevMode;
-      localStorage.setItem('darkMode', newMode);
-      if (newMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      return newMode;
-    });
-  };
 
   // --- NEW: Generic Firestore Data Fetcher ---
   const fetchUserData = async (collectionName, setData, orderByField = null, orderByDirection = 'desc') => {
@@ -328,15 +358,15 @@ function Settings() {
       try {
         if (user) {
           if (activeTab === 'products') {
-            await fetchUserData('products', setProducts, "createdAt", "desc");
+            await fetchUserData('products', setUserProducts, "createdAt", "desc");
           } else if (activeTab === 'tiktok') {
             // TikTok uses its own listener setup in another useEffect
             // await fetchTikTokAccounts(); // This is handled by its own useEffect
           } else if (activeTab === 'creators') {
-            await fetchUserData('creators', setCreators, "createdAt", "desc");
+            await fetchUserData('creators', setUserCreators, "createdAt", "desc");
           } else if (activeTab === 'backgrounds') {
             await fetchUserData('backgrounds', (data) => {
-              setBackgrounds(data);
+              setUserBackgrounds(data);
               setUserBackgroundUrls(new Set(data.map(bg => bg.imageUrl)));
             }, "createdAt", "desc");
           } else if (activeTab === 'featureRequests') {
@@ -671,7 +701,7 @@ function Settings() {
     if (!user) return; 
 
     // NEW CHECK: Prevent adding more than one product
-    if (products.length >= 1 && !editingProduct) { // Check only if NOT editing
+    if (userProducts.length >= 1 && !editingProduct) { // Check only if NOT editing
       alert('You can only add one product for now. To add a different one, please delete the existing product first.');
       setShowAddProductForm(false); // Close the form if it was open
       return;
@@ -794,10 +824,14 @@ function Settings() {
             console.log('[Add Product] manuallyStandardizeProductVideo call INITIATED (background).', result);
           }).catch(error => {
             console.error('[Add Product] Error INITIATING manuallyStandardizeProductVideo (background):', error);
-            // Optionally, update Firestore with this initial error, though the function itself also logs errors
-            // For now, the main product data is saved, and the function will try to update with its own status/error.
-            standardizationError = error.message; // Capture error for initial doc write if needed
-            showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+            // Check if it's a timeout error vs a real error
+            if (error.code === 'deadline-exceeded') {
+              console.log('[Add Product] Video standardization taking longer than expected, but continuing in background');
+              showCustomToast('Video uploaded successfully! Video processing is continuing in the background.', 'info');
+            } else {
+              standardizationError = error.message; // Capture real error for initial doc write if needed
+              showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+            }
           });
         }
       }
@@ -821,7 +855,33 @@ function Settings() {
       
       await setDoc(doc(db, 'users', user.uid, 'products', newProductId), productData);
       
-      setProducts(prev => [{ ...productData, createdAt: new Date() }, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      // Generate topics for the product in background
+      generateProductTopicsCallable({
+        userId: user.uid,
+        productId: newProductId,
+        productName: name,
+        productDescription: description
+      }).then(result => {
+        console.log('[Add Product] Topic generation INITIATED (background).', result);
+        if (result.data && result.data.success) {
+          showCustomToast('Product topics generated!', 'success');
+        }
+      }).catch(error => {
+        console.error('[Add Product] Error generating topics (background):', error);
+        // Don't show error to user, it's background process
+      });
+      
+      setUserProducts(prev => {
+        // Check if product already exists to avoid duplicates
+        const productExists = prev.some(p => p.id === newProductId);
+        if (productExists) {
+          return prev.map(p => p.id === newProductId ? { ...productData, createdAt: new Date() } : p)
+            .sort((a, b) => b.createdAt - a.createdAt);
+        } else {
+          return [{ ...productData, createdAt: new Date() }, ...prev]
+            .sort((a, b) => b.createdAt - a.createdAt);
+        }
+      });
       showCustomToast('Product added successfully!', 'success');
       resetProductForm();
       setShowAddProductForm(false);
@@ -930,8 +990,14 @@ function Settings() {
             console.log('[Update Product] manuallyStandardizeProductVideo call INITIATED (background).', result);
           }).catch(error => {
             console.error('[Update Product] Error INITIATING manuallyStandardizeProductVideo (background):', error);
-            standardizationError = error.message; // Capture error for initial doc write if needed
-            showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+            // Check if it's a timeout error vs a real error
+            if (error.code === 'deadline-exceeded') {
+              console.log('[Update Product] Video standardization taking longer than expected, but continuing in background');
+              showCustomToast('Video updated successfully! Video processing is continuing in the background.', 'info');
+            } else {
+              standardizationError = error.message; // Capture real error for initial doc write if needed
+              showCustomToast(`Error starting video standardization: ${error.message}`, 'error');
+            }
           });
         }
       }
@@ -944,7 +1010,7 @@ function Settings() {
 
 
       await updateDoc(productRef, updatedData);
-      setProducts(prevProducts => prevProducts.map(p => p.id === editingProduct.id ? { ...p, ...updatedData, logoUrl: newLogoUrl, mediaUrl: newMediaUrl, mediaType: newMediaType } : p).sort((a,b) => b.createdAt - a.createdAt));
+      setUserProducts(prevProducts => prevProducts.map(p => p.id === editingProduct.id ? { ...p, ...updatedData, logoUrl: newLogoUrl, mediaUrl: newMediaUrl, mediaType: newMediaType } : p).sort((a,b) => b.createdAt - a.createdAt));
       showCustomToast('Product updated successfully!', 'success');
       resetProductForm();
       setShowAddProductForm(false);
@@ -962,7 +1028,7 @@ function Settings() {
   const handleDeleteProduct = (productId, productLogoUrl, productMediaUrl, productName) => { // Accept name
     if (!user) return;
 
-    if (products.length === 1) {
+    if (userProducts.length === 1) {
       showCustomToast('You cannot delete your last product. You must have at least one product.', 'error');
       return;
     }
@@ -1012,7 +1078,7 @@ function Settings() {
       }
       
       // Update local state
-      setProducts(prev => prev.filter(p => p.id !== id));
+      setUserProducts(prev => prev.filter(p => p.id !== id));
       showCustomToast('Product deleted successfully!', 'success');
       if (refreshLayoutData) refreshLayoutData(); // <-- CALL REFRESH
 
@@ -1052,7 +1118,7 @@ function Settings() {
       
       const docRef = await addDoc(collection(db, 'users', user.uid, 'creators'), creatorData);
       
-      setCreators(prev => [...prev, { id: docRef.id, ...creatorData }]);
+      setUserCreators(prev => [...prev, { id: docRef.id, ...creatorData }]);
       
       // Reset form
       setNewCreatorName('');
@@ -1113,20 +1179,20 @@ function Settings() {
       <div className="px-6 lg:px-0"> 
         <div className="text-left">
           <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
               User Profile
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-            <span className="text-sm text-gray-500 dark:text-zinc-400">
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+            <span className="text-sm text-stone-500 dark:text-stone-400">
               Manage your personal information
             </span>
           </div>
           
-          <p className="mb-8 text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
+          <p className="mb-8 text-base text-stone-600 dark:text-stone-400 max-w-2xl">
             Update your profile details and manage your account settings.
           </p>
           
-          <div className="mb-12 border-b border-gray-100 dark:border-zinc-800 pb-8">
+          <div className="mb-12 border-b border-stone-100 dark:border-stone-800 pb-8">
             <div className="flex flex-col md:flex-row gap-8">
               {/* Make the parent div rounded for circular hover effect */}
               <div className="relative group flex-shrink-0 w-24 h-24 rounded-full">
@@ -1136,7 +1202,7 @@ function Settings() {
                   className="w-24 h-24 rounded-full object-cover shadow-sm hover:shadow-md transition-all duration-200"
                 />
                 <label className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <PencilSimple size={22} className="text-white" />
+                  <PencilSimple size={22} className="text-stone-100" />
                   <input 
                     type="file" 
                     accept="image/*" 
@@ -1157,35 +1223,35 @@ function Settings() {
               
               <div className="space-y-6 flex-1 max-w-md">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
                     First Name
                   </label>
                   <input 
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white rounded-md border-0 shadow-sm ring-1 ring-inset ring-gray-200 dark:ring-zinc-800 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-white transition-all duration-200"
+                    className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-900 text-stone-900 dark:text-stone-100 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 placeholder:text-stone-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-stone-100 transition-all duration-200"
                     placeholder="First Name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
                     Last Name
                   </label>
                   <input 
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white rounded-md border-0 shadow-sm ring-1 ring-inset ring-gray-200 dark:ring-zinc-800 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-white transition-all duration-200"
+                    className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-900 text-stone-900 dark:text-stone-100 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 placeholder:text-stone-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-stone-100 transition-all duration-200"
                     placeholder="Last Name"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-2">
+                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
                     Email Address
                   </label>
-                  <div className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-900/50 text-gray-500 dark:text-zinc-400 rounded-md border-0 shadow-sm ring-1 ring-inset ring-gray-200 dark:ring-zinc-800 flex items-center">
+                  <div className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-900/50 text-stone-500 dark:text-stone-400 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 flex items-center">
                     {user?.email || 'No email available'}
                   </div>
                 </div>
@@ -1195,8 +1261,8 @@ function Settings() {
                   disabled={isLoading}
                   className={`px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center ${
                     isLoading 
-                      ? 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 cursor-not-allowed' 
-                      : 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-200 shadow-sm hover:shadow'
+                      ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-not-allowed' 
+                      : 'bg-black dark:bg-neutral-100 text-stone-100 dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200 shadow-sm hover:shadow'
                   }`}
                 >
                   {isLoading ? (
@@ -1214,11 +1280,11 @@ function Settings() {
           <div className="space-y-6">
             <div>
               <div className="flex items-center mb-4">
-                <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+                <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                   Account Actions
                 </span>
-                <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-                <span className="text-sm text-gray-500 dark:text-zinc-400">
+                <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+                <span className="text-sm text-stone-500 dark:text-stone-400">
                   Manage your account
                 </span>
               </div>
@@ -1229,8 +1295,8 @@ function Settings() {
                   disabled={isLoading}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
                     isLoading
-                      ? 'bg-gray-50 dark:bg-zinc-900 text-gray-400 dark:text-zinc-500 cursor-not-allowed'
-                      : 'bg-white dark:bg-zinc-900 shadow-sm hover:shadow text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-800 ring-1 ring-inset ring-gray-200 dark:ring-zinc-800 hover:ring-gray-300 dark:hover:ring-zinc-700'
+                      ? 'bg-neutral-50 dark:bg-neutral-900 text-stone-400 dark:text-stone-500 cursor-not-allowed'
+                      : 'bg-neutral-100 dark:bg-neutral-900 shadow-sm hover:shadow text-stone-700 dark:text-stone-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:ring-stone-300 dark:hover:ring-stone-700'
                   }`}
                 >
                   <SignOut size={18} weight="bold" />
@@ -1243,7 +1309,7 @@ function Settings() {
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
                     isLoading
                       ? 'bg-red-50 dark:bg-red-900/10 text-red-300 dark:text-red-500 cursor-not-allowed'
-                      : 'bg-white dark:bg-zinc-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 shadow-sm hover:shadow ring-1 ring-inset ring-red-200 dark:ring-red-900/30 hover:ring-red-300 dark:hover:ring-red-800/50'
+                      : 'bg-neutral-100 dark:bg-neutral-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 shadow-sm hover:shadow ring-1 ring-inset ring-red-200 dark:ring-red-900/30 hover:ring-red-300 dark:hover:ring-red-800/50'
                   }`}
                 >
                   <Trash size={18} weight="bold" />
@@ -1251,7 +1317,7 @@ function Settings() {
                 </button>
               </div>
               
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-3">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-3">
                 Deleting your account is permanent and cannot be undone. All associated data will be removed.
               </p>
             </div>
@@ -1273,7 +1339,7 @@ function Settings() {
          setPortalError(null);
          try {
              console.log("Calling createStripePortalSession...");
-             const result = await createStripePortalSession();
+             const result = await createStripePortalSessionCallable();
              const portalUrl = result?.data?.url;
             // Add a stricter check to ensure portalUrl is a valid-looking string
             if (typeof portalUrl === 'string' && portalUrl.startsWith('http')) {
@@ -1300,23 +1366,23 @@ function Settings() {
           {/* Add header consistent with User tab */}
           <div className="text-left mb-8"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Plan & Billing
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+              <span className="text-sm text-stone-500 dark:text-stone-400">
                 Manage your subscription and billing details
               </span>
             </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
+            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl">
            View your current plan, upgrade options, or manage your payment methods and billing history.
           </p>
           </div>
           {/* Render the PricingSection - Pass subscription data */}
           {isFetchingSubscription ? (
              <div className="flex justify-center items-center py-20">
-                <CircleNotch size={28} weight="regular" className="animate-spin text-gray-400 dark:text-zinc-500 mr-3" />
-                <span className="text-base text-gray-500 dark:text-zinc-400">Loading plan details...</span>
+                <CircleNotch size={28} weight="regular" className="animate-spin text-stone-400 dark:text-stone-500 mr-3" />
+                <span className="text-base text-stone-500 dark:text-stone-400">Loading plan details...</span>
              </div>
           ) : (
              <PricingSection id="settings-pricing" subscriptionData={userSubscription} user={user} /> 
@@ -1324,9 +1390,9 @@ function Settings() {
 
           {/* Manage Billing Button Area - Added below PricingSection */} 
           {!isFetchingSubscription && userSubscription?.stripeCustomerId && (userSubscription?.subscriptionStatus === 'active' || userSubscription?.subscriptionStatus === 'trialing') && (
-             <div className="mt-12 pt-8 border-t border-gray-100 dark:border-zinc-800 flex flex-col items-start">
-                <h3 className="text-base font-medium text-gray-800 dark:text-zinc-200 mb-3">Manage Your Subscription</h3>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-4 max-w-xl">
+             <div className="mt-12 pt-8 border-t border-stone-100 dark:border-stone-800 flex flex-col items-start">
+                <h3 className="text-base font-medium text-stone-800 dark:text-stone-200 mb-3">Manage Your Subscription</h3>
+                <p className="text-sm text-stone-600 dark:text-stone-400 mb-4 max-w-xl">
                    Need to update your payment method, view invoices, or cancel your plan? Access the secure customer portal.
                 </p>
                 <button 
@@ -1334,10 +1400,10 @@ function Settings() {
                    disabled={isPortalLoading || !userSubscription?.stripeCustomerId} // Disable if loading or no customer ID
                    className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow ${
                       isPortalLoading 
-                         ? 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 cursor-wait' 
+                         ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait' 
                          : !userSubscription?.stripeCustomerId
-                            ? 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 cursor-not-allowed' // Disabled style if no customer ID
-                            : 'bg-white dark:bg-zinc-900 text-black dark:text-white ring-1 ring-inset ring-gray-200 dark:ring-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800'
+                            ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-not-allowed' // Disabled style if no customer ID
+                            : 'bg-neutral-100 dark:bg-neutral-900 text-black dark:text-stone-100 ring-1 ring-inset ring-stone-200 dark:ring-stone-700 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                    }`}
                 >
                    {isPortalLoading ? (
@@ -1351,7 +1417,7 @@ function Settings() {
                     <p className="mt-3 text-xs text-red-600 dark:text-red-400">{portalError}</p>
                 )}
                 {!userSubscription?.stripeCustomerId && !isFetchingSubscription && (
-                     <p className="mt-3 text-xs text-gray-500 dark:text-zinc-500">Subscribe to a plan to manage billing.</p>
+                     <p className="mt-3 text-xs text-stone-500 dark:text-stone-500">Subscribe to a plan to manage billing.</p>
                 )}
              </div>
           )}
@@ -1367,26 +1433,26 @@ function Settings() {
         {/* Header consistent with User tab */}
         <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Products
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+              <span className="text-sm text-stone-500 dark:text-stone-400">
                 Manage your product information
               </span>
             </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl mb-8">
+            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl mb-8">
               Add, edit, or remove products. This information is used to generate relevant TikTok content.
             </p>
         </div>
 
       {/* Action Button - Moved below header */}
-      <div className="flex justify-end border-b border-gray-100 dark:border-zinc-800 pb-4">
+      <div className="flex justify-end border-b border-stone-100 dark:border-stone-800 pb-4">
         <button 
           onClick={() => {
             // If trying to open the form (i.e., showAddProductForm is currently false) 
             // and product limit is reached, prevent opening and show alert.
-            if (!showAddProductForm && products.length >= 1) {
+            if (!showAddProductForm && userProducts.length >= 1) {
               alert('You can only add one product. Delete the existing one to add a new product.');
               return;
             }
@@ -1397,11 +1463,11 @@ function Settings() {
             }
           }}
           // Disable button if it's in the "Add Product" state (showAddProductForm is false)
-          // AND the product limit (products.length >= 1) is reached.
+          // AND the product limit (userProducts.length >= 1) is reached.
           // The button acts as "Cancel" when showAddProductForm is true, so it shouldn't be disabled then based on product count.
-          // disabled={!showAddProductForm && products.length >= 1}
+          // disabled={!showAddProductForm && userProducts.length >= 1}
           className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors 
-                      bg-gray-900 text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-200
+                      bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200
                     `}
         >
           {showAddProductForm ? <X size={16} /> : <Plus size={16} />}
@@ -1411,12 +1477,12 @@ function Settings() {
       
       {/* Add Product Form with improved layout */}
       {showAddProductForm && (
-        <form onSubmit={handleAddProduct} className="p-6 border border-gray-100 dark:border-zinc-800 rounded-lg space-y-5 bg-gray-50/50 dark:bg-zinc-900/30 mb-6">
-          <h3 className="text-lg font-medium text-black dark:text-white mb-2">
+        <form onSubmit={handleAddProduct} className="p-6 border border-stone-100 dark:border-stone-800 rounded-lg space-y-5 bg-neutral-50/50 dark:bg-neutral-900/30 mb-6">
+          <h3 className="text-lg font-medium text-black dark:text-stone-100 mb-2">
             {editingProduct ? 'Edit Product' : 'Add New Product'}
           </h3>
           <div>
-            <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+            <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
               Product Name <span className="text-red-500">*</span>
             </label>
             <input 
@@ -1425,12 +1491,12 @@ function Settings() {
               onChange={(e) => setProductNameForForm(e.target.value)}
               placeholder="e.g., Super Widget"
               required
-              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
-              Description <span className="text-red-500">*</span> <span className="text-xs text-gray-400 dark:text-zinc-500">(Min 50 chars)</span>
+            <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
+              Description <span className="text-red-500">*</span> <span className="text-xs text-stone-400 dark:text-stone-500">(Min 50 chars)</span>
             </label>
             <textarea 
               value={productDescriptionForForm}
@@ -1439,23 +1505,23 @@ function Settings() {
               rows={4}
               required
               minLength={50} // <-- CHANGED FROM 150 to 50
-              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
             />
              {/* Character Counter with improved visual feedback */}
-            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 50 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-zinc-400'}`}>
+            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 50 ? 'text-green-600 dark:text-green-400' : 'text-stone-500 dark:text-stone-400'}`}>
                 {productDescriptionForForm.length} / 50 characters {productDescriptionForForm.length < 50 ? `(${50 - productDescriptionForForm.length} more needed)` : '✓'}
             </p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+              <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
                 Product Logo {editingProduct ? '(Optional: Change)' : <span className="text-red-500">*</span>}
               </label>
               {editingProduct && currentLogoUrlInForm && (
                 <div className="mb-2">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mb-1">Current Logo:</p>
-                  <img src={currentLogoUrlInForm} alt="Current product logo" className="max-h-20 rounded border border-gray-200 dark:border-zinc-700 p-1 bg-white dark:bg-zinc-800" />
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mb-1">Current Logo:</p>
+                  <img src={currentLogoUrlInForm} alt="Current product logo" className="max-h-20 rounded border border-stone-200 dark:border-stone-700 p-1 bg-neutral-100 dark:bg-neutral-800" />
                 </div>
               )}
               <input 
@@ -1464,30 +1530,30 @@ function Settings() {
                 ref={productLogoInputRef}
                 onChange={(e) => setProductLogoFileForForm(e.target.files[0])}
                 required={!editingProduct} // Required only if NOT editing
-                className="w-full text-sm text-gray-500 dark:text-zinc-400
+                className="w-full text-sm text-stone-500 dark:text-stone-400
                            file:mr-4 file:py-2 file:px-4
                            file:rounded-lg file:border-0
                            file:text-sm file:font-semibold
-                           file:bg-gray-100 file:dark:bg-zinc-800 
-                           file:text-gray-700 file:dark:text-zinc-200
-                           hover:file:bg-gray-200 hover:file:dark:bg-zinc-700
+                           file:bg-neutral-100 file:dark:bg-neutral-800 
+                           file:text-stone-700 file:dark:text-stone-200
+                           hover:file:bg-neutral-200 hover:file:dark:bg-neutral-700
                            cursor-pointer"
               />
               {productLogoFileForForm && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Selected Logo: {productLogoFileForForm.name}</p>
+                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Selected Logo: {productLogoFileForForm.name}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+              <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
                 Product Video {editingProduct ? '(Optional: Change)' : <span className="text-red-500">*</span>}
               </label>
                {editingProduct && currentMediaUrlInForm && (
                 <div className="mb-2">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mb-1">Current Media:</p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mb-1">Current Media:</p>
                   {currentMediaTypeInForm === 'video' ? (
-                    <video src={currentMediaUrlInForm} controls className="max-h-28 rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"></video>
+                    <video src={currentMediaUrlInForm} controls className="max-h-28 rounded border border-stone-200 dark:border-stone-700 bg-neutral-100 dark:bg-neutral-800"></video>
                   ) : (
-                    <img src={currentMediaUrlInForm} alt="Current product media" className="max-h-28 rounded border border-gray-200 dark:border-zinc-700 p-1 bg-white dark:bg-zinc-800" />
+                    <img src={currentMediaUrlInForm} alt="Current product media" className="max-h-28 rounded border border-stone-200 dark:border-stone-700 p-1 bg-neutral-100 dark:bg-neutral-800" />
                   )}
                 </div>
               )}
@@ -1497,22 +1563,22 @@ function Settings() {
                 ref={productMediaInputRef}
                 onChange={(e) => setProductMediaFileForForm(e.target.files[0])}
                 required={!editingProduct} // Required only if NOT editing
-                className="w-full text-sm text-gray-500 dark:text-zinc-400
+                className="w-full text-sm text-stone-500 dark:text-stone-400
                            file:mr-4 file:py-2 file:px-4
                            file:rounded-lg file:border-0
                            file:text-sm file:font-semibold
-                           file:bg-gray-100 file:dark:bg-zinc-800 
-                           file:text-gray-700 file:dark:text-zinc-200
-                           hover:file:bg-gray-200 hover:file:dark:bg-zinc-700
+                           file:bg-neutral-100 file:dark:bg-neutral-800 
+                           file:text-stone-700 file:dark:text-stone-200
+                           hover:file:bg-neutral-200 hover:file:dark:bg-neutral-700
                            cursor-pointer"
               />
               {productMediaFileForForm && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Selected Media: {productMediaFileForForm.name}</p>
+                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Selected Media: {productMediaFileForForm.name}</p>
               )}
             </div>
           </div>
           
-          <p className="text-xs text-gray-500 dark:text-zinc-400 pt-1 p-2 border-l-2 border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/50 rounded">
+          <p className="text-xs text-stone-500 dark:text-stone-400 pt-1 p-2 border-l-2 border-stone-200 dark:border-stone-700 bg-neutral-50 dark:bg-neutral-800/50 rounded">
             The logo and product image/video will be used directly in generated TikTok content. High-quality assets will significantly improve output quality.
           </p>
           
@@ -1520,14 +1586,14 @@ function Settings() {
              <button
                 type="button"
                 onClick={resetProductForm} // Use new reset function
-                className="px-4 py-2 text-sm text-gray-700 dark:text-zinc-300 bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-stone-700 dark:text-stone-300 bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             >
                 Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-5 py-2 bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors disabled:opacity-50"
+              className="px-5 py-2 bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg text-sm hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"
             >
               {isLoading 
                 ? (editingProduct ? 'Saving...' : 'Adding...') 
@@ -1539,19 +1605,19 @@ function Settings() {
       
       {/* Products List with improved layout */}
       {isLoading && !showAddProductForm && activeTab === 'products' ? ( // Only show loading if this tab is active
-        <div className="flex justify-center py-8 text-gray-500 dark:text-zinc-400">
+        <div className="flex justify-center py-8 text-stone-500 dark:text-stone-400">
           <div className="flex items-center gap-2">
              <CircleNotch size={18} className="animate-spin"/> Loading Products...
           </div>
         </div>
-      ) : !isLoading && products.length === 0 && !showAddProductForm ? (
-        <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg">
-          <Package size={36} className="text-gray-400 dark:text-zinc-600 mb-4" />
-          <p className="text-gray-500 dark:text-zinc-400 mb-4">No products added yet.</p>
-          {/* This button is only shown when products.length is 0, so no need for a disable check here based on count */}
+      ) : !isLoading && userProducts.length === 0 && !showAddProductForm ? (
+        <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-lg">
+          <Package size={36} className="text-stone-400 dark:text-stone-600 mb-4" />
+          <p className="text-stone-500 dark:text-stone-400 mb-4">No products added yet.</p>
+          {/* This button is only shown when userProducts.length is 0, so no need for a disable check here based on count */}
           <button 
             onClick={() => setShowAddProductForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white dark:bg-white dark:text-black text-sm rounded-lg hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black text-sm rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
           >
             <Plus size={16} />
             Add Your First Product
@@ -1559,7 +1625,7 @@ function Settings() {
         </div>
       ) : (
         <div className="space-y-3">
-          {products.map(product => {
+          {userProducts.map(product => {
             // Truncate description
             let displayDescription = product.description || 'No description provided.';
             if (displayDescription.length > 50) {
@@ -1567,19 +1633,19 @@ function Settings() {
             }
 
             return (
-              <div key={product.id} className="flex gap-4 p-4 border border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors rounded-lg items-center">
+              <div key={product.id} className="flex gap-4 p-4 border border-stone-100 dark:border-stone-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors rounded-lg items-center">
                 <img 
                   src={product.logoUrl || 'https://via.placeholder.com/80?text=No+Logo'}
                   alt={`${product.name} logo`} 
-                  className="w-16 h-auto max-h-16 object-contain rounded flex-shrink-0 bg-gray-50 dark:bg-zinc-800 p-1" 
+                  className="w-16 h-auto max-h-16 object-contain rounded flex-shrink-0 bg-neutral-50 dark:bg-neutral-800 p-1" 
                 />
                 <div className="flex-1 min-w-0 py-1">
                   <div className="flex justify-between items-start">
-                    <h3 className="font-medium text-black dark:text-white truncate mr-2">{product.name}</h3>
+                    <h3 className="font-medium text-black dark:text-stone-100 truncate mr-2">{product.name}</h3>
                     <div className="flex gap-1 flex-shrink-0">
                       <button 
                           onClick={() => handleEditProductClick(product)} // <-- WIRE UP EDIT
-                          className="p-1.5 text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                          className="p-1.5 text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
                           aria-label={`Edit ${product.name}`}
                           title={`Edit ${product.name}`}
                       >
@@ -1588,7 +1654,7 @@ function Settings() {
                       <button 
                           onClick={() => handleDeleteProduct(product.id, product.logoUrl, product.mediaUrl, product.name)}
                           disabled={isLoading}
-                          className="p-1.5 text-gray-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors disabled:opacity-50"
+                          className="p-1.5 text-stone-500 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors disabled:opacity-50"
                           aria-label={`Delete ${product.name}`}
                       >
                         <Trash size={16} />
@@ -1596,7 +1662,7 @@ function Settings() {
                     </div>
                   </div>
                   {/* Removed line-clamp-2 and used displayDescription */}
-                  <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">{displayDescription}</p>
+                  <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">{displayDescription}</p>
                 </div>
               </div>
             );
@@ -1613,16 +1679,16 @@ function Settings() {
         {/* NEW HEADER SECTION */}
         <div className="text-left mb-8">
           <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
               TikTok Accounts
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-            <span className="text-sm text-gray-500 dark:text-zinc-400">
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+            <span className="text-sm text-stone-500 dark:text-stone-400">
               Manage your TikTok account integrations
             </span>
           </div>
-          <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
-             Connect one or more TikTok accounts to enable posting features. <span className="font-semibold text-zinc-900 dark:text-white">(Coming Soon)</span>
+          <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl">
+             Connect one or more TikTok accounts to enable posting features.
           </p>
         </div>
         {/* END NEW HEADER SECTION */}
@@ -1631,59 +1697,62 @@ function Settings() {
         {/* The button section should directly follow */}
         <div className="mt-4 flex justify-start">
           <button 
-            onClick={handleConnectTikTokAccount} // This will now call the disabled version
-            disabled={true} // MODIFIED: Always disabled
-            className="inline-flex items-center justify-center rounded-md border-0 bg-gray-900 dark:bg-white px-4 py-2 text-sm font-medium text-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50"
+            onClick={handleConnectTikTokAccount}
+            disabled= {true} // Disable while main connection is in progress
+            className="inline-flex items-center justify-center rounded-md border-0 bg-neutral-900 dark:bg-neutral-100 px-4 py-2 text-sm font-medium text-stone-100 dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors disabled:opacity-50"
           >
-            {/* MODIFIED: Removed isLoadingTikTok check for icon, button always disabled */}
-            <TiktokLogo size={20} className="mr-2" />
-            Connect New TikTok Account <span className="ml-1.5 text-xs opacity-80">(Soon)</span> {/* ADDED Soon text */}
+            {isLoadingTikTok ? (
+              <CircleNotch size={20} className="mr-2 animate-spin" />
+            ) : (
+              <TiktokLogo size={20} className="mr-2" />
+            )}
+            Connect New TikTok Account
           </button>
         </div>
         
         {isLoadingTikTok && tiktokAccounts.length === 0 && (
           <div className="flex justify-center items-center py-10">
-            <CircleNotch size={24} className="animate-spin text-gray-500 dark:text-gray-400 mr-3" />
-            <p className="text-gray-600 dark:text-gray-400">Loading connected accounts...</p>
+            <CircleNotch size={24} className="animate-spin text-stone-500 dark:text-stone-400 mr-3" />
+            <p className="text-stone-600 dark:text-stone-400">Loading connected accounts...</p>
           </div>
         )}
 
         {!isLoadingTikTok && tiktokAccounts.length === 0 && (
-          <div className="mt-6 text-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-200 dark:border-zinc-700 rounded-lg p-8">
-            <TiktokLogo size={40} className="mx-auto text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No TikTok Accounts Connected</h3>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Direct posting to TikTok is coming soon. Check back later!</p> {/* MODIFIED Message */}
+          <div className="mt-6 text-center text-stone-500 dark:text-stone-400 border border-dashed border-stone-200 dark:border-stone-700 rounded-lg p-8">
+            <TiktokLogo size={40} className="mx-auto text-stone-400 dark:text-stone-500" />
+            <h3 className="mt-2 text-sm font-medium text-stone-900 dark:text-stone-100">No TikTok Accounts Connected</h3>
+            <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">Direct posting to TikTok is coming soon. Check back later!</p> {/* MODIFIED Message */}
           </div>
         )}
 
         {tiktokAccounts.length > 0 && !isLoadingTikTok && (
           <div className="mt-6 space-y-4">
             {tiktokAccounts.map(account => (
-              <div key={account.id} className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-lg overflow-hidden opacity-70 pointer-events-none"> {/* ADDED opacity and pointer-events */}
+              <div key={account.id} className="bg-neutral-100 dark:bg-neutral-900 border border-stone-100 dark:border-stone-800 rounded-lg overflow-hidden"> {/* REMOVED opacity and pointer-events */}
                 <div className="px-4 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       {account.user_info?.avatar_url ? (
                         <img className="h-12 w-12 rounded-full mr-3" src={account.user_info.avatar_url} alt="Avatar" />
                       ) : (
-                        <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mr-3">
-                          <UserCircle size={24} className="text-gray-400 dark:text-gray-500" />
+                        <div className="h-12 w-12 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mr-3">
+                          <UserCircle size={24} className="text-stone-400 dark:text-stone-500" />
                         </div>
                       )}
                       <div>
-                        <h3 className="text-base font-medium text-gray-900 dark:text-white">
+                        <h3 className="text-base font-medium text-stone-900 dark:text-stone-100">
                           {account.user_info?.display_name || 'TikTok Account'}
                           {account.user_info === null && <span className="ml-2 text-xs text-yellow-500">(Sync pending...)</span>}
                         </h3>
                         
                         <div className="flex space-x-4 mt-1">
                           {account.user_info?.follower_count !== undefined && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-sm text-stone-500 dark:text-stone-400">
                               {account.user_info.follower_count.toLocaleString()} followers
                             </p>
                           )}
                           {account.user_info?.video_count !== undefined && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-sm text-stone-500 dark:text-stone-400">
                               {account.user_info.video_count.toLocaleString()} videos
                             </p>
                           )}
@@ -1692,19 +1761,27 @@ function Settings() {
                     </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleSyncTikTokDetails(account.id)} // This will now call the disabled version
-                        disabled={true} // MODIFIED: Always disabled
-                        className="inline-flex items-center px-3 py-1.5 text-sm border border-gray-200 dark:border-zinc-700 rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                        onClick={() => handleSyncTikTokDetails(account.id)}
+                        disabled={isLoadingAction[account.id]?.sync || isLoadingAction[account.id]?.delete}
+                        className="inline-flex items-center px-3 py-1.5 text-sm border border-stone-200 dark:border-stone-700 rounded-md text-stone-700 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
                       >
-                        <ClockCounterClockwise size={16} className="mr-1.5" />
+                        {isLoadingAction[account.id]?.sync ? (
+                           <CircleNotch size={16} className="mr-1.5 animate-spin" />
+                        ) : (
+                           <ClockCounterClockwise size={16} className="mr-1.5" />
+                        )}
                         Sync
                       </button>
                       <button 
-                        onClick={() => handleDeleteTikTokAccountClick(account.id, account.user_info?.display_name || 'this account')} // This will now call the disabled version
-                        disabled={true} // MODIFIED: Always disabled
-                        className="inline-flex items-center px-3 py-1.5 text-sm border border-transparent rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                        onClick={() => handleDeleteTikTokAccountClick(account.id, account.user_info?.display_name || 'this account')}
+                        disabled={isLoadingAction[account.id]?.sync || isLoadingAction[account.id]?.delete}
+                        className="inline-flex items-center px-3 py-1.5 text-sm border border-transparent rounded-md text-stone-100 bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
                       >
-                        <Trash size={16} className="mr-1.5" />
+                        {isLoadingAction[account.id]?.delete ? (
+                          <CircleNotch size={16} className="mr-1.5 animate-spin" />
+                        ) : (
+                          <Trash size={16} className="mr-1.5" />
+                        )}
                         Disconnect
                       </button>
                     </div>
@@ -1720,25 +1797,65 @@ function Settings() {
 
   // --- NEW: Handler to Sync TikTok User Details (Disabled Version) ---
   const handleSyncTikTokDetails = async (integrationId) => {
-    // DISABLED
-    showCustomToast("TikTok account syncing is temporarily disabled.", "info");
-    return;
+    if (!integrationId) {
+      showCustomToast("Cannot sync: Integration ID is missing.", "error");
+      return;
+    }
+    setIsLoadingAction(prevState => ({ ...prevState, [integrationId]: { ...prevState[integrationId], sync: true } }));
+    showCustomToast("Syncing TikTok account details...", "info");
+
+    const updateTikTokUserDetails = httpsCallable(functions, 'updateTikTokUserDetails');
+    try {
+      const result = await updateTikTokUserDetails({ integrationId: integrationId });
+      if (result.data.success) {
+        showCustomToast(result.data.message || "TikTok details synced successfully!", "success");
+      } else {
+        throw new Error(result.data.message || "Failed to sync TikTok details.");
+      }
+    } catch (error) {
+      console.error("Error syncing TikTok details:", error);
+      showCustomToast(`Error syncing: ${error.message}`, "error");
+    } finally {
+      setIsLoadingAction(prevState => ({ ...prevState, [integrationId]: { ...prevState[integrationId], sync: false } }));
+    }
   };
 
-  // --- MODIFIED: Handle Delete Individual TikTok Account with Confirmation (Disabled Version) ---
   const handleDeleteTikTokAccountClick = (integrationId, accountName) => {
-    // DISABLED
-    showCustomToast("Disconnecting TikTok accounts is temporarily disabled.", "info");
-    return;
+    if (!integrationId) {
+        showCustomToast("Cannot delete: Integration ID is missing.", "error");
+        return;
+    }
+    setTikTokAccountToDelete({ id: integrationId, name: accountName || 'this account' });
+    setShowDeleteTikTokConfirmModal(true);
   };
 
-  // --- Confirm Delete TikTok Account (Disabled Version) ---
   const confirmDeleteTikTokAccount = async () => {
-    // DISABLED
-    showCustomToast("Disconnecting TikTok accounts is temporarily disabled.", "info");
-    if (showDeleteTikTokConfirmModal) setShowDeleteTikTokConfirmModal(false);
-    if (tikTokAccountToDelete) setTikTokAccountToDelete(null);
-    return;
+    if (!tikTokAccountToDelete || !tikTokAccountToDelete.id) {
+      showCustomToast("Deletion failed: No account selected or ID missing.", "error");
+      return;
+    }
+    const { id: integrationId } = tikTokAccountToDelete;
+
+    setIsLoadingAction(prevState => ({ ...prevState, [integrationId]: { ...prevState[integrationId], delete: true } }));
+    showCustomToast("Disconnecting TikTok account...", "info");
+
+    const deleteTikTokIntegration = httpsCallable(functions, 'deleteTikTokIntegration'); 
+    try {
+      const result = await deleteTikTokIntegration({ integrationId: integrationId });
+      if (result.data.success) {
+        showCustomToast(result.data.message || "TikTok account disconnected successfully.", "success");
+        setTiktokAccounts(prevAccounts => prevAccounts.filter(acc => acc.id !== integrationId));
+      } else {
+        throw new Error(result.data.message || "Failed to disconnect TikTok account.");
+      }
+    } catch (error) {
+      console.error("Error deleting TikTok integration:", error);
+      showCustomToast(`Error disconnecting: ${error.message}`, "error");
+    } finally {
+      setShowDeleteTikTokConfirmModal(false);
+      setTikTokAccountToDelete(null);
+      setIsLoadingAction(prevState => ({ ...prevState, [integrationId]: { ...prevState[integrationId], delete: false } }));
+    }
   };
 
   // --- Modified Creators Tab ---
@@ -1748,27 +1865,27 @@ function Settings() {
        {/* Header consistent with User tab */}
          <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 UGC Creators
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+              <span className="text-sm text-stone-500 dark:text-stone-400">
                 Manage your UGC creator assets
               </span>
             </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl mb-8">
+            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl mb-8">
               Upload images of your User-Generated Content creators. These visuals can be used in generated videos.
             </p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 -mt-6 mb-8 max-w-2xl">
+            <p className="text-xs text-stone-500 dark:text-stone-400 -mt-6 mb-8 max-w-2xl">
               Tip: You can also generate unique UGC-style creator images using Lungo AI's image generation features and then add them here!
             </p>
         </div>
 
       {/* Action Button - Moved below header */}
-      <div className="flex justify-end border-b border-gray-100 dark:border-zinc-800 pb-4">
+      <div className="flex justify-end border-b border-stone-100 dark:border-stone-800 pb-4">
         <button 
           onClick={() => setShowAddCreatorForm(!showAddCreatorForm)}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
         >
           {showAddCreatorForm ? <X size={16} /> : <Plus size={16} />}
           {showAddCreatorForm ? 'Cancel' : 'Add Creator'}
@@ -1777,10 +1894,10 @@ function Settings() {
       
       {/* Add Creator Form with improved layout */}
       {showAddCreatorForm && (
-        <form onSubmit={handleAddCreator} className="p-6 border border-gray-100 dark:border-zinc-800 rounded-lg space-y-5 bg-gray-50/50 dark:bg-zinc-900/30 mb-6">
-          <h3 className="text-lg font-medium text-black dark:text-white mb-2">Add New Creator</h3>
+        <form onSubmit={handleAddCreator} className="p-6 border border-stone-100 dark:border-stone-800 rounded-lg space-y-5 bg-neutral-50/50 dark:bg-neutral-900/30 mb-6">
+          <h3 className="text-lg font-medium text-black dark:text-stone-100 mb-2">Add New Creator</h3>
           <div>
-            <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+            <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
               Creator Name <span className="text-red-500">*</span>
             </label>
             <input 
@@ -1789,11 +1906,11 @@ function Settings() {
               onChange={(e) => setNewCreatorName(e.target.value)}
               placeholder="e.g., Influencer Jane"
               required
-              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
+              className="w-full px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+            <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
               Creator Image <span className="text-red-500">*</span>
             </label>
             <input 
@@ -1802,31 +1919,31 @@ function Settings() {
               ref={creatorFileInputRef} 
               onChange={(e) => setNewCreatorFile(e.target.files[0])}
               required
-              className="w-full text-sm text-gray-500 dark:text-zinc-400
+              className="w-full text-sm text-stone-500 dark:text-stone-400
                          file:mr-4 file:py-2 file:px-4
                          file:rounded-lg file:border-0
                          file:text-sm file:font-semibold
-                         file:bg-gray-100 file:dark:bg-zinc-800 
-                         file:text-gray-700 file:dark:text-zinc-200
-                         hover:file:bg-gray-200 hover:file:dark:bg-zinc-700
+                         file:bg-neutral-100 file:dark:bg-neutral-800 
+                         file:text-stone-700 file:dark:text-stone-200
+                         hover:file:bg-neutral-200 hover:file:dark:bg-neutral-700
                          cursor-pointer"
             />
             {newCreatorFile && (
-                <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Selected: {newCreatorFile.name}</p>
+                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Selected: {newCreatorFile.name}</p>
             )}
           </div>
           <div className="flex justify-end gap-3 pt-2">
              <button
                 type="button"
                 onClick={() => setShowAddCreatorForm(false)}
-                className="px-4 py-2 text-sm text-gray-700 dark:text-zinc-300 bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-stone-700 dark:text-stone-300 bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             >
                 Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-5 py-2 bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors disabled:opacity-50"
+              className="px-5 py-2 bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg text-sm hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"
             >
               {isLoading ? 'Adding...' : 'Add Creator'}
             </button>
@@ -1836,18 +1953,18 @@ function Settings() {
       
       {/* Creators List Grid */}
       {isLoading && !showAddCreatorForm && activeTab === 'creators' ? ( // Only show loading if this tab is active
-        <div className="flex justify-center py-8 text-gray-500 dark:text-zinc-400">
+        <div className="flex justify-center py-8 text-stone-500 dark:text-stone-400">
            <div className="flex items-center gap-2">
              <CircleNotch size={18} className="animate-spin"/> Loading Creators...
           </div>
         </div>
-      ) : !isLoading && creators.length === 0 && !showAddCreatorForm ? ( 
-        <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg">
-          <Camera size={36} className="text-gray-400 dark:text-zinc-600 mb-4" />
-          <p className="text-gray-500 dark:text-zinc-400 mb-4">No UGC creators added yet.</p>
+      ) : !isLoading && userCreators.length === 0 && !showAddCreatorForm ? ( 
+        <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-lg">
+          <Camera size={36} className="text-stone-400 dark:text-stone-600 mb-4" />
+          <p className="text-stone-500 dark:text-stone-400 mb-4">No UGC creators added yet.</p>
           <button 
             onClick={() => setShowAddCreatorForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white dark:bg-white dark:text-black text-sm rounded-lg hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black text-sm rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors"
           >
             <Plus size={16} />
             Add Your First Creator
@@ -1857,8 +1974,8 @@ function Settings() {
         // --- Grid Layout similar to Backgrounds ---
         // Adjusted column count AGAIN for even larger items
         <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {creators.map(creator => (
-            <div key={creator.id} className="relative aspect-[3/4] rounded-lg overflow-hidden group border border-gray-100 dark:border-zinc-800"> {/* Aspect ratio can be adjusted */}
+          {userCreators.map(creator => (
+            <div key={creator.id} className="relative aspect-[3/4] rounded-lg overflow-hidden group border border-stone-100 dark:border-stone-800"> {/* Aspect ratio can be adjusted */}
               <img 
                 src={creator.imageUrl || 'https://via.placeholder.com/150x200?text=No+Img'} 
                 alt={creator.name} 
@@ -1867,13 +1984,13 @@ function Settings() {
               />
               {/* Hover Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3">
-                 <p className="text-sm font-medium text-white truncate mb-1">{creator.name}</p>
+                 <p className="text-sm font-medium text-stone-100 truncate mb-1">{creator.name}</p>
                  {/* Action Buttons */}
                  <div className="absolute top-2 right-2 flex gap-1.5">
                    <button 
                        onClick={() => handleDeleteCreator(creator.id, creator.imageUrl, creator.name)} // Use updated handler
                        disabled={isLoading}
-                       className="p-1.5 bg-black/50 text-white rounded-full hover:bg-red-600 transition-colors disabled:opacity-50"
+                       className="p-1.5 bg-black/50 text-stone-100 rounded-full hover:bg-red-600 transition-colors disabled:opacity-50"
                        aria-label={`Delete ${creator.name}`}
                        title="Delete Creator"
                    >
@@ -1896,24 +2013,24 @@ function Settings() {
         {/* Header consistent with User tab */}
         <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Background Images
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+              <span className="text-sm text-stone-500 dark:text-stone-400">
                 Manage backgrounds for video generation
               </span>
             </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl mb-8">
+            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl mb-8">
               Upload your own background images or select from our library. These images will be used as backgrounds in generated TikToks.
             </p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 -mt-6 mb-8 max-w-2xl">
+            <p className="text-xs text-stone-500 dark:text-stone-400 -mt-6 mb-8 max-w-2xl">
               Tip: Don't forget, you can generate custom background scenes using Lungo AI's image generation, then upload them here or add directly from your generation history!
             </p>
         </div>
 
       {/* Header Area with action buttons - Moved below header */}
-      <div className="flex flex-wrap justify-end items-center gap-2.5 border-b border-gray-100 dark:border-zinc-800 pb-4">
+      <div className="flex flex-wrap justify-end items-center gap-2.5 border-b border-stone-100 dark:border-stone-800 pb-4">
           {/* Library Button with improved spacing */}
           <button
             onClick={() => {
@@ -1927,7 +2044,7 @@ function Settings() {
               }
             }}
             disabled={isLoadingLibrary || isLoading}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-100 text-gray-800 dark:bg-zinc-800 dark:text-zinc-100 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-neutral-100 text-stone-800 dark:bg-neutral-800 dark:text-stone-100 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
           >
             {showLibrary ? <X size={16} /> : <ImageIcon size={16} />} 
             {showLibrary ? 'Cancel Library' : 'Add from Library'}
@@ -1938,7 +2055,7 @@ function Settings() {
              <button 
                onClick={() => setShowAddBackgroundForm(!showAddBackgroundForm)}
                disabled={isLoading}
-               className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors disabled:opacity-50"
+               className="flex items-center gap-1.5 px-4 py-2 text-sm bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"
              >
                {showAddBackgroundForm ? <X size={16} /> : <Plus size={16} />}
                {showAddBackgroundForm ? 'Cancel Upload' : 'Upload Custom'}
@@ -1948,10 +2065,10 @@ function Settings() {
 
       {/* Add Custom Background Form with improved layout */}
       {showAddBackgroundForm && !showLibrary && (
-        <form onSubmit={handleAddCustomBackground} className="p-6 border border-gray-100 dark:border-zinc-800 rounded-lg space-y-5 bg-gray-50/50 dark:bg-zinc-900/30 mb-6">
-           <h3 className="text-lg font-medium text-black dark:text-white mb-2">Upload Custom Background</h3>
+        <form onSubmit={handleAddCustomBackground} className="p-6 border border-stone-100 dark:border-stone-800 rounded-lg space-y-5 bg-neutral-50/50 dark:bg-neutral-900/30 mb-6">
+           <h3 className="text-lg font-medium text-black dark:text-stone-100 mb-2">Upload Custom Background</h3>
            <div>
-             <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
+             <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
                Background Name <span className="text-red-500">*</span>
              </label>
              <input 
@@ -1960,12 +2077,12 @@ function Settings() {
                onChange={(e) => setNewBackgroundName(e.target.value)}
                placeholder="e.g., Office Desk Setup"
                required
-               className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
+               className="w-full px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
              />
            </div>
            <div>
-             <label className="block text-sm text-gray-700 dark:text-zinc-300 mb-1.5">
-               Image File <span className="text-red-500">*</span> <span className="text-xs text-gray-400">(Recommended: 9:16 aspect ratio)</span>
+             <label className="block text-sm text-stone-700 dark:text-stone-300 mb-1.5">
+               Image File <span className="text-red-500">*</span> <span className="text-xs text-stone-400">(Recommended: 9:16 aspect ratio)</span>
              </label>
              <input 
                type="file" 
@@ -1973,18 +2090,18 @@ function Settings() {
                ref={backgroundFileInputRef} 
                onChange={(e) => setNewBackgroundFile(e.target.files[0])}
                required
-               className="w-full text-sm text-gray-500 dark:text-zinc-400
+               className="w-full text-sm text-stone-500 dark:text-stone-400
                           file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold
-                          file:bg-gray-100 file:dark:bg-zinc-800 file:text-gray-700 file:dark:text-zinc-200
-                          hover:file:bg-gray-200 hover:file:dark:bg-zinc-700 cursor-pointer"
+                          file:bg-neutral-100 file:dark:bg-neutral-800 file:text-stone-700 file:dark:text-stone-200
+                          hover:file:bg-neutral-200 hover:file:dark:bg-neutral-700 cursor-pointer"
              />
              {newBackgroundFile && (
-                 <p className="mt-2 text-xs text-gray-500 dark:text-zinc-400">Selected: {newBackgroundFile.name}</p>
+                 <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Selected: {newBackgroundFile.name}</p>
              )}
            </div>
            <div className="flex justify-end gap-3 pt-2">
-             <button type="button" onClick={() => setShowAddBackgroundForm(false)} className="px-4 py-2 text-sm text-gray-700 dark:text-zinc-300 bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors">Cancel</button>
-             <button type="submit" disabled={isLoading} className="px-5 py-2 bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors disabled:opacity-50"> {isLoading ? 'Uploading...' : 'Add Background'} </button>
+             <button type="button" onClick={() => setShowAddBackgroundForm(false)} className="px-4 py-2 text-sm text-stone-700 dark:text-stone-300 bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors">Cancel</button>
+             <button type="submit" disabled={isLoading} className="px-5 py-2 bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg text-sm hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"> {isLoading ? 'Uploading...' : 'Add Background'} </button>
            </div>
         </form>
       )}
@@ -1994,13 +2111,13 @@ function Settings() {
           <div className="space-y-6">
               {/* Header and button with improved layout */}
               <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-black dark:text-white">Select Backgrounds from Library</h3>
+                  <h3 className="text-lg font-medium text-black dark:text-stone-100">Select Backgrounds from Library</h3>
                   {/* Save Button - improved visibility */}
                   {!isLoadingLibrary && libraryImages.length > 0 && (
                       <button
                           onClick={handleSaveSelectedLibraryImages}
                           disabled={isLoading || selectedLibraryImages.length === 0}
-                          className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 py-1.5 bg-blue-600 text-stone-100 rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                           {isLoading ? 'Saving...' : `Add (${selectedLibraryImages.length}) Selected`}
                       </button>
@@ -2008,15 +2125,15 @@ function Settings() {
               </div>
 
               {isLoadingLibrary ? (
-                  <div className="flex justify-center py-8 text-gray-500 dark:text-zinc-400">
+                  <div className="flex justify-center py-8 text-stone-500 dark:text-stone-400">
                       <div className="flex items-center gap-2">
                           <CircleNotch size={18} className="animate-spin"/> Loading Library...
                       </div>
                   </div>
               ) : libraryImages.length === 0 ? (
-                   <div className="py-12 flex flex-col items-center justify-center text-center border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg">
-                      <ImageIcon size={36} className="text-gray-400 dark:text-zinc-600 mb-4" />
-                      <p className="text-gray-500 dark:text-zinc-400 mb-4">No images found in the library folder (`lungo-backgrounds`).</p>
+                   <div className="py-12 flex flex-col items-center justify-center text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-lg">
+                      <ImageIcon size={36} className="text-stone-400 dark:text-stone-600 mb-4" />
+                      <p className="text-stone-500 dark:text-stone-400 mb-4">No images found in the library folder (`lungo-backgrounds`).</p>
                    </div>
               ) : (
                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -2026,7 +2143,7 @@ function Settings() {
                           return (
                               <div 
                                   key={url} 
-                                  className={`relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer group border-2 ${isSelected ? 'border-blue-500' : isAlreadyAdded ? 'border-green-500/50' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}
+                                  className={`relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer group border-2 ${isSelected ? 'border-blue-500' : isAlreadyAdded ? 'border-green-500/50' : 'border-transparent hover:border-stone-300 dark:hover:border-stone-600'}`}
                                   onClick={() => toggleLibrarySelection(url)}
                                   title={isAlreadyAdded ? `${name} (Already Added)` : name}
                               >
@@ -2039,7 +2156,7 @@ function Settings() {
                                   {/* Selection / Added Indicator */}
                                   {(isSelected || isAlreadyAdded) && (
                                       <div className={`absolute inset-0 flex items-center justify-center ${isSelected ? 'bg-blue-500/50' : 'bg-green-800/60'}`}>
-                                           <CheckCircle size={24} weight="fill" className="text-white" />
+                                           <CheckCircle size={24} weight="fill" className="text-stone-100" />
                                       </div>
                                   )}
                                   {/* Dim overlay for added items */}
@@ -2058,16 +2175,16 @@ function Settings() {
       {!showLibrary && !showAddBackgroundForm && (
           <>
             {isLoading && activeTab === 'backgrounds' ? ( // Only show loading if this tab is active
-              <div className="flex justify-center py-8 text-gray-500 dark:text-zinc-400">
+              <div className="flex justify-center py-8 text-stone-500 dark:text-stone-400">
                  <div className="flex items-center gap-2">
                      <CircleNotch size={18} className="animate-spin"/> Loading Your Backgrounds...
                  </div>
               </div>
-            ) : backgrounds.length === 0 ? (
-              <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg">
-                <ImageIcon size={40} className="text-gray-400 dark:text-zinc-600 mb-4" />
-                <p className="text-gray-500 dark:text-zinc-400 mb-2">You haven't added any backgrounds yet.</p>
-                <p className="text-xs text-gray-400 dark:text-zinc-500 mb-4">Upload your own or add from the library.</p>
+            ) : userBackgrounds.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center border border-dashed border-stone-200 dark:border-stone-800 rounded-lg">
+                <ImageIcon size={40} className="text-stone-400 dark:text-stone-600 mb-4" />
+                <p className="text-stone-500 dark:text-stone-400 mb-2">You haven't added any backgrounds yet.</p>
+                <p className="text-xs text-stone-400 dark:text-stone-500 mb-4">Upload your own or add from the library.</p>
                 
                 {/* Added buttons for quick action */}
                 <div className="flex gap-3 mt-2">
@@ -2076,14 +2193,14 @@ function Settings() {
                       setShowLibrary(true);
                       fetchLibraryBackgrounds();
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 text-gray-800 dark:bg-zinc-800 dark:text-zinc-100 rounded-lg"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neutral-100 text-stone-800 dark:bg-neutral-800 dark:text-stone-100 rounded-lg"
                   >
                     <ImageIcon size={14} />
                     Browse Library
                   </button>
                   <button 
                     onClick={() => setShowAddBackgroundForm(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 text-white dark:bg-white dark:text-black rounded-lg"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-lg"
                   >
                     <Plus size={14} />
                     Upload Custom
@@ -2092,7 +2209,7 @@ function Settings() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                  {backgrounds.map(bg => (
+                  {userBackgrounds.map(bg => (
                       <div key={bg.id} className="relative aspect-[9/16] rounded-lg overflow-hidden group">
                            <img 
                                src={bg.imageUrl || 'https://via.placeholder.com/180x320?text=No+Img'} 
@@ -2101,18 +2218,18 @@ function Settings() {
                                loading="lazy"
                            />
                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3">
-                              <p className="text-sm font-medium text-white truncate mb-1">{bg.name}</p>
+                              <p className="text-sm font-medium text-stone-100 truncate mb-1">{bg.name}</p>
                               <button 
                                   onClick={() => handleDeleteBackground(bg.id, bg.imageUrl, bg.isFromLibrary, bg.name)} 
                                   disabled={isLoading}
-                                  className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-red-600 transition-colors disabled:opacity-50"
+                                  className="absolute top-2 right-2 p-1.5 bg-black/50 text-stone-100 rounded-full hover:bg-red-600 transition-colors disabled:opacity-50"
                                   aria-label={`Delete ${bg.name}`}
                               >
                                 <Trash size={14} />
                               </button>
                            </div>
                            {bg.isFromLibrary && (
-                               <div className="absolute top-2 left-2 bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-medium" title="Added from Library">
+                               <div className="absolute top-2 left-2 bg-blue-500 text-stone-100 text-[9px] px-1.5 py-0.5 rounded-full font-medium" title="Added from Library">
                                    Lib
                                </div>
                            )}
@@ -2130,25 +2247,25 @@ function Settings() {
   const renderFeatureRequestsTab = () => (
      <div className="w-full"> 
       <div className="px-6 lg:px-0 space-y-6"> 
-        <div className="text-left border-b border-gray-100 dark:border-zinc-800 pb-8 mb-8"> 
+        <div className="text-left border-b border-stone-100 dark:border-stone-800 pb-8 mb-8"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Feature Requests
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-              <span className="text-sm text-gray-500 dark:text-zinc-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+              <span className="text-sm text-stone-500 dark:text-stone-400">
                 Vote on upcoming features or submit your own
               </span>
             </div>
-            <p className="text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
+            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl">
               Help us prioritize what to build next by upvoting the features you want most, or let us know what you'd like to see!
             </p>
         </div>
 
         {/* --- NEW: Form to submit a new feature request --- */}
-        <form onSubmit={handleNewFeatureRequestSubmit} className="mb-10 p-5 border border-gray-100 dark:border-zinc-800 rounded-lg bg-gray-50/50 dark:bg-zinc-900/30">
-          <h3 className="text-md font-medium text-gray-800 dark:text-zinc-100 mb-3">Suggest a New Feature</h3>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">
+        <form onSubmit={handleNewFeatureRequestSubmit} className="mb-10 p-5 border border-stone-100 dark:border-stone-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30">
+          <h3 className="text-md font-medium text-stone-800 dark:text-stone-100 mb-3">Suggest a New Feature</h3>
+          <p className="text-xs text-stone-500 dark:text-stone-400 mb-3">
             Have an idea that's not on the list? Describe it below. Your suggestion will be private to you.
           </p>
           <textarea
@@ -2156,14 +2273,14 @@ function Settings() {
             onChange={(e) => setNewFeatureRequestText(e.target.value)}
             placeholder="Describe your feature idea..."
             rows={3}
-            className="w-full px-3 py-2 rounded-md bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-sm text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-zinc-600"
+            className="w-full px-3 py-2 rounded-md bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-sm text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
             required
           />
           <div className="mt-3 flex justify-end">
             <button
               type="submit"
               disabled={isSubmittingRequest || !newFeatureRequestText.trim()}
-              className="px-4 py-2 bg-gray-800 text-white dark:bg-white dark:text-black rounded-md text-sm font-medium hover:bg-gray-700 dark:hover:bg-zinc-200 transition-colors disabled:opacity-60 flex items-center justify-center min-w-[110px]" // Added min-w for consistent size
+              className="px-4 py-2 bg-neutral-800 text-stone-100 dark:bg-neutral-100 dark:text-black rounded-md text-sm font-medium hover:bg-neutral-700 dark:hover:bg-neutral-200 transition-colors disabled:opacity-60 flex items-center justify-center min-w-[110px]" // Added min-w for consistent size
             >
               {isSubmittingRequest ? (
                 <CircleNotch size={18} className="animate-spin" /> // Only spinner when submitting
@@ -2176,7 +2293,7 @@ function Settings() {
         {/* --- End New Feature Request Form --- */}
       
       {isFetchingRequests ? (
-        <div className="flex justify-center py-16 text-gray-500 dark:text-zinc-400">
+        <div className="flex justify-center py-16 text-stone-500 dark:text-stone-400">
           <div className="flex flex-col items-center">
             <CircleNotch size={24} className="animate-spin mb-4" />
             <p className="text-sm">Loading requests</p>
@@ -2184,11 +2301,11 @@ function Settings() {
         </div>
       ) : featureRequests.length === 0 ? (
         <div className="py-20 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 bg-gray-50 dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-full flex items-center justify-center mb-4 shadow-sm">
-            <Sparkle size={22} weight="light" className="text-gray-400 dark:text-zinc-600" />
+          <div className="w-12 h-12 bg-neutral-50 dark:bg-neutral-900 border border-stone-100 dark:border-stone-800 rounded-full flex items-center justify-center mb-4 shadow-sm">
+            <Sparkle size={22} weight="light" className="text-stone-400 dark:text-stone-600" />
           </div>
-          <p className="text-base text-gray-700 dark:text-zinc-300 font-medium mb-2">No feature requests yet</p>
-          <p className="text-sm text-gray-500 dark:text-zinc-400 max-w-md">
+          <p className="text-base text-stone-700 dark:text-stone-300 font-medium mb-2">No feature requests yet</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400 max-w-md">
             Feature requests will appear here. Upvote the ones you'd like to see implemented.
           </p>
         </div>
@@ -2197,12 +2314,12 @@ function Settings() {
           {/* Public feature requests list */}
           {featureRequests.length > 0 && (
             <>
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-zinc-300 mb-2 px-2 pt-2">Vote on Public Requests</h4>
-          <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+              <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-2 px-2 pt-2">Vote on Public Requests</h4>
+          <div className="divide-y divide-stone-100 dark:divide-stone-800">
             {featureRequests.map((request) => (
               <div 
                 key={request.id} 
-                className="flex items-center py-3.5 px-2 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors"
+                className="flex items-center py-3.5 px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
               >
                 <div className="mr-3">
                   <button 
@@ -2210,8 +2327,8 @@ function Settings() {
                         disabled={votingCooldown[request.id] || isLoading || isSubmittingRequest} // Also disable if submitting new
                     className={`relative flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 
                       ${request.userUpvoted 
-                        ? 'bg-gray-900 text-white dark:bg-white dark:text-black' 
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'} 
+                        ? 'bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black' 
+                        : 'bg-neutral-50 hover:bg-neutral-100 text-stone-500 hover:text-stone-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-stone-400 dark:hover:text-stone-200'} 
                       ${votingCooldown[request.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
                     aria-label={request.userUpvoted ? "Remove vote" : "Upvote"}
                     title={request.userUpvoted ? "Remove vote" : "Upvote"}
@@ -2219,17 +2336,17 @@ function Settings() {
                     <ArrowUp size={14} weight={request.userUpvoted ? "fill" : "regular"} />
                     
                     {votingCooldown[request.id] && (
-                      <span className="absolute inset-0 rounded-md border-2 border-gray-900 dark:border-white animate-ping opacity-30"></span>
+                      <span className="absolute inset-0 rounded-md border-2 border-stone-900 dark:border-stone-100 animate-ping opacity-30"></span>
                     )}
                   </button>
                 </div>
                 
-                <span className="text-sm text-gray-800 dark:text-zinc-200">
+                <span className="text-sm text-stone-800 dark:text-stone-200">
                   {request.title}
                 </span>
                 {/* REMOVE VOTE COUNT DISPLAY (Kept commented out) */}
                 {/* 
-                <span className="ml-auto text-xs font-medium text-gray-500 dark:text-zinc-400 pr-2">
+                <span className="ml-auto text-xs font-medium text-stone-500 dark:text-stone-400 pr-2">
                     {request.votes} {request.votes === 1 ? 'vote' : 'votes'}
                 </span>
                 */}
@@ -2237,7 +2354,7 @@ function Settings() {
             ))}
           </div>
           <div className="pt-3 px-2">
-            <p className="text-xs text-gray-500 dark:text-zinc-500">
+            <p className="text-xs text-stone-500 dark:text-stone-500">
                   Upvoting helps us prioritize which features to implement.
             </p>
           </div>
@@ -2247,13 +2364,13 @@ function Settings() {
 
           {/* User's Private Submitted Requests List */}
           {userPrivateRequests.length > 0 && (
-            <div className="mt-8 pt-6 border-t border-gray-100 dark:border-zinc-800">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-zinc-300 mb-3 px-2">My Submitted Ideas</h4>
-              <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+            <div className="mt-8 pt-6 border-t border-stone-100 dark:border-stone-800">
+              <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3 px-2">My Submitted Ideas</h4>
+              <div className="divide-y divide-stone-100 dark:divide-stone-800">
                 {userPrivateRequests.map((request) => (
-                  <div key={request.id} className="flex items-center justify-between py-3 px-2 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors">
-                    <span className="text-sm text-gray-700 dark:text-zinc-300">{request.title}</span>
-                    <span className="text-xs text-gray-400 dark:text-zinc-500">
+                  <div key={request.id} className="flex items-center justify-between py-3 px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
+                    <span className="text-sm text-stone-700 dark:text-stone-300">{request.title}</span>
+                    <span className="text-xs text-stone-400 dark:text-stone-500">
                       Submitted: {request.createdAt?.toDate ? request.createdAt.toDate().toLocaleDateString() : 'Recently'}
                     </span>
                     {/* Add delete button for private requests later if needed */}
@@ -2267,8 +2384,8 @@ function Settings() {
           {/* Show if no requests at all (public or private) */}
           {featureRequests.length === 0 && userPrivateRequests.length === 0 && (
              <div className="py-10 flex flex-col items-center justify-center text-center">
-               <Sparkle size={28} weight="light" className="text-gray-400 dark:text-zinc-600 mb-3" />
-               <p className="text-sm text-gray-500 dark:text-zinc-400">
+               <Sparkle size={28} weight="light" className="text-stone-400 dark:text-stone-600 mb-3" />
+               <p className="text-sm text-stone-500 dark:text-stone-400">
                  No feature requests yet. Be the first to suggest something!
                </p>
              </div>
@@ -2323,7 +2440,7 @@ function Settings() {
 
       // Update local state and URL set
       const newBg = { id: docRef.id, ...backgroundData };
-      setBackgrounds(prev => [...prev, newBg]);
+      setUserBackgrounds(prev => [...prev, newBg]);
       setUserBackgroundUrls(prev => new Set(prev).add(newBg.imageUrl));
 
       // Reset form
@@ -2414,14 +2531,14 @@ function Settings() {
 
       // 3. Update local state
       if (type === 'background') {
-        setBackgrounds(prev => prev.filter(b => b.id !== id));
+        setUserBackgrounds(prev => prev.filter(b => b.id !== id));
         setUserBackgroundUrls(prev => {
           const newSet = new Set(prev);
           newSet.delete(imageUrl);
           return newSet;
         });
       } else if (type === 'creator') {
-        setCreators(prev => prev.filter(c => c.id !== id));
+        setUserCreators(prev => prev.filter(c => c.id !== id));
       }
       
       // alert(deleteSuccessMessage);
@@ -2502,6 +2619,7 @@ function Settings() {
       
       try {
           await batch.commit();
+          setUserBackgrounds(prev => [...prev, ...newBackgroundsToAdd]);
           setBackgrounds(prev => [...prev, ...newBackgroundsToAdd]);
           setUserBackgroundUrls(newUrlsToAdd);
           setSelectedLibraryImages([]); // Clear selection
@@ -2552,27 +2670,34 @@ function Settings() {
     }
   };
 
-  // NEW: Function to show custom toast
-  const showCustomToast = (message, type = 'info') => { // type can be 'info', 'success', 'error'
-    setToastMessage({ text: message, type: type });
-    setShowToast(true);
-
-    // Clear existing timeout if any
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-
-    // Auto-hide after 3 seconds (adjust as needed)
-    toastTimeoutRef.current = setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
-  };
-
   // --- Handle Add TikTok Account --- // REWRITTEN FOR OAUTH (Disabled Version)
   const handleConnectTikTokAccount = async () => {
-    // DISABLED
-    showCustomToast("Connecting new TikTok accounts is temporarily disabled.", "info");
-    return;
+    setIsLoadingTikTok(true); // Use a specific loader for this action
+    showCustomToast("Preparing to connect with TikTok...", "info");
+
+    try {
+      // 1. Generate a unique state string for CSRF protection
+      const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('tiktok_auth_state', state);
+
+      // 2. Define the redirect URI (must match TikTok App config and callback component)
+      const REDIRECT_URI = `${window.location.origin}/auth/tiktok/callback`;
+      
+      // 3. Call the Firebase Function to get the TikTok Auth URL
+      const getTikTokAuthUrl = httpsCallable(functions, 'getTikTokAuthUrl');
+      const result = await getTikTokAuthUrl({ redirectUri: REDIRECT_URI, state: state });
+
+      if (result.data.authorizationUrl) {
+        // 4. Redirect the user to TikTok's authorization page
+        window.location.href = result.data.authorizationUrl;
+      } else {
+        throw new Error("Could not retrieve TikTok authorization URL.");
+      }
+    } catch (error) {
+      console.error("Error initiating TikTok connection:", error);
+      showCustomToast(`Error connecting to TikTok: ${error.message}`, "error");
+      setIsLoadingTikTok(false);
+    }
   };
 
   // --- Handle Delete TikTok Account (This one might be a general delete, ensure it's also disabled or removed if not used elsewhere) ---
@@ -2603,8 +2728,8 @@ function Settings() {
                   className={`
                     w-full text-left px-3 py-2 rounded-md flex items-center gap-2.5 transition-colors duration-150 ease-in-out
                     ${activeTab === tab.id
-                      ? 'bg-gray-100 dark:bg-zinc-800 text-black dark:text-white font-medium' 
-                      : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-900/50 hover:text-black dark:hover:text-white'}
+                      ? 'bg-neutral-100 dark:bg-neutral-800 text-black dark:text-stone-100 font-medium' 
+                      : 'text-stone-600 dark:text-stone-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 hover:text-black dark:hover:text-stone-100'}
                   `}
                   aria-current={activeTab === tab.id ? 'page' : undefined}
                 >
@@ -2612,7 +2737,7 @@ function Settings() {
                   <span className="text-sm">{tab.label}</span>
                   
                   {activeTab === tab.id && (
-                    <span className="ml-auto h-5 w-1 bg-black dark:bg-white rounded-full"></span> 
+                    <span className="ml-auto h-5 w-1 bg-black dark:bg-neutral-100 rounded-full"></span> 
                   )}
                 </button>
               ))}
@@ -2620,7 +2745,7 @@ function Settings() {
           </div>
         </aside>
 
-        <main className="flex-1 py-4 px-8 border-l border-gray-100 dark:border-zinc-800/60 min-h-screen relative"> {/* Added relative for toast positioning */}
+        <main className="flex-1 py-4 px-8 border-l border-stone-100 dark:border-stone-800/60 min-h-screen relative"> {/* Added relative for toast positioning */}
           <div>
             {renderTabContent()}
           </div>
@@ -2629,9 +2754,9 @@ function Settings() {
           {showToast && toastMessage && (
             <div 
               className={`fixed top-5 right-5 z-[100] px-6 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 ease-in-out transform ${showToast ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'} 
-                          ${toastMessage.type === 'success' ? 'bg-green-500 text-white' : 
-                            toastMessage.type === 'error' ? 'bg-red-500 text-white' : 
-                            'bg-gray-800 text-white dark:bg-gray-100 dark:text-black'}`}
+                          ${toastMessage.type === 'success' ? 'bg-green-500 text-stone-100' : 
+                            toastMessage.type === 'error' ? 'bg-red-500 text-stone-100' : 
+                            'bg-neutral-800 text-stone-100 dark:bg-neutral-100 dark:text-black'}`}
             >
               {toastMessage.text}
               <button 
@@ -2653,7 +2778,7 @@ function Settings() {
           onClick={() => setShowDeleteConfirmModal(false)} // Close on backdrop click
         >
           <div 
-            className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
+            className="bg-neutral-100 dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()} // Prevent closing modal when clicking inside
           >
             <div className="p-6">
@@ -2668,11 +2793,11 @@ function Settings() {
                 </div>
                 <div className="flex-1">
                    {/* Dynamic Title */}
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">
                      {itemToDelete?.type === 'creator' ? 'Delete Creator?' : 'Remove Background?'}
                   </h3>
                    {/* Dynamic Text */}
-                  <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
+                  <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
                     {itemToDelete?.type === 'creator' ? (
                         <>Are you sure you want to delete the creator "<span className="font-semibold">{itemToDelete.name || 'this creator'}</span>"? This will also permanently delete their image file.</>
                     ) : (
@@ -2686,12 +2811,12 @@ function Settings() {
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 dark:bg-zinc-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
+            <div className="bg-neutral-50 dark:bg-neutral-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
               <button
                 type="button"
                 disabled={isLoading}
                 onClick={confirmItemDeletion} // Use the updated handler
-                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-stone-100 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                  {/* Dynamic Button Text */}
                 {isLoading ? 'Processing...' : (itemToDelete?.type === 'creator' ? 'Delete Creator' : 'Remove Background')}
@@ -2700,7 +2825,7 @@ function Settings() {
                 type="button"
                 onClick={() => setShowDeleteConfirmModal(false)}
                 disabled={isLoading}
-                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-gray-300 dark:border-zinc-600 shadow-sm px-4 py-2 bg-white dark:bg-zinc-700 text-base font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-stone-300 dark:border-stone-600 shadow-sm px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-base font-medium text-stone-700 dark:text-stone-200 hover:bg-neutral-50 dark:hover:bg-neutral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-400 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -2716,7 +2841,7 @@ function Settings() {
           onClick={() => setShowDeleteProductConfirmModal(false)} // Close on backdrop click
         >
           <div 
-            className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
+            className="bg-neutral-100 dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()} // Prevent closing modal when clicking inside
           >
             <div className="p-6">
@@ -2725,20 +2850,20 @@ function Settings() {
                   <Package size={24} className="text-red-600 dark:text-red-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Delete Product?</h3>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
+                  <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">Delete Product?</h3>
+                  <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
                     Are you sure you want to delete the product "<span className="font-semibold">{productToDelete.name || 'this product'}</span>"? 
                     This will permanently delete the product data, its logo, and its associated media file. This action cannot be undone.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 dark:bg-zinc-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
+            <div className="bg-neutral-50 dark:bg-neutral-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
               <button
                 type="button"
                 disabled={isLoading}
                 onClick={confirmProductDeletion}
-                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-stone-100 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                 {isLoading ? 'Deleting...' : 'Delete Product'}
               </button>
@@ -2746,7 +2871,7 @@ function Settings() {
                 type="button"
                 onClick={() => setShowDeleteProductConfirmModal(false)}
                 disabled={isLoading}
-                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-gray-300 dark:border-zinc-600 shadow-sm px-4 py-2 bg-white dark:bg-zinc-700 text-base font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-stone-300 dark:border-stone-600 shadow-sm px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-base font-medium text-stone-700 dark:text-stone-200 hover:bg-neutral-50 dark:hover:bg-neutral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-400 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -2762,7 +2887,7 @@ function Settings() {
           onClick={() => setShowDeleteAccountConfirmModal(false)} 
         >
           <div 
-            className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
+            className="bg-neutral-100 dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()} 
           >
             <div className="p-6">
@@ -2771,20 +2896,20 @@ function Settings() {
                   <WarningCircle size={24} className="text-red-600 dark:text-red-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Delete Your Account?</h3>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-zinc-400">
+                  <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">Delete Your Account?</h3>
+                  <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
                     Are you absolutely sure you want to delete your account? This action is <span className="font-bold">permanent and cannot be undone</span>. 
                     All your data, including products, creators, generated content history, and settings will be permanently removed.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 dark:bg-zinc-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
+            <div className="bg-neutral-50 dark:bg-neutral-800/50 px-6 py-4 flex flex-col sm:flex-row-reverse sm:gap-3">
               <button
                 type="button"
                 disabled={isLoading}
                 onClick={confirmDeleteAccount}
-                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-stone-100 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                 {isLoading ? (<><CircleNotch size={16} className="animate-spin mr-2" /> Deleting...</>) : 'Yes, Delete My Account'}
               </button>
@@ -2792,7 +2917,7 @@ function Settings() {
                 type="button"
                 onClick={() => setShowDeleteAccountConfirmModal(false)}
                 disabled={isLoading}
-                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-gray-300 dark:border-zinc-600 shadow-sm px-4 py-2 bg-white dark:bg-zinc-700 text-base font-medium text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-offset-zinc-900 sm:text-sm disabled:opacity-50"
+                className="mt-3 w-full sm:mt-0 sm:w-auto inline-flex justify-center rounded-md border border-stone-300 dark:border-stone-600 shadow-sm px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-base font-medium text-stone-700 dark:text-stone-200 hover:bg-neutral-50 dark:hover:bg-neutral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-400 dark:focus:ring-offset-stone-900 sm:text-sm disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -2804,9 +2929,9 @@ function Settings() {
       {/* Delete TikTok Account Confirmation Modal */}
       {showDeleteTikTokConfirmModal && tikTokAccountToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Confirm Disconnect (Disabled)</h3> {/* MODIFIED */}
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">Confirm Disconnect (Disabled)</h3> {/* MODIFIED */}
+            <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
                Disconnecting TikTok accounts (<strong className="font-semibold">{tikTokAccountToDelete.name || tikTokAccountToDelete.id}</strong>) is temporarily disabled.
             </p>
             <div className="mt-6 flex justify-end space-x-3">
@@ -2815,14 +2940,14 @@ function Settings() {
                   setShowDeleteTikTokConfirmModal(false);
                   setTikTokAccountToDelete(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 rounded-md hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:focus:ring-offset-zinc-800"
+                className="px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-300 bg-neutral-100 dark:bg-neutral-700 border border-stone-300 dark:border-stone-600 rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:focus:ring-offset-stone-800"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDeleteTikTokAccount} // This will now show a toast and do nothing
                 disabled // MODIFIED: Button itself disabled too
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-zinc-800 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-stone-100 bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-stone-800 disabled:opacity-50"
               >
                 Disconnect Account
               </button>

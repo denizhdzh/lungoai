@@ -15,8 +15,8 @@ const planCreditLimits = {
   "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 15, videos: 10, slideshows: 30 }, // Monthly
   "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 15, videos: 10, slideshows: 30 }, // Yearly
   // Pro Plan
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { images: 50, videos: 40, slideshows: 100 }, // Monthly
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { images: 50, videos: 40, slideshows: 100 }, // Yearly
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { images: 50, videos: 40, slideshows: 100 }, // Monthly
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": { images: 50, videos: 40, slideshows: 100 }, // Yearly
   // Business Plan
   "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 120, videos: 90, slideshows: 250 }, // Monthly
   "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 120, videos: 90, slideshows: 250 } // Yearly
@@ -283,7 +283,9 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
   const [editedSlideTexts, setEditedSlideTexts] = useState([...(generation.slideTexts || [])]);
   const [selectedBackgroundId, setSelectedBackgroundId] = useState(generation.selectedBackgroundId || '');
   const [selectedTextColor, setSelectedTextColor] = useState(generation.textColor || 'white');
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(2);
+  const [textPosition, setTextPosition] = useState(generation.textPosition || 'center');
+  const [textSize, setTextSize] = useState(generation.textSize || 'medium');
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [textOpacity, setTextOpacity] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -294,7 +296,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
   const [showSaveBackgroundInput, setShowSaveBackgroundInput] = useState(false);
   const [creatorAssetName, setCreatorAssetName] = useState('');
   const [backgroundAssetName, setBackgroundAssetName] = useState('');
-  const [activeEditTab, setActiveEditTab] = useState('background'); // New state for tab system
+  const [activeEditTab, setActiveEditTab] = useState('text'); // Changed default to text tab
 
   const videoRef = useRef(null);
 
@@ -306,6 +308,8 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
       const initialState = {
         selectedBackgroundId: generation.selectedBackgroundId || '',
         textColor: generation.textColor || 'white',
+        textPosition: generation.textPosition || 'center',
+        textSize: generation.textSize || 'medium',
         slideTexts: [...(generation.slideTexts || [])],
         hookText: generation.hookText || '',
       };
@@ -316,6 +320,8 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
       setEditedSlideTexts([...(generation.slideTexts || [])]);
       setSelectedBackgroundId(generation.selectedBackgroundId || '');
       setSelectedTextColor(generation.textColor || 'white');
+      setTextPosition(generation.textPosition || 'center');
+      setTextSize(generation.textSize || 'medium');
       
       // Reset slide index to start from first slide
       setCurrentSlideIndex(0);
@@ -428,7 +434,9 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
 
       if (generation.type === 'video') {
         const functions = getFunctions();
-        const performVideoConcatenation = httpsCallable(functions, 'performVideoConcatenation');
+        const performVideoConcatenation = httpsCallable(functions, 'performVideoConcatenation', {
+          timeout: 540000, // 9 minutes timeout
+        });
         
         await performVideoConcatenation({
           userId: user.uid,
@@ -445,7 +453,9 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
         console.log('[RenderSlideshowAsSingleImage] Starting single image render for slideshow display...');
         
         const functions = getFunctions();
-        const callRenderAndReplace = httpsCallable(functions, 'renderAndReplaceGenerationImage');
+        const callRenderAndReplace = httpsCallable(functions, 'renderAndReplaceGenerationImage', {
+          timeout: 540000, // 9 minutes timeout
+        });
 
         let bgUrlToUse = generation.selectedBackgroundUrl; // Default to existing URL on the generation
         if (selectedBackgroundId && backgrounds && backgrounds.length > 0) {
@@ -476,6 +486,9 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
           targetGenerationId: generation.id,
           backgroundUrl: bgUrlToUse,
           textToRender: textForSingleRender,
+          textColor: selectedTextColor,
+          textPosition: textPosition,
+          textSize: textSize,
         };
 
         console.log('[RenderSlideshowAsSingleImage] Sending payload to renderAndReplaceGenerationImage:', payload);
@@ -573,6 +586,14 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
         if (selectedTextColor !== initialGenerationStateForEdit.textColor) {
           updateData.textColor = selectedTextColor;
         }
+
+        if (textPosition !== initialGenerationStateForEdit.textPosition) {
+          updateData.textPosition = textPosition;
+        }
+
+        if (textSize !== initialGenerationStateForEdit.textSize) {
+          updateData.textSize = textSize;
+        }
         
         if (JSON.stringify(editedSlideTexts) !== JSON.stringify(initialGenerationStateForEdit.slideTexts)) {
           updateData.slideTexts = editedSlideTexts;
@@ -594,6 +615,8 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
         ...prev,
         selectedBackgroundId: selectedBackgroundId,
         textColor: selectedTextColor,
+        textPosition: textPosition,
+        textSize: textSize,
         slideTexts: [...editedSlideTexts],
         hookText: editedHookText,
       }));
@@ -610,7 +633,9 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
       if (generation.type === 'slideshow' && 
           (updateData.hasOwnProperty('slideTexts') || 
            updateData.hasOwnProperty('selectedBackgroundId') || 
-           updateData.hasOwnProperty('textColor'))) {
+           updateData.hasOwnProperty('textColor') ||
+           updateData.hasOwnProperty('textPosition') ||
+           updateData.hasOwnProperty('textSize'))) {
         updatedGenerationData.processedImageUrls = []; // or null, to trigger re-render logic in card
         console.log('[handleSaveEdits] Invalidated processedImageUrls because slideshow content changed.');
       }
@@ -642,16 +667,24 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
   const canGoPrevious = generation.type === 'slideshow' && currentSlideIndex > 0;
   
   // Fix navigation logic to work for both processed images and text-based slides
-  // UPDATED LOGIC for canGoNext and numSlides to respect isEditing state
-  const currentDisplayableTexts = isEditing ? editedSlideTexts : (generation.slideTexts || []);
-  
-  const canGoNext = generation.type === 'slideshow' && 
-                    currentDisplayableTexts.length > 0 && 
-                    currentSlideIndex < (currentDisplayableTexts.length - 1);
-  
-  const numSlides = generation.type === 'slideshow' ? 
-                    (currentDisplayableTexts.length > 0 ? currentDisplayableTexts.length : 1) 
-                    : 1;
+  // UPDATED LOGIC for canGoNext and numSlides - use processedImageUrls when not editing, texts when editing
+  const getCurrentSlideCount = () => {
+    if (generation.type !== 'slideshow') return 1;
+    
+    if (isEditing) {
+      // When editing, use slide texts
+      return editedSlideTexts.length > 0 ? editedSlideTexts.length : 1;
+    } else {
+      // When not editing, use processedImageUrls if available, otherwise slide texts
+      if (generation.processedImageUrls && generation.processedImageUrls.length > 0) {
+        return generation.processedImageUrls.length;
+      }
+      return generation.slideTexts && generation.slideTexts.length > 0 ? generation.slideTexts.length : 1;
+    }
+  };
+
+  const numSlides = getCurrentSlideCount();
+  const canGoNext = generation.type === 'slideshow' && currentSlideIndex < (numSlides - 1);
 
   // Computed property to check if there are changes
   const hasChanges = useMemo(() => {
@@ -660,12 +693,14 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
     const currentState = {
       selectedBackgroundId,
       textColor: selectedTextColor,
+      textPosition: textPosition,
+      textSize: textSize,
       slideTexts: editedSlideTexts,
       hookText: editedHookText,
     };
     
     return JSON.stringify(currentState) !== JSON.stringify(initialGenerationStateForEdit);
-  }, [initialGenerationStateForEdit, selectedBackgroundId, selectedTextColor, editedSlideTexts, editedHookText]);
+  }, [initialGenerationStateForEdit, selectedBackgroundId, selectedTextColor, textPosition, textSize, editedSlideTexts, editedHookText]);
 
   return (
     <AnimatePresence>
@@ -750,56 +785,85 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                 transition={{ delay: 0.1 }}
                 className="w-full h-full"
               >
-                {generation.selectedBackgroundUrl && generation.slideTexts ? (
+                {/* Show rendered images when not editing and processedImageUrls exist */}
+                {!isEditing && generation.processedImageUrls && generation.processedImageUrls.length > 0 ? (
                   <div className="relative w-full h-full">
-                    <img
-                      src={(() => {
-                        const url = selectedBackgroundId 
-                          ? backgrounds.find(bg => bg.id === selectedBackgroundId)?.imageUrl 
-                          : generation.selectedBackgroundUrl;
-                        return url;
-                      })()}
-                      alt="Slideshow background"
+                    <motion.img
+                      key={currentSlideIndex}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                      src={generation.processedImageUrls[currentSlideIndex]}
+                      alt={`Rendered slide ${currentSlideIndex + 1}`}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 flex items-center justify-center p-4 z-10">
-                      <motion.div 
-                        key={currentSlideIndex}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: textOpacity, y: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="max-w-[85%]" // MODIFIED: Reduced width
-                      >
-                        <p 
-                          className={`text-base font-medium text-left ${selectedTextColor === 'white' ? 'text-white' : 'text-black'}`} // MODIFIED: text-center to text-left
-                          style={{ 
-                            textShadow: selectedTextColor === 'white' 
-                              ? '0 1px 2px rgba(0,0,0,0.8)' 
-                              : '0 1px 2px rgba(255,255,255,0.8)'
-                          }}
-                        >
-                          {(() => {
-                            const textsToUse = isEditing ? editedSlideTexts : generation.slideTexts;
-                            const currentText = textsToUse?.[currentSlideIndex];
-                            console.log('Debug slideshow text:', { 
-                              currentSlideIndex, 
-                              isEditing, 
-                              editedSlideTexts: editedSlideTexts, 
-                              generationSlideTexts: generation.slideTexts,
-                              textsToUse,
-                              currentText,
-                              numSlides
-                            });
-                            return currentText || `Slide ${currentSlideIndex + 1}`;
-                          })()}
-                        </p>
-                      </motion.div>
-                    </div>
                   </div>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-neutral-200 dark:bg-neutral-700">
-                    <Slideshow size={40} className="text-neutral-400 dark:text-neutral-500" />
-                  </div>
+                  /* Live preview when editing or no rendered images */
+                  generation.selectedBackgroundUrl && generation.slideTexts ? (
+                    <div className="relative w-full h-full">
+                      <img
+                        src={(() => {
+                          const url = selectedBackgroundId 
+                            ? backgrounds.find(bg => bg.id === selectedBackgroundId)?.imageUrl 
+                            : generation.selectedBackgroundUrl;
+                          return url;
+                        })()}
+                        alt="Slideshow background"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className={`absolute inset-0 flex p-4 z-10 ${
+                        textPosition === 'top' ? 'items-start justify-center' :
+                        textPosition === 'bottom' ? 'items-end justify-center' :
+                        textPosition === 'left' ? 'items-center justify-start' :
+                        textPosition === 'right' ? 'items-center justify-end' :
+                        'items-center justify-center'
+                      }`}>
+                        <motion.div 
+                          key={`${currentSlideIndex}-${textPosition}-${textSize}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: textOpacity, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className={`max-w-[85%] ${
+                            textPosition === 'left' || textPosition === 'right' ? 'text-left' : 'text-center'
+                          }`}
+                        >
+                          <p 
+                            className={`font-medium ${
+                              textSize === 'small' ? 'text-sm' :
+                              textSize === 'large' ? 'text-xl' :
+                              'text-base'
+                            } ${
+                              selectedTextColor === 'white' ? 'text-white' :
+                              selectedTextColor === 'black' ? 'text-black' :
+                              selectedTextColor === 'red' ? 'text-red-500' :
+                              selectedTextColor === 'blue' ? 'text-blue-500' :
+                              selectedTextColor === 'green' ? 'text-green-500' :
+                              selectedTextColor === 'yellow' ? 'text-yellow-400' :
+                              selectedTextColor === 'purple' ? 'text-purple-500' :
+                              selectedTextColor === 'pink' ? 'text-pink-500' :
+                              'text-white'
+                            }`}
+                            style={{ 
+                              textShadow: selectedTextColor === 'white' || selectedTextColor === 'yellow'
+                                ? '0 1px 2px rgba(0,0,0,0.8)' 
+                                : '0 1px 2px rgba(255,255,255,0.8)'
+                            }}
+                          >
+                            {(() => {
+                              const textsToUse = isEditing ? editedSlideTexts : generation.slideTexts;
+                              const currentText = textsToUse?.[currentSlideIndex];
+                              return currentText || `Slide ${currentSlideIndex + 1}`;
+                            })()}
+                          </p>
+                        </motion.div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-neutral-200 dark:bg-neutral-700">
+                      <Slideshow size={40} className="text-stone-400 dark:text-stone-500" />
+                    </div>
+                  )
                 )}
 
                 {/* Slideshow navigation - Smaller */}
@@ -840,12 +904,12 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
             className="flex-1 flex flex-col bg-white dark:bg-neutral-900 min-w-0"
           >
             {/* Header - Very compact */}
-            <div className="p-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between flex-shrink-0">
+            <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                <h3 className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
                   {getFriendlyGenerationType(generation.commandCode)}
                 </h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                <p className="text-xs text-stone-500 dark:text-stone-400">
                   {generation.timestamp && generation.timestamp instanceof Date 
                     ? generation.timestamp.toLocaleDateString() 
                     : 'Unknown date'}
@@ -855,7 +919,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onClose}
-                className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 dark:text-neutral-400 transition-colors flex-shrink-0"
+                className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-500 dark:text-stone-400 transition-colors flex-shrink-0"
               >
                 <CloseIcon size={16} />
               </motion.button>
@@ -872,7 +936,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   className="space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Edit Content</h4>
+                    <h4 className="text-xs font-medium text-stone-700 dark:text-stone-300">Edit Content</h4>
                     <motion.button 
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -888,8 +952,8 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                         }
                       }}
                       className={`p-1 rounded-md transition-all ${isEditing 
-                        ? 'bg-neutral-900 dark:bg-neutral-100 text-neutral-100 dark:text-neutral-900' 
-                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
+                        ? 'bg-neutral-900 dark:bg-neutral-100 text-stone-100 dark:text-stone-900' 
+                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-500 dark:text-stone-400'
                       }`}
                     >
                       <Pencil size={12} />
@@ -904,19 +968,19 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                       transition={{ delay: 0.2 }}
                       className="space-y-1.5"
                     >
-                      <label className="text-xs text-neutral-600 dark:text-neutral-400">Hook Text</label>
+                      <label className="text-xs text-stone-600 dark:text-stone-400">Hook Text</label>
                       {isEditing ? (
                         <motion.textarea
                           initial={{ scale: 0.99 }}
                           animate={{ scale: 1 }}
                           value={editedHookText}
                           onChange={(e) => setEditedHookText(e.target.value)}
-                          className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-neutral-400 focus:border-transparent transition-all resize-none"
+                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all resize-none"
                           rows={2}
                           placeholder="Enter hook text..."
                         />
                       ) : (
-                        <p className="text-xs text-neutral-600 dark:text-neutral-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
+                        <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
                           {generation.hookText || 'No hook text'}
                         </p>
                       )}
@@ -932,35 +996,176 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                       className="space-y-3"
                     >
                       {/* Tab Navigation */}
-                      <div className="flex border-b border-neutral-200 dark:border-neutral-700">
+                      <div className="flex border-b border-stone-200 dark:border-stone-700">
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={() => setActiveEditTab('text')}
+                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
+                            activeEditTab === 'text'
+                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
+                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
+                          }`}
+                        >
+                          Text Style
+                        </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.99 }}
                           onClick={() => setActiveEditTab('background')}
-                          className={`flex-1 py-2 px-3 text-xs font-medium transition-all ${
+                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
                             activeEditTab === 'background'
-                              ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
-                              : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
+                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
                           }`}
                         >
-                          Background & Color
+                          Background
                         </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.99 }}
                           onClick={() => setActiveEditTab('texts')}
-                          className={`flex-1 py-2 px-3 text-xs font-medium transition-all ${
+                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
                             activeEditTab === 'texts'
-                              ? 'text-neutral-900 dark:text-neutral-100 border-b-2 border-neutral-900 dark:border-neutral-100'
-                              : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300'
+                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
+                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
                           }`}
                         >
-                          Slide Texts
+                          Slides
                         </motion.button>
                       </div>
 
                       {/* Tab Content */}
                       <AnimatePresence mode="wait">
+                        {activeEditTab === 'text' && (
+                          <motion.div
+                            key="text-tab"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            transition={{ duration: 0.2 }}
+                            className="space-y-3"
+                          >
+                            {/* Text color selection */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Color</label>
+                              {isEditing ? (
+                                <motion.div 
+                                  initial={{ scale: 0.99 }}
+                                  animate={{ scale: 1 }}
+                                  className="grid grid-cols-4 gap-1.5"
+                                >
+                                  {[
+                                    { value: 'white', label: 'White', bgClass: 'bg-white', borderClass: 'border-stone-300' },
+                                    { value: 'black', label: 'Black', bgClass: 'bg-black', borderClass: '' },
+                                    { value: 'red', label: 'Red', bgClass: 'bg-red-500', borderClass: '' },
+                                    { value: 'blue', label: 'Blue', bgClass: 'bg-blue-500', borderClass: '' },
+                                    { value: 'green', label: 'Green', bgClass: 'bg-green-500', borderClass: '' },
+                                    { value: 'yellow', label: 'Yellow', bgClass: 'bg-yellow-400', borderClass: '' },
+                                    { value: 'purple', label: 'Purple', bgClass: 'bg-purple-500', borderClass: '' },
+                                    { value: 'pink', label: 'Pink', bgClass: 'bg-pink-500', borderClass: '' }
+                                  ].map((color) => (
+                                    <motion.button
+                                      key={color.value}
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      onClick={() => setSelectedTextColor(color.value)}
+                                      className={`flex-1 p-2 rounded-md border transition-all ${
+                                        selectedTextColor === color.value
+                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100'
+                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600'
+                                      }`}
+                                    >
+                                      <div className="flex flex-col items-center gap-1">
+                                        <div className={`w-3 h-3 ${color.bgClass} ${color.borderClass} rounded-full`}></div>
+                                        <span className="text-xs text-stone-900 dark:text-stone-100">{color.label}</span>
+                                      </div>
+                                    </motion.button>
+                                  ))}
+                                </motion.div>
+                              ) : (
+                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
+                                  {selectedTextColor.charAt(0).toUpperCase() + selectedTextColor.slice(1)} text
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Text position selection */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Position</label>
+                              {isEditing ? (
+                                <motion.div 
+                                  initial={{ scale: 0.99 }}
+                                  animate={{ scale: 1 }}
+                                  className="grid grid-cols-3 gap-1"
+                                >
+                                  {[
+                                    { value: 'top', label: 'Top' },
+                                    { value: 'center', label: 'Center' },
+                                    { value: 'bottom', label: 'Bottom' },
+                                    { value: 'left', label: 'Left' },
+                                    { value: 'right', label: 'Right' }
+                                  ].map((position) => (
+                                    <motion.button
+                                      key={position.value}
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      onClick={() => setTextPosition(position.value)}
+                                      className={`p-2 rounded-md border transition-all text-xs ${
+                                        textPosition === position.value
+                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100 text-stone-900 dark:text-stone-100'
+                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600 text-stone-600 dark:text-stone-400'
+                                      } ${position.value === 'center' ? 'col-span-1' : ''}`}
+                                    >
+                                      {position.label}
+                                    </motion.button>
+                                  ))}
+                                </motion.div>
+                              ) : (
+                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
+                                  {textPosition.charAt(0).toUpperCase() + textPosition.slice(1)} position
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Text size selection */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Size</label>
+                              {isEditing ? (
+                                <motion.div 
+                                  initial={{ scale: 0.99 }}
+                                  animate={{ scale: 1 }}
+                                  className="flex gap-1.5"
+                                >
+                                  {[
+                                    { value: 'small', label: 'Small' },
+                                    { value: 'medium', label: 'Medium' },
+                                    { value: 'large', label: 'Large' }
+                                  ].map((size) => (
+                                    <motion.button
+                                      key={size.value}
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      onClick={() => setTextSize(size.value)}
+                                      className={`flex-1 p-2 rounded-md border transition-all text-xs ${
+                                        textSize === size.value
+                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100 text-stone-900 dark:text-stone-100'
+                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600 text-stone-600 dark:text-stone-400'
+                                      }`}
+                                    >
+                                      {size.label}
+                                    </motion.button>
+                                  ))}
+                                </motion.div>
+                              ) : (
+                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
+                                  {textSize.charAt(0).toUpperCase() + textSize.slice(1)} size
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+
                         {activeEditTab === 'background' && (
                           <motion.div
                             key="background-tab"
@@ -972,7 +1177,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                           >
                             {/* Background selection */}
                             <div className="space-y-1.5">
-                              <label className="text-xs text-neutral-600 dark:text-neutral-400">Background</label>
+                              <label className="text-xs text-stone-600 dark:text-stone-400">Background</label>
                               {isEditing ? (
                                 <motion.div 
                                   initial={{ scale: 0.99 }}
@@ -992,8 +1197,8 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                       }}
                                       className={`relative cursor-pointer rounded-md overflow-hidden border transition-all ${
                                         selectedBackgroundId === bg.id
-                                          ? 'border-neutral-900 dark:border-neutral-100 ring-1 ring-neutral-900 dark:ring-neutral-100'
-                                          : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                                          ? 'border-stone-900 dark:border-stone-100 ring-1 ring-stone-900 dark:ring-stone-100'
+                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600'
                                       }`}
                                     >
                                       <div className="aspect-[9/16]">
@@ -1014,14 +1219,14 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                           animate={{ scale: 1 }}
                                           className="absolute top-1 right-1 w-3 h-3 bg-neutral-900 dark:bg-neutral-100 rounded-full flex items-center justify-center"
                                         >
-                                          <Check size={8} className="text-neutral-100 dark:text-neutral-900" />
+                                          <Check size={8} className="text-stone-100 dark:text-stone-900" />
                                         </motion.div>
                                       )}
                                     </motion.div>
                                   ))}
                                 </motion.div>
                               ) : (
-                                <p className="text-xs text-neutral-600 dark:text-neutral-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
+                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
                                   {(() => {
                                     if (generation.selectedBackgroundId) {
                                       const bgById = backgrounds.find(bg => bg.id === generation.selectedBackgroundId);
@@ -1033,53 +1238,6 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                     }
                                     return 'Background selected';
                                   })()}
-                                </p>
-                              )}
-                            </div>
-                     
-                            {/* Text color selection */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-neutral-600 dark:text-neutral-400">Text Color</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="flex gap-1.5"
-                                >
-                                  <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => setSelectedTextColor('white')}
-                                    className={`flex-1 p-2 rounded-md border transition-all ${
-                                      selectedTextColor === 'white'
-                                        ? 'border-neutral-900 dark:border-neutral-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-neutral-900 dark:ring-neutral-100'
-                                        : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      <div className="w-2.5 h-2.5 bg-white border border-neutral-300 rounded-full"></div>
-                                      <span className="text-xs text-neutral-900 dark:text-neutral-100">White</span>
-                                    </div>
-                                  </motion.button>
-                                  <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => setSelectedTextColor('black')}
-                                    className={`flex-1 p-2 rounded-md border transition-all ${
-                                      selectedTextColor === 'black'
-                                        ? 'border-neutral-900 dark:border-neutral-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-neutral-900 dark:ring-neutral-100'
-                                        : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      <div className="w-2.5 h-2.5 bg-black rounded-full"></div>
-                                      <span className="text-xs text-neutral-900 dark:text-neutral-100">Black</span>
-                                    </div>
-                                  </motion.button>
-                                </motion.div>
-                              ) : (
-                                <p className="text-xs text-neutral-600 dark:text-neutral-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700">
-                                  {selectedTextColor === 'white' ? 'White text' : 'Black text'}
                                 </p>
                               )}
                             </div>
@@ -1097,7 +1255,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                           >
                             {/* Slide texts editing */}
                             <div className="space-y-1.5">
-                              <label className="text-xs text-neutral-600 dark:text-neutral-400">Slide Texts</label>
+                              <label className="text-xs text-stone-600 dark:text-stone-400">Slide Texts</label>
                               {isEditing ? (
                                 <motion.div 
                                   initial={{ scale: 0.99 }}
@@ -1116,7 +1274,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                         newTexts[index] = e.target.value;
                                         setEditedSlideTexts(newTexts);
                                       }}
-                                      className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-neutral-400 focus:border-transparent transition-all resize-none"
+                                      className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all resize-none"
                                       rows={3}
                                       placeholder={`Slide ${index + 1} text...`}
                                     />
@@ -1130,7 +1288,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                       initial={{ opacity: 0, x: -4 }}
                                       animate={{ opacity: 1, x: 0 }}
                                       transition={{ delay: 0.03 * index }}
-                                      className="text-xs text-neutral-600 dark:text-neutral-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700"
+                                      className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700"
                                     >
                                       {index + 1}. {text}
                                     </motion.p>
@@ -1152,14 +1310,14 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   initial={{ y: 8, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.25 }}
-                  className="space-y-2 border-t border-neutral-200 dark:border-neutral-800 pt-3"
+                  className="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-3"
                 >
-                  <h4 className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Save as Asset</h4>
+                  <h4 className="text-xs font-medium text-stone-700 dark:text-stone-300">Save as Asset</h4>
                   
                   {/* Creator Section */}
                   {generation.commandCode === 202 && (
                     <div className="space-y-1.5">
-                      <label className="text-xs text-neutral-600 dark:text-neutral-400">UGC Creator</label>
+                      <label className="text-xs text-stone-600 dark:text-stone-400">UGC Creator</label>
                       {isAlreadySavedAsCreator ? (
                         <motion.div 
                           initial={{ scale: 0.99 }}
@@ -1185,7 +1343,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                             value={creatorAssetName}
                             onChange={(e) => setCreatorAssetName(e.target.value)}
                             placeholder="Enter creator name..."
-                            className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-neutral-400 focus:border-transparent transition-all"
+                            className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && creatorAssetName.trim()) {
                                 handleSaveAsAsset('creator');
@@ -1198,7 +1356,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                               whileTap={{ scale: 0.99 }}
                               onClick={() => setShowSaveCreatorInput(false)}
                               disabled={isSavingAsset}
-                              className="flex-1 py-1.5 px-2 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
+                              className="flex-1 py-1.5 px-2 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
                             >
                               Cancel
                             </motion.button>
@@ -1207,7 +1365,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                               whileTap={{ scale: 0.99 }}
                               onClick={() => handleSaveAsAsset('creator')}
                               disabled={isSavingAsset || !creatorAssetName.trim()}
-                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs rounded-md transition-all flex items-center justify-center"
+                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs rounded-md transition-all flex items-center justify-center"
                             >
                               {isSavingAsset ? <CircleNotch size={10} className="animate-spin" /> : 'Save'}
                             </motion.button>
@@ -1222,7 +1380,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                             setShowSaveBackgroundInput(false);
                             setCreatorAssetName('');
                           }}
-                          className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-neutral-900 dark:text-neutral-100 transition-all flex items-center justify-center gap-1.5"
+                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-stone-900 dark:text-stone-100 transition-all flex items-center justify-center gap-1.5"
                         >
                           <UserPlus size={12} />
                           Save as Creator
@@ -1234,7 +1392,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   {/* Background Section */}
                   {generation.commandCode === 201 && (
                     <div className="space-y-1.5">
-                      <label className="text-xs text-neutral-600 dark:text-neutral-400">Background</label>
+                      <label className="text-xs text-stone-600 dark:text-stone-400">Background</label>
                       {isAlreadySavedAsBackground ? (
                         <motion.div 
                           initial={{ scale: 0.99 }}
@@ -1260,7 +1418,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                             value={backgroundAssetName}
                             onChange={(e) => setBackgroundAssetName(e.target.value)}
                             placeholder="Enter background name..."
-                            className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-neutral-400 focus:border-transparent transition-all"
+                            className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && backgroundAssetName.trim()) {
                                 handleSaveAsAsset('background');
@@ -1273,7 +1431,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                               whileTap={{ scale: 0.99 }}
                               onClick={() => setShowSaveBackgroundInput(false)}
                               disabled={isSavingAsset}
-                              className="flex-1 py-1.5 px-2 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
+                              className="flex-1 py-1.5 px-2 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
                             >
                               Cancel
                             </motion.button>
@@ -1282,7 +1440,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                               whileTap={{ scale: 0.99 }}
                               onClick={() => handleSaveAsAsset('background')}
                               disabled={isSavingAsset || !backgroundAssetName.trim()}
-                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs rounded-md transition-all flex items-center justify-center"
+                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs rounded-md transition-all flex items-center justify-center"
                             >
                               {isSavingAsset ? <CircleNotch size={10} className="animate-spin" /> : 'Save'}
                             </motion.button>
@@ -1297,7 +1455,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                             setShowSaveCreatorInput(false);
                             setBackgroundAssetName('');
                           }}
-                          className="w-full p-2 border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-neutral-900 dark:text-neutral-100 transition-all flex items-center justify-center gap-1.5"
+                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-stone-900 dark:text-stone-100 transition-all flex items-center justify-center gap-1.5"
                         >
                           <PlusSquare size={12} />
                           Save as Background
@@ -1314,7 +1472,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="p-3 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex-shrink-0"
+              className="p-3 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-neutral-900 flex-shrink-0"
             >
               {/* Save button for editing mode - ALWAYS show when editing and has changes */}
               {isEditing && hasChanges && (
@@ -1325,7 +1483,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   whileTap={{ scale: 0.99 }}
                   onClick={handleSaveEdits}
                   disabled={isSaving}
-                  className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 mb-2"
+                  className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 mb-2"
                 >
                   {isSaving ? (
                     <>
@@ -1355,7 +1513,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                       whileTap={{ scale: 0.99 }}
                       onClick={handleDownload}
                       disabled={isDownloading}
-                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
                     >
                       {isDownloading ? (
                         <>
@@ -1378,7 +1536,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                       whileTap={{ scale: 0.99 }}
                       onClick={handleDownload} // This now calls renderAndReplaceGenerationImage
                       disabled={isDownloading}
-                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
                 >
                       {isDownloading ? (
                         <>
@@ -1403,7 +1561,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                         whileTap={{ scale: 0.99 }}
                         onClick={() => handleGenerationDownload(generation)}
                         disabled={isDownloading}
-                        className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
+                        className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
                       >
                         <>
                           <DownloadSimple size={10} />
@@ -1419,7 +1577,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                     whileTap={{ scale: 0.99 }}
                     onClick={handleDownload}
                     disabled={isDownloading}
-                    className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-neutral-100 dark:text-neutral-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
+                    className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
                   >
                     {isDownloading ? (
                       <CircleNotch size={10} className="animate-spin" />
@@ -1455,7 +1613,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                   
                   {/* Note about editing limitations after rendering */}
                   {(generation.type === 'video' || generation.type === 'slideshow') && (
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center mt-2">
+                    <p className="text-xs text-stone-500 dark:text-stone-400 text-center mt-2">
                       Note: Content cannot be edited after rendering
                     </p>
                   )}
@@ -1723,8 +1881,8 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
       } else {
         // Fallback if essential slideshow data is missing for the preview
         return (
-          <div className="w-full h-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center">
-            <Slideshow size={32} className="text-gray-400 dark:text-zinc-500" />
+          <div className="w-full h-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+            <Slideshow size={32} className="text-stone-400 dark:text-stone-500" />
           </div>
         );
       }
@@ -1732,8 +1890,8 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
     
     // Fallback
     return (
-      <div className="w-full h-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center">
-        <ImageSquare size={32} className="text-gray-400 dark:text-zinc-500" />
+      <div className="w-full h-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+        <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
       </div>
     );
   };
@@ -1755,7 +1913,7 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
         ease: "easeOut",
         scale: { type: "spring", stiffness: 400, damping: 25 }
       }}
-      className="relative rounded-lg overflow-hidden border border-gray-100 dark:border-zinc-800 group shadow-sm hover:shadow-md transition-all duration-300 bg-gray-50 dark:bg-zinc-800 cursor-pointer"
+      className="relative rounded-lg overflow-hidden border border-stone-100 dark:border-stone-800 group shadow-sm hover:shadow-md transition-all duration-300 bg-neutral-50 dark:bg-neutral-800 cursor-pointer"
       style={{ paddingTop: '177.77%' }} // 9:16 aspect ratio
       onClick={onClick}
     >
@@ -1775,7 +1933,7 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
       
       {/* Creator/Background save buttons - top right */}
       {generation.imageUrl && (
-        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30">
           {generation.commandCode === 202 && (
             existingCreator ? (
               <div className="px-2 py-1 bg-black text-white text-[10px] rounded-full backdrop-blur-sm font-medium">
@@ -1785,14 +1943,12 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Open creator save modal by setting selected generation and triggering save mode
-                  onClick(); // This will open the main popup
-                  // TODO: Add specific creator save trigger
+                  onClick(); 
                 }}
-                className="w-8 h-8 bg-neutral-900/90 hover:bg-neutral-800 dark:bg-neutral-100/90 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
+                className="w-7 h-7 bg-neutral-900/80 hover:bg-neutral-800 dark:bg-neutral-100/80 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
                 title="Save as Creator"
               >
-                <UserPlus size={14} className="text-neutral-100 dark:text-neutral-900" />
+                <UserPlus size={12} className="text-stone-100 dark:text-stone-900" />
               </button>
             )
           )}
@@ -1805,16 +1961,29 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Open background save modal by setting selected generation and triggering save mode
-                  onClick(); // This will open the main popup
-                  // TODO: Add specific background save trigger
+                  onClick(); 
                 }}
-                className="w-8 h-8 bg-neutral-900/90 hover:bg-neutral-800 dark:bg-neutral-100/90 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
+                className="w-7 h-7 bg-neutral-900/80 hover:bg-neutral-800 dark:bg-neutral-100/80 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
                 title="Save as Background"
               >
-                <PlusSquare size={14} className="text-neutral-100 dark:text-neutral-900" />
+                <PlusSquare size={12} className="text-stone-100 dark:text-stone-900" />
               </button>
             )
+          )}
+          {/* NEW: Post to TikTok button for slideshows */} 
+          {generation.type === 'slideshow' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // TODO: Implement actual TikTok posting logic
+                console.log('Post to TikTok clicked for slideshow:', generation.id);
+                window.alert('Post to TikTok functionality coming soon!');
+              }}
+              className="w-7 h-7 bg-blue-500/90 hover:bg-blue-600 dark:bg-blue-500/90 dark:hover:bg-blue-600 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
+              title="Post to TikTok"
+            >
+              <ArrowSquareOut size={12} className="text-white" />
+            </button>
           )}
         </div>
       )}
@@ -1822,7 +1991,7 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
       {/* Info overlay */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-zinc-300">
+          <span className="text-[10px] text-stone-300">
             {generation.timestamp && generation.timestamp instanceof Date 
               ? generation.timestamp.toLocaleDateString() 
               : 'Unknown date'}
@@ -2123,20 +2292,20 @@ function Dashboard() {
             <div className="flex items-center justify-between mb-6">
               
               {/* Filters */}
-              <div className="inline-flex items-center p-1 bg-gray-100 dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700">
+              <div className="inline-flex items-center p-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg border border-stone-200 dark:border-stone-700">
                 <button
                   onClick={() => setActiveFilter('all')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
                     activeFilter === 'all'
-                      ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-zinc-400 hover:text-black dark:hover:text-white'
+                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
                   All
                   <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
                     activeFilter === 'all'
-                      ? 'bg-gray-100 dark:bg-zinc-600 text-gray-700 dark:text-zinc-300'
-                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500'
+                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
                   }`}>
                     {generations.length} 
              </span>
@@ -2145,15 +2314,15 @@ function Dashboard() {
                   onClick={() => setActiveFilter('video')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
                     activeFilter === 'video'
-                      ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-zinc-400 hover:text-black dark:hover:text-white'
+                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
                   Videos
                   <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
                     activeFilter === 'video'
-                      ? 'bg-gray-100 dark:bg-zinc-600 text-gray-700 dark:text-zinc-300'
-                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500'
+                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
                   }`}>
                     {generationCounts.videos}
               </span>
@@ -2162,15 +2331,15 @@ function Dashboard() {
                   onClick={() => setActiveFilter('image')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
                     activeFilter === 'image'
-                      ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-zinc-400 hover:text-black dark:hover:text-white'
+                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
                   Images
                   <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
                     activeFilter === 'image'
-                      ? 'bg-gray-100 dark:bg-zinc-600 text-gray-700 dark:text-zinc-300'
-                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500'
+                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
                   }`}>
                     {generationCounts.images}
                       </span>
@@ -2179,15 +2348,15 @@ function Dashboard() {
                   onClick={() => setActiveFilter('slideshow')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
                     activeFilter === 'slideshow'
-                      ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-sm'
-                      : 'text-gray-600 dark:text-zinc-400 hover:text-black dark:hover:text-white'
+                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
                   Slideshows
                   <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
                     activeFilter === 'slideshow'
-                      ? 'bg-gray-100 dark:bg-zinc-600 text-gray-700 dark:text-zinc-300'
-                      : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500'
+                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
                   }`}>
                     {generationCounts.slideshows}
                   </span>
@@ -2195,20 +2364,20 @@ function Dashboard() {
         </div>
       </div>
             {isLoadingGenerations && displayedGenerations.length === 0 ? (
-              <div className="w-full h-48 rounded-xl border border-gray-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm flex items-center justify-center">
+              <div className="w-full h-48 rounded-xl border border-stone-100 dark:border-stone-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center">
                 <div className="animate-pulse flex space-x-4 w-3/4">
                   <div className="flex-1 space-y-4 py-1">
-                    <div className="h-3 bg-gray-200 dark:bg-zinc-700 rounded w-3/4"></div>
+                    <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4"></div>
                     <div className="space-y-3">
-                      <div className="h-3 bg-gray-200 dark:bg-zinc-700 rounded"></div>
-                      <div className="h-3 bg-gray-200 dark:bg-zinc-700 rounded w-5/6"></div>
+                      <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
+                      <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-5/6"></div>
                     </div>
                   </div>
                 </div>
               </div>
             ) : displayedGenerations.length === 0 && !generatingItem ? (
-              <div className="w-full h-48 rounded-xl border border-gray-100 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6">
-                <p className="text-gray-500 dark:text-zinc-400">No {activeFilter !== 'all' ? activeFilter : ''} generations found.</p>
+              <div className="w-full h-48 rounded-xl border border-stone-100 dark:border-stone-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6">
+                <p className="text-stone-500 dark:text-stone-400">No {activeFilter !== 'all' ? activeFilter : ''} generations found.</p>
               </div>
             ) : (
               <>
@@ -2229,8 +2398,8 @@ function Dashboard() {
                       onClick={fetchMoreGenerations}
                       disabled={isLoadingMore}
                       className={`px-6 py-2 rounded-full text-sm font-medium transition-colors duration-200 flex items-center justify-center ${isLoadingMore
-                        ? 'bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400 cursor-not-allowed'
-                        : 'bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-200'
+                        ? 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-400 cursor-not-allowed'
+                        : 'bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-stone-700 dark:text-stone-200'
                       }`}
                     >
                       {isLoadingMore ? (<> <CircleNotch size={16} className="animate-spin mr-2" /> Loading...</> ) : ( 'Load More' )}
@@ -2244,21 +2413,21 @@ function Dashboard() {
       {/* Modals (Delete, Success) */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <div className="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-zinc-100">Confirm Deletion</h3>
-                <button onClick={handleCloseDeleteModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300">
+                <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">Confirm Deletion</h3>
+                <button onClick={handleCloseDeleteModal} className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
                   <CloseIcon size={20} />
                 </button>
               </div>
-              <p className="text-sm text-gray-600 dark:text-zinc-300 mb-6">
+              <p className="text-sm text-stone-600 dark:text-stone-300 mb-6">
                 Are you sure you want to delete this generation? This action cannot be undone.
               </p>
               <div className="flex justify-end gap-3">
                 <button 
                   onClick={handleCloseDeleteModal}
                   disabled={isDeletingGeneration}
-                  className="px-4 py-2 text-sm rounded-md border border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-200 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-md border border-stone-300 dark:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-stone-700 dark:text-stone-200 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -2276,10 +2445,10 @@ function Dashboard() {
       {isSuccessModalOpen && (
         <div 
           className="fixed top-5 right-5 z-[100] p-4 max-w-sm w-full transition-all duration-300 ease-in-out"
-          style={{ transform: isSuccessModalOpen ? 'translateX(0)' : 'translateX(100%)' }}
+          style={{ transform: isSuccessModalOpen ? 'transtoneX(0)' : 'transtoneX(100%)' }}
         >
             <div 
-              className={`rounded-md shadow-lg p-3 flex items-start space-x-3 ${isDarkMode ? 'bg-zinc-800 text-white border border-zinc-700' : 'bg-white text-gray-900 border border-gray-200'}`}
+              className={`rounded-md shadow-lg p-3 flex items-start space-x-3 ${isDarkMode ? 'bg-neutral-800 text-white border border-stone-700' : 'bg-white text-stone-900 border border-stone-200'}`}
             >
               <div className={`flex-shrink-0 p-1.5 rounded-full ${isDarkMode ? 'bg-green-600/30' : 'bg-green-100'}`}>
                   <svg className={`w-4 h-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`} fill="currentColor" viewBox="0 0 20 20">
@@ -2293,7 +2462,7 @@ function Dashboard() {
               </div>
               <button 
                 onClick={handleCloseSuccessModal}
-                className={`p-1 rounded-full ${isDarkMode ? 'hover:bg-zinc-700' : 'hover:bg-gray-100'} text-gray-400 dark:text-zinc-500`}
+                className={`p-1 rounded-full ${isDarkMode ? 'hover:bg-neutral-700' : 'hover:bg-neutral-100'} text-stone-400 dark:text-stone-500`}
                 aria-label="Close notification"
               >
                 <CloseIcon size={14} />

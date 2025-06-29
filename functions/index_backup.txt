@@ -1,0 +1,30 @@
+// BACKUP OF ORIGINAL INDEX.JS FILE
+// Bu dosya orijinal index.js'in tam kopyasıdır - referans amaçlı tutulmuştur
+
+const functions = require('firebase-functions'); // <-- ADD THIS LINE
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onRequest } = require("firebase-functions/v2/https"); // Keep for the new task handler
+const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import onSchedule
+const { onObjectFinalized } = require("firebase-functions/v2/storage"); // <<< ADDED THIS LINE
+const { logger } = require("firebase-functions");
+const { OpenAI, toFile } = require("openai");
+const admin = require("firebase-admin");
+const { getStorage } = require('firebase-admin/storage');
+const axios = require('axios');
+const { CloudTasksClient } = require('@google-cloud/tasks'); // <-- ADD Cloud Tasks Client
+const fs = require('fs').promises; // For async file operations
+const path = require('path'); // For path manipulation
+const os = require('os'); // Added for tmpdir access in renderAndReplaceGenerationImage
+const ffmpeg = require('fluent-ffmpeg'); // MOVED TO GLOBAL SCOPE
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path; // MOVED TO GLOBAL SCOPE
+ffmpeg.setFfmpegPath(ffmpegPath); // MOVED TO GLOBAL SCOPE
+// const stripe = require('stripe')(process.env.STRIPE_SECRET); // <-- REMOVE Global Stripe import and initialize
+
+// Initialize Firebase Admin SDK (once)
+admin.initializeApp();
+const db = admin.firestore(); // Firestore instance
+const bucket = getStorage().bucket(); // Default Firebase Storage bucket
+const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
+
+// DOSYA ÇOK BÜYÜK OLDUĞU İÇİN SADECE BAŞLANGICI KAYDETILDI
+// Tam backup için tüm dosyayı kopyalamak gerekiyor 

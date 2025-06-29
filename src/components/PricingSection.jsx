@@ -10,10 +10,10 @@ const createStripeCheckoutSession = httpsCallable(functions, 'createStripeChecko
 const planPriceMap = {
   "price_1RMqEZDf8kAOBAT3ltD6n2lX": "Basic (Monthly)",
   "price_1RMqGbDf8kAOBAT3vgwkWLr6": "Basic (Yearly)",
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": "Pro (Monthly)",
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": "Pro (Yearly)",
-  "price_1RMqHgDf8kAOBAT3m6kthIND": "Business (Monthly)",
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": "Business (Yearly)",
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": "Pro (Monthly)",
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": "Pro (Yearly)",
+  "price_1RY4JdDf8kAOBAT3AWlBbEx3": "Business (Monthly)",
+  "price_1RY4JuDf8kAOBAT3lrADc9fO": "Business (Yearly)",
 };
 // --- End Plan Price Map ---
 
@@ -22,10 +22,8 @@ const plans = [
   {
     id: 'basic',
     name: 'Basic Plan',
-    originalMonthlyPrice: 29.00,
-    monthlyPrice: parseFloat((29.00 * 0.75).toFixed(2)), // 25% discount
-    originalYearlyMonthlyPrice: parseFloat((29.00 * 10 / 12).toFixed(2)),
-    yearlyMonthlyPrice: parseFloat(((29.00 * 10 / 12) * 0.75).toFixed(2)), // 25% discount
+    monthlyPrice: 29.00,
+    yearlyMonthlyPrice: Math.round(29.00 * 10 / 12),
     monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX",
     yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6",
     credits: 2500,
@@ -43,13 +41,11 @@ const plans = [
   {
     id: 'pro',
     name: 'Pro plan',
-    originalMonthlyPrice: 89.00,
-    monthlyPrice: parseFloat((89.00 * 0.75).toFixed(2)), // 25% discount
-    originalYearlyMonthlyPrice: parseFloat((89.00 * 10 / 12).toFixed(2)),
-    yearlyMonthlyPrice: parseFloat(((89.00 * 10 / 12) * 0.75).toFixed(2)), // 25% discount
+    monthlyPrice: 59.00,
+    yearlyMonthlyPrice: Math.round(590 / 12),
     monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM",
     yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq",
-    credits: 12000,
+    credits: 10000,
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)',
@@ -64,10 +60,8 @@ const plans = [
   {
     id: 'business',
     name: 'Business plan',
-    originalMonthlyPrice: 179.00,
-    monthlyPrice: parseFloat((179.00 * 0.75).toFixed(2)), // 25% discount
-    originalYearlyMonthlyPrice: parseFloat((179.00 * 10 / 12).toFixed(2)),
-    yearlyMonthlyPrice: parseFloat(((179.00 * 10 / 12) * 0.75).toFixed(2)), // 25% discount
+    monthlyPrice: 119.00,
+    yearlyMonthlyPrice: Math.round(1190 / 12),
     monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND",
     yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho",
     credits: 30000,
@@ -131,7 +125,7 @@ function AnimatedPrice({ price, duration = 800 }) {
   const animatedPrice = useCounterAnimation(price, duration);
   
   return (
-    <span className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+    <span className="text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
       ${animatedPrice.toFixed(2)}
     </span>
   );
@@ -141,7 +135,7 @@ function AnimatedPrice({ price, duration = 800 }) {
 function AnimatedCredits({ credits, duration = 800 }) {
   const animatedCredits = useCounterAnimation(credits, duration);
   return (
-    <span className="text-2xl font-semibold text-gray-700 dark:text-zinc-200">
+    <span className="text-2xl font-semibold text-stone-700 dark:text-stone-200">
       {Math.round(animatedCredits).toLocaleString()} Credits
     </span>
   );
@@ -170,7 +164,7 @@ function AnimatedValue({ contentBefore, value, contentAfter = "", duration = 600
   const isNumeric = !isNaN(numericValue);
   
   return (
-    <span className="inline text-gray-600 dark:text-zinc-300">
+    <span className="inline text-stone-600 dark:text-stone-300">
       {isNumeric ? (
         <>
           {contentBefore}
@@ -333,11 +327,11 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
       <div id={id} className="w-full">
         <div className="px-6 lg:px-0">
           <div className="py-10 px-6 rounded-xl text-left">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            <h3 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">
               You Have an Active Subscription
             </h3>
-            <p className="text-gray-600 dark:text-zinc-300 mb-1">
-              You are currently subscribed to the <strong className="text-gray-800 dark:text-zinc-100">{planPriceMap[subscriptionData.stripePriceId] || 'Selected Plan'}</strong>.
+            <p className="text-stone-600 dark:text-stone-300 mb-1">
+              You are currently subscribed to the <strong className="text-stone-800 dark:text-stone-100">{planPriceMap[subscriptionData.stripePriceId] || 'Selected Plan'}</strong>.
             </p>
           </div>
         </div>
@@ -351,16 +345,16 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
         {/* REMOVED HEADER BLOCK
         <div className="text-left">
           <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-gray-800 dark:text-zinc-200">
+            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
               Plans & Pricing
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-gray-400 dark:bg-zinc-500"></span>
-            <span className="text-sm text-gray-500 dark:text-zinc-400">
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
+            <span className="text-sm text-stone-500 dark:text-stone-400">
               Choose a plan that's right for you
             </span>
           </div>
           
-          <p className="mb-8 text-base text-gray-600 dark:text-zinc-400 max-w-2xl">
+          <p className="mb-8 text-base text-stone-600 dark:text-stone-400 max-w-2xl">
             All plans include core features like content generation, TikTok format support, and scheduling.
              Annual billing gives you 4 months free.
           </p>
@@ -369,12 +363,12 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
 
         {/* Billing Cycle Toggle */}
         <div className="mb-10 flex items-center justify-between">
-          <div className="inline-flex rounded-lg p-0.5 bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800">
+          <div className="inline-flex rounded-lg p-0.5 bg-neutral-50 dark:bg-neutral-900 border border-stone-200 dark:border-stone-800">
             <button 
               className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 billingCycle === 'monthly' 
-                  ? 'bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow-sm' 
-                  : 'bg-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300'
+                  ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
+                  : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
               }`}
               onClick={() => setBillingCycle('monthly')}
             >
@@ -383,18 +377,14 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
             <button 
               className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 billingCycle === 'yearly' 
-                  ? 'bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow-sm' 
-                  : 'bg-transparent text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-300'
+                  ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
+                  : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
               }`}
               onClick={() => setBillingCycle('yearly')}
             >
               Yearly 
               <span className="ml-2 text-xs font-medium text-green-600 dark:text-green-500">2 months free</span>
             </button>
-          </div>
-          {/* NEW: Launch Discount Badge */}
-          <div className="ml-4 px-3 py-1 text-xs font-semibold text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-700/30 rounded-full">
-            ✨ Launch Discount: 25% OFF! ✨
           </div>
         </div>
 
@@ -407,7 +397,6 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {plans.map((plan, index) => {
             const displayPrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyMonthlyPrice;
-            const originalDisplayPrice = billingCycle === 'monthly' ? plan.originalMonthlyPrice : plan.originalYearlyMonthlyPrice; // Get original price
             const currentPriceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
             const isLoadingThisButton = isLoadingCheckout === (plan.id + '-' + billingCycle);
             const isCurrentPlan = isActiveSubscription(currentPriceId);
@@ -417,15 +406,15 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 key={`${plan.id}-${billingCycle}`}
                 className={`relative rounded-xl p-6 border ${
                   plan.mostPopular 
-                    ? 'border-black dark:border-white' 
-                    : 'border-gray-200 dark:border-zinc-800'
-                } hover:border-gray-300 dark:hover:border-zinc-700 transition-colors bg-white dark:bg-zinc-900 shadow-sm hover:shadow`}
+                    ? 'border-stone-800 dark:border-white' 
+                    : 'border-stone-200 dark:border-stone-800'
+                } hover:border-stone-300 dark:hover:border-stone-700 transition-colors bg-white dark:bg-neutral-900 shadow-sm hover:shadow`}
               >
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{plan.name}</h3>
+                    <h3 className="text-sm font-semibold text-stone-900 dark:text-white">{plan.name}</h3>
                     {plan.mostPopular && (
-                      <span className="relative overflow-hidden inline-flex items-center rounded-full bg-black/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-semibold leading-5 text-black dark:text-white
+                      <span className="relative overflow-hidden inline-flex items-center rounded-full bg-neutral-800/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-semibold leading-5 text-stone-800 dark:text-white
                                      before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/40 dark:before:via-white/20 before:to-transparent">
                         Popular
                       </span>
@@ -433,14 +422,10 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   </div>
                   
                   <div className="flex flex-col">
-                    {/* MODIFIED: Show original price with strikethrough and new price */}
                     <div className="flex items-baseline gap-2">
-                      <del className="text-xl font-normal text-gray-400 dark:text-zinc-500">
-                        ${originalDisplayPrice.toFixed(2)}
-                      </del>
                       <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-zinc-400 mt-1 mb-2">
+                    <span className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-2">
                       {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
                     </span>
                     <AnimatedCredits credits={plan.credits} duration={800 + index * 100} key={billingCycle + '-credits'} />
@@ -452,12 +437,12 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   disabled={isCurrentPlan || isLoadingThisButton || isLoadingCheckout}
                   className={`w-full flex items-center justify-center px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow ${
                     isCurrentPlan
-                      ? 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 cursor-default'
+                      ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-500 dark:text-stone-400 cursor-default'
                       : isLoadingThisButton
-                        ? 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 cursor-wait'
+                        ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
                         : plan.mostPopular 
-                          ? 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-zinc-200' 
-                          : 'bg-white dark:bg-zinc-900 text-black dark:text-white ring-1 ring-inset ring-gray-200 dark:ring-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
+                          ? 'bg-neutral-800 dark:bg-white text-white dark:text-stone-800 hover:bg-neutral-800 dark:hover:bg-neutral-200' 
+                          : 'bg-white dark:bg-neutral-900 text-stone-800 dark:text-white ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
                   } ${
                     isLoadingCheckout && !isLoadingThisButton && !isCurrentPlan ? 'opacity-60 cursor-not-allowed' : ''
                   }`}
@@ -473,8 +458,8 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   )}
                 </button>
                 
-                <p className="text-xs uppercase tracking-wider text-gray-500 dark:text-zinc-500 mt-8 mb-3">Features</p>
-                <ul role="list" className="space-y-2.5 text-xs leading-6 text-gray-600 dark:text-zinc-300">
+                <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-8 mb-3">Features</p>
+                <ul role="list" className="space-y-2.5 text-xs leading-6 text-stone-600 dark:text-stone-300">
                   {plan.features.map((feature, idx) => {
                     let baseFeature = feature;
                     let suffix = null;
@@ -487,10 +472,10 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                     
                     return (
                       <li key={idx} className="flex gap-x-2.5 items-start">
-                        <CheckCircle className="h-4 w-4 flex-none text-gray-400 dark:text-zinc-500 mt-0.5" weight="fill" aria-hidden="true" />
-                        <span className="text-gray-600 dark:text-zinc-300">
+                        <CheckCircle className="h-4 w-4 flex-none text-stone-400 dark:text-stone-500 mt-0.5" weight="fill" aria-hidden="true" />
+                        <span className="text-stone-600 dark:text-stone-300">
                             {baseFeature}
-                            {suffix && <span className="ml-1 text-xs text-gray-400 dark:text-zinc-500">{suffix}</span>}
+                            {suffix && <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">{suffix}</span>}
                         </span>
                       </li>
                     );
@@ -501,9 +486,9 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
           })}
         </div>
 
-        <div className="mt-10 text-left text-xs space-y-2 text-gray-500 dark:text-zinc-500 border-t border-gray-100 dark:border-zinc-800 pt-5">
+        <div className="mt-10 text-left text-xs space-y-2 text-stone-500 dark:text-stone-500 border-t border-stone-100 dark:border-stone-800 pt-5">
           <p className="flex items-center gap-x-1">
-            <Lock size={12} className="text-gray-400 dark:text-zinc-600" aria-hidden="true" />
+            <Lock size={12} className="text-stone-400 dark:text-stone-600" aria-hidden="true" />
             Payments secured with industry-standard encryption
           </p>
         </div>

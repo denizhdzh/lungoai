@@ -5,7 +5,6 @@ import './index.css'
 import SignUp from './components/SignUp.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import Dashboard from './components/Dashboard.jsx';
-import Calendar from './components/Calendar.jsx';
 import Settings from './components/Settings.jsx';
 import Layout from './components/Layout.jsx';
 import Admin from './components/Admin.jsx';
@@ -18,6 +17,8 @@ import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
 import { motion } from 'framer-motion';
+import CampaignCreator from './pages/CampaignCreator.jsx';
+import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 
 // --- IMMEDIATE THEME CHECK (Before React Renders) ---
 if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -31,6 +32,13 @@ if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage
 
 // Protected Route Component (Updated to use userData)
 function ProtectedRoute({ user, userData, userDataFetched, children }) {
+  // --- DEVELOPMENT OVERRIDE ---
+  // In development, always allow access to children to bypass login for testing.
+  if (import.meta.env.DEV) {
+    return children;
+  }
+  // --- END DEVELOPMENT OVERRIDE ---
+
   // Wait until auth is checked and user data is fetched
   if (!userDataFetched) {
     return null; // Or a loading indicator
@@ -185,13 +193,24 @@ function AppRouter() {
         <Route index element={<Dashboard />} /> 
         {/* Other child routes */}
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="calendar" element={<Calendar />} />
         <Route path="settings" element={<Settings />} />
         <Route path="pricing" element={<PricingSection id="pricing" />} />
         <Route path="generation" element={<Generation />} />
         <Route path="aiguide" element={<CommandInfo />} />
         <Route path="admin" element={<Admin />} />
+        <Route path="campaign" element={<CampaignCreator />} />
+        <Route path="studio" element={<CanvasWorkspace />} />
       </Route>
+
+      {/* --- REMOVE STANDALONE STUDIO ROUTE --- */}
+      {/* <Route 
+        path="/studio" 
+        element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <CanvasWorkspace /> 
+          </ProtectedRoute>
+        }
+      /> */}
 
       {/* Fallback Route - Simplified (ProtectedRoute handles logic) */}
       <Route 

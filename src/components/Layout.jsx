@@ -1,25 +1,38 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase'; // Import db
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  getDocs, 
+  Timestamp, 
+  where, 
+  doc, 
+  getDoc 
+} from 'firebase/firestore';
 import { getFunctions, httpsCallable } from "firebase/functions"; // Import functions SDK
 import { 
   Sun, Moon, Plus, ArrowRight, ArrowUpRight, 
   User as UserIcon, // Aliased for consistency 
+  User,
   ImageSquare as ImageIcon, // Aliased
-  Code, Sparkle, Calendar, 
+  ImageSquare,
+  Code, Sparkle, /* Calendar, */ // <-- Calendar ikonunu siliyorum
   FilmSlate as VideoIcon, // Aliased
   PencilSimple, Database, Compass, Power, ChatText, XCircle, BookOpen, X, Camera, UserSquare, 
-  Mountains as BackgroundIcon, // Aliased
+  Mountains as BackgroundPlaceholderIcon, // Aliased
   PenNib, Timer, Package, Gauge, 
   Slideshow as SlideshowIcon, // Aliased
-  UploadSimple, Check // Removed Info icon since it's no longer used
+  Check, Calendar,
+  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple
 } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion'; // Import framer-motion
-import { collection, query, getDocs, Timestamp } from "@firebase/firestore"; 
 import { commandDefinitions } from '../command'; 
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'; // Import DotLottieReact
 import Fuse from 'fuse.js'; // Import Fuse.js for fuzzy matching
-import { doc, onSnapshot, getDoc } from "firebase/firestore"; 
 import DynamicIsland from './DynamicIsland'; // <-- IMPORT DynamicIsland
 import CustomDropdown from './CustomDropdown'; // <-- IMPORT CustomDropdown
 import PricingSection from './PricingSection'; // <-- IMPORT PricingSection
@@ -33,18 +46,18 @@ const saveBackgroundFromGenCallable = httpsCallable(functions, 'saveBackgroundFr
 const createStripePortalSessionCallableLayout = httpsCallable(functions, 'createStripePortalSession');
 // Add createOneTimeCheckoutSession callable for extra credits
 const createOneTimeCheckoutSession = httpsCallable(functions, 'createOneTimeCheckoutSession');
-// --- REMOVE OLD CALLABLES ---
-// const generateImageSlideshowCallable = httpsCallable(functions, 'generateImageSlideshow'); 
-// const processLungoJob = httpsCallable(functions, 'processLungoJob');
-// --- ADD NEW CALLABLE ---
-const parseUserCommandCallable = httpsCallable(functions, 'parseUserCommand');
+
+// --- ADD NEW DIRECT CALLABLE ---
+const generateImageCallable = httpsCallable(functions, 'generateImage', {
+  timeout: 540000, // 9 minutes timeout
+});
 
 // --- Plan Price Mapping (Moved from Dashboard) ---
 const planPriceMap = {
   "price_1RMqEZDf8kAOBAT3ltD6n2lX": "Basic (Monthly)",
   "price_1RMqGbDf8kAOBAT3vgwkWLr6": "Basic (Yearly)",
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": "Pro (Monthly)",
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": "Pro (Yearly)",
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": "Pro (Monthly)",
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": "Pro (Yearly)",
   "price_1RMqHgDf8kAOBAT3m6kthIND": "Business (Monthly)",
   "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": "Business (Yearly)",
 };
@@ -75,6 +88,7 @@ function Layout() {
   const [creators, setCreators] = useState([]); // To store fetched creators
   const [backgrounds, setBackgrounds] = useState([]); // To store fetched backgrounds
   const [products, setProducts] = useState([]); // Add state for products
+  const [tiktokAccounts, setTiktokAccounts] = useState([]); // To store fetched TikTok accounts
   const [isLoadingSuggestionsData, setIsLoadingSuggestionsData] = useState(false); // Loading state for suggestions data
   const [generatedImageUrl, setGeneratedImageUrl] = useState(null); // <-- ADD State for image URL
   const [isGeneratingImage, setIsGeneratingImage] = useState(false); // <-- State for image generation loading
@@ -193,18 +207,29 @@ function Layout() {
   const dropdownHoverTimeoutRef = useRef(null); // For delayed close on trigger leave
   const menuHoverTimeoutRef = useRef(null); // For delayed close on menu leave
 
+  // --- NEW: Step-by-step creation states ---
+  const [creationStep, setCreationStep] = useState(1); // 1: source selection, 2: configuration
+  const [creationSource, setCreationSource] = useState(''); // 'custom', 'library'
+
   // --- NEW: States and Refs for sub-option dropdowns ---
   const [selectedVideoType, setSelectedVideoType] = useState('');
   const [selectedVideoLength, setSelectedVideoLength] = useState(''); // Kept for potential future use, though not in current UI spec
   const [selectedVideoProduct, setSelectedVideoProduct] = useState('');
   const [selectedVideoLanguage, setSelectedVideoLanguage] = useState('en'); // Default to English
   const [selectedImageType, setSelectedImageType] = useState('');
-  const [selectedImageQuality, setSelectedImageQuality] = useState(''); // Kept for potential future use, though not in current UI spec
+  const [selectedImageQuality, setSelectedImageQuality] = useState('high'); // Default to high quality
   const [selectedImageProduct, setSelectedImageProduct] = useState(''); // NEW: For Image Ads Product
   const [selectedSlideshowProduct, setSelectedSlideshowProduct] = useState('');
   const [selectedSlideshowBackground, setSelectedSlideshowBackground] = useState('');
   const [selectedSlideshowType, setSelectedSlideshowType] = useState(''); // NEW: For Slideshow Type
+  const [selectedSlideshowTopic, setSelectedSlideshowTopic] = useState(''); // NEW: For Topic Selection
   const [selectedSlideshowLanguage, setSelectedSlideshowLanguage] = useState('en'); // Default to English
+  // --- NEW: Campaign specific states ---
+  // const [selectedCampaignTikTok, setSelectedCampaignTikTok] = useState(''); // REMOVED
+  // const [selectedCampaignProduct, setSelectedCampaignProduct] = useState(''); // REMOVED
+  // const [selectedCampaignSlideshowType, setSelectedCampaignSlideshowType] = useState(''); // REMOVED
+  // const [selectedCampaignBackgrounds, setSelectedCampaignBackgrounds] = useState([]); // REMOVED
+  // const [selectedCampaignLanguage, setSelectedCampaignLanguage] = useState('en'); // REMOVED
   // --- END NEW STATES ---
 
   // --- Fuzzy Match Options for Yes/No ---
@@ -219,6 +244,7 @@ function Layout() {
     }
     if (creationMode === 'image') {
       if (!selectedImageType || selectedImageType === '') return true; // Image Type is a required dropdown itself
+      if (!selectedImageQuality || selectedImageQuality === '') return true; // Quality is required
       // if (selectedImageType === 'ads' && !selectedImageProduct) return true; // Ads option removed
       return false; // No image type requires a sub-product selection anymore
     }
@@ -226,6 +252,10 @@ function Layout() {
       return !selectedSlideshowProduct || !selectedSlideshowBackground || !selectedSlideshowType || !selectedSlideshowLanguage ||
              selectedSlideshowProduct === '' || selectedSlideshowBackground === '' || selectedSlideshowType === '' || selectedSlideshowLanguage === '';
     }
+    // if (creationMode === 'campaign') { // REMOVED CAMPAIGN CHECK
+    //   return !selectedCampaignTikTok || !selectedCampaignProduct || !selectedCampaignSlideshowType || selectedCampaignBackgrounds.length === 0 || !selectedCampaignLanguage ||
+    //          selectedCampaignTikTok === '' || selectedCampaignProduct === '' || selectedCampaignSlideshowType === '' || selectedCampaignLanguage === '';
+    // }
     return false; // No sub-options for other modes or if no creationMode
   };
 
@@ -234,6 +264,11 @@ function Layout() {
     { id: 'ugc_model', name: 'UGC Model' },
     // { id: 'ads', name: 'Ads' }, // Removed Ads
     { id: 'background', name: 'Background' },
+  ];
+
+  const imageQualityOptions = [
+    { id: 'standard', name: 'Medium Quality', credits: 50 },
+    { id: 'high', name: 'High Quality', credits: 90 },
   ];
 
   const videoProductOptions = useMemo(() => (
@@ -253,11 +288,22 @@ function Layout() {
   ), [backgrounds]);
 
   const slideshowTypeOptions = [
-    { id: 'safe_secure', name: 'Safe & Secure' },
-    { id: 'learn_grow', name: 'Learn & Grow' },
-    { id: 'viral_fun', name: 'Viral & Fun' },
-    { id: 'personal_stories', name: 'Personal Stories' },
+    { id: 'top_3_lists', name: 'Top 3 Lists', icon: <ListNumbers size={16} /> },
+    { id: 'before_after', name: 'Before & After', icon: <ArrowsClockwise size={16} /> },
+    { id: 'step_by_step', name: 'Step-by-Step Guide', icon: <Steps size={16} /> },
+    { id: 'question_reveal', name: 'Question & Reveal', icon: <Question size={16} /> },
+    { id: 'personal_story', name: 'Personal Story', icon: <ChatCircle size={16} /> },
+    { id: 'problem_solution', name: 'Problem & Solution', icon: <Lightbulb size={16} /> },
   ];
+
+  // TikTok accounts options for campaigns
+  // const tiktokAccountOptions = useMemo(() => ( // REMOVED
+  //   tiktokAccounts.map(account => ({ 
+  //     id: account.id, 
+  //     name: account.name,
+  //     imageUrl: account.user_info?.avatar_url
+  //   }))
+  // ), [tiktokAccounts]); // REMOVED
 
   // Language options with flag emojis
   const languageOptions = [
@@ -307,9 +353,9 @@ function Layout() {
   ]), [products]);
 
   const itemRenderer = (option, isSelected) => (
-    <div className="flex items-center gap-2.5 flex-grow">
+    <div className="flex items-center gap-3 flex-grow">
       {option.imageUrl ? (
-        <div className="w-8 h-8 rounded-md overflow-hidden border border-gray-200 dark:border-zinc-700 flex-shrink-0">
+        <div className="w-8 h-8 rounded-lg overflow-hidden border border-stone-200/50 dark:border-stone-700/50 flex-shrink-0">
           <img 
             src={option.imageUrl} 
             alt={option.name} 
@@ -317,22 +363,26 @@ function Layout() {
           />
         </div>
       ) : option.id === 'upload_new' ? (
-        <div className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-zinc-700 flex-shrink-0">
-          <UploadSimple size={16} className="text-gray-400 dark:text-gray-500" />
+        <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-50 dark:bg-neutral-800/50 text-red-500 border border-stone-200/50 dark:border-stone-700/50 flex-shrink-0">
+          <UploadSimple size={15} className="text-red-500" />
+        </div>
+      ) : option.icon ? (
+        <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-50 dark:bg-neutral-800/50 text-stone-600 dark:text-stone-400 border border-stone-200/50 dark:border-stone-700/50 flex-shrink-0">
+          {React.cloneElement(option.icon, { size: 16 })}
         </div>
       ) : (
-        // Placeholder for items without image and not 'upload_new'
-        <div className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-zinc-700 flex-shrink-0">
+        // Placeholder for items without image, icon and not 'upload_new'
+        <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-neutral-50 dark:bg-neutral-800/50 text-stone-400 dark:text-stone-500 border border-stone-200/50 dark:border-stone-700/50 flex-shrink-0">
           {/* Optionally, render a generic icon from the parent dropdown if available */}
           {/* This part depends on how you want to display items without their own specific icon/image */}
         </div>
       )}
       <div className="flex flex-grow items-center justify-between min-w-0">
-        <span className={`truncate pr-2 text-gray-900 dark:text-gray-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
+        <span className={`truncate pr-2 text-stone-900 dark:text-stone-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
           {option.name}
         </span>
         {isSelected && (
-          <Check size={14} weight="bold" className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <Check size={13} weight="bold" className="text-red-500 flex-shrink-0" />
         )}
       </div>
     </div>
@@ -340,20 +390,53 @@ function Layout() {
 
   // Language item renderer with flag emojis
   const languageItemRenderer = (option, isSelected) => (
-    <div className="flex items-center gap-2.5 flex-grow">
-      <div className="w-8 h-8 flex items-center justify-center rounded-md text-lg flex-shrink-0">
+    <div className="flex items-center gap-3 flex-grow">
+      <div className="w-8 h-8 flex items-center justify-center rounded-lg text-lg flex-shrink-0 bg-neutral-50 dark:bg-neutral-800/50 border border-stone-200/50 dark:border-stone-700/50">
         {option.flag}
       </div>
       <div className="flex flex-grow items-center justify-between min-w-0">
-        <span className={`truncate pr-2 text-gray-900 dark:text-gray-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
+        <span className={`truncate pr-2 text-stone-900 dark:text-stone-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
           {option.name}
         </span>
         {isSelected && (
-          <Check size={14} weight="bold" className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+          <Check size={13} weight="bold" className="text-red-500 flex-shrink-0" />
         )}
       </div>
     </div>
   );
+
+  // Grid item renderer for images (9:16 aspect ratio with name below)
+  const gridItemRenderer = (option, isSelected) => (
+    <div className="flex flex-col items-center gap-2 w-full">
+      <div className={`relative w-full aspect-[9/16] rounded-xl overflow-hidden border-2 transition-all ${
+        isSelected ? 'border-stone-600 dark:border-stone-400 shadow-lg' : 'border-stone-200/50 dark:border-stone-700/50'
+      }`}>
+        {option.imageUrl ? (
+          <img 
+            src={option.imageUrl} 
+            alt={option.name} 
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500">
+            <ImageSquare size={24} className="opacity-50" />
+          </div>
+        )}
+        {isSelected && (
+                                <div className="absolute top-2 right-2 bg-neutral-950/80 dark:bg-neutral-100/80 rounded-full p-1">
+                        <Check size={12} weight="bold" className="text-white dark:text-stone-900" />
+                      </div>
+        )}
+      </div>
+      <span className={`text-center text-xs font-medium w-full truncate ${
+        isSelected ? 'text-stone-900 dark:text-stone-100' : 'text-stone-700 dark:text-stone-300'
+      }`}>
+        {option.name}
+      </span>
+    </div>
+  );
+
+
   // --- END NEW: Dropdown Options ---
 
   // --- Function to trigger dashboard refresh ---
@@ -413,18 +496,39 @@ function Layout() {
     }
   }, [user]); // Removed db from deps
 
+  // const fetchTikTokAccounts = useCallback(async () => { // REMOVED
+  //   if (!user) return;
+  //   try {
+  //     const tiktokQuery = query(
+  //       collection(db, 'users', user.uid, 'integrations'),
+  //       where('type', '==', 'tiktok')
+  //     );
+  //     const tiktokSnapshot = await getDocs(tiktokQuery);
+  //     const fetchedTikTok = tiktokSnapshot.docs.map(doc => ({ 
+  //       id: doc.id, 
+  //       ...doc.data(),
+  //       name: doc.data().user_info?.display_name || `TikTok Account ${doc.id.slice(-4)}`
+  //     }));
+  //     setTiktokAccounts(fetchedTikTok);
+  //     // console.log("Fetched/Refetched TikTok Accounts:", fetchedTikTok);
+  //   } catch (error) {
+  //     console.error("Error fetching/refetching TikTok accounts:", error);
+  //   }
+  // }, [user]); // REMOVED
+
   // --- NEW: refreshLayoutData Function ---
   const refreshLayoutData = useCallback(async () => {
     // console.log("[Layout] Refreshing layout data...");
     try {
       await fetchProducts();
       await fetchCreatorsAndBackgrounds();
+      // await fetchTikTokAccounts(); // REMOVED
       // Potentially add other data refresh calls here if needed
       // console.log("[Layout] Layout data refreshed.");
     } catch (error) {
       console.error("[Layout] Error refreshing layout data:", error);
     }
-  }, [fetchProducts, fetchCreatorsAndBackgrounds]);
+  }, [fetchProducts, fetchCreatorsAndBackgrounds]); // REMOVED fetchTikTokAccounts
   // --- END NEW: refreshLayoutData Function ---
 
   // --- Fetch Initial Data ---
@@ -432,7 +536,7 @@ function Layout() {
     if (user) {
     setIsInitialDataLoaded(false); // Reset on user change
       setIsLoadingSuggestionsData(true);
-      Promise.all([fetchCreatorsAndBackgrounds(), fetchProducts()])
+      Promise.all([fetchCreatorsAndBackgrounds(), fetchProducts()]) // REMOVED fetchTikTokAccounts()
       .finally(() => {
           setIsLoadingSuggestionsData(false);
             setIsInitialDataLoaded(true);
@@ -443,9 +547,10 @@ function Layout() {
         setCreators([]);
         setBackgrounds([]);
         setProducts([]);
+        // setTiktokAccounts([]); // REMOVED
         setIsInitialDataLoaded(false);
     }
-  }, [user, fetchCreatorsAndBackgrounds, fetchProducts]);
+  }, [user, fetchCreatorsAndBackgrounds, fetchProducts]); // REMOVED fetchTikTokAccounts
 
   // --- NEW: Effect to fetch Firestore user data ---
   useEffect(() => {
@@ -476,6 +581,10 @@ function Layout() {
       case '/':
         setPageTitle(`Recent Generations`);
         setPageSubtitle('Overview of your latest creations.');
+        break;
+      case '/studio':
+        setPageTitle('AI Content Studio');
+        setPageSubtitle('Create TikTok and Instagram content with AI.');
         break;
       case '/calendar':
         setPageTitle('Content Calendar');
@@ -580,6 +689,9 @@ function Layout() {
         // Blur the input and clear any selected mention when hiding
         chatInputRef.current?.blur();
         setCreationMode(null); // Reset creation mode when chat input is closed
+        // Reset step states
+        setCreationStep(1);
+        setCreationSource('');
         // Optionally reset sub-option states here as well
         setSelectedVideoType('');
         setSelectedVideoLength('');
@@ -590,6 +702,11 @@ function Layout() {
         setSelectedSlideshowBackground('');
         setSelectedSlideshowType('');
         setSelectedSlideshowLanguage('en');
+        // setSelectedCampaignTikTok(''); // REMOVED
+        // setSelectedCampaignProduct(''); // REMOVED
+        // setSelectedCampaignSlideshowType(''); // REMOVED
+        // setSelectedCampaignBackgrounds([]); // REMOVED
+        // setSelectedCampaignLanguage('en'); // REMOVED
       }
       return nextVisibleState;
     });
@@ -659,217 +776,124 @@ function Layout() {
       }
 
       if (creationMode === 'video') {
-        itemName = "Video";
-        if (!selectedVideoProduct || !selectedVideoType || selectedVideoProduct === '' || selectedVideoType === '') {
-          alert("Please select a Product and UGC Model for your video.");
-          return;
-        }
-        operationPayload.commandCode = 101; // GENERATE_UGC_TIKTOK_VIDEO
-        operationPayload.parameters.product_id = selectedVideoProduct;
-        operationPayload.parameters.mentionedCreatorId = selectedVideoType; // Changed from creator_id
-        operationPayload.parameters.language = selectedVideoLanguage; // Use selected language
-        
-        // Add other optional parameters if user provided input
-        if (finalCommandText) {
-          operationPayload.parameters.user_prompt = finalCommandText;
-          operationPayload.parameters.action_description = finalCommandText; // Also pass as action_description for backward compatibility
-        }
-        
-        // Debug log to check values
-        console.log('[Layout] Video parameters:', {
-          product_id: selectedVideoProduct,
-          mentionedCreatorId: selectedVideoType,
-          language: selectedVideoLanguage,
-          product_id_type: typeof selectedVideoProduct,
-          mentionedCreatorId_type: typeof selectedVideoType,
-          full_parameters: operationPayload.parameters
-        });
-      
+        alert("Video generation is temporarily disabled.");
+        return;
+        // Video logic that used parseUserCommandCallable is commented out
       } else if (creationMode === 'image') {
         itemName = 'Image';
         
-        // Set commandCode based on selectedImageType
-        if (selectedImageType === 'ugc_model') {
-          operationPayload.commandCode = 202; // GENERATE_UGC_IMAGE
-          operationPayload.parameters.subject_description = finalCommandText || 'person';
-        } else if (selectedImageType === 'background') {
-          operationPayload.commandCode = 201; // GENERATE_BACKGROUND_IMAGE
-          operationPayload.parameters.scene_description = finalCommandText || 'beautiful scene';
-        } else {
-          // Default fallback
-          operationPayload.commandCode = 203; // GENERATE_RANDOM_IMAGE
-          operationPayload.parameters.image_subject = finalCommandText || 'random image';
-        }
-        
-        // Add common image parameters without overwriting existing parameters
-        operationPayload.parameters.image_style = operationPayload.parameters.image_style || 'photorealistic';
-        
-        console.log('[Layout] Image parameters:', {
-          commandCode: operationPayload.commandCode,
-          selectedImageType: selectedImageType,
-          parameters: operationPayload.parameters
-        });
-        
-        operationPayload.parameters.baseImageUrl = selectedImageProduct?.imageUrl || null;
-        // product_id is not explicitly needed by performImageGenerationTask if baseImageUrl is direct
-        
-        // Ensure commandCode is set for image generation
-        if (!operationPayload.commandCode) { // This check is now redundant but kept for safety / future ref
-            // TODO: Determine the correct commandCode for image generation.
-            // This might be a predefined constant or based on selectedImageType/selectedImageProduct.
-            // For now, let's assume a default or throw an error.
-            // For example, if you have a generic image generation command:
-            // operationPayload.commandCode = 201; // GENERATE_BACKGROUND_IMAGE as a placeholder
-            // OR, if the command depends on selectedImageType:
-            // if (selectedImageType === 'product_shot') operationPayload.commandCode = 201;
-            // else if (selectedImageType === 'character_gen') operationPayload.commandCode = 202;
-            console.error("handleCommandSubmit: commandCode is not being set for image generation!");
-        }
+        const imageGenPayload = {
+          userInput: finalCommandText || 'a random image',
+          imageType: selectedImageType === 'background' ? 'background_image' : 'ugc_image',
+          // gender, age, ethnicity could be added here from state if available
+          style: selectedImageQuality === 'high' ? 'high quality realistic photo' : 'photorealistic',
+        };
 
-      } else if (creationMode === 'slideshow') {
-        itemName = "Slideshow";
-        if (!selectedSlideshowProduct || !selectedSlideshowBackground || !selectedSlideshowType || 
-            selectedSlideshowProduct === '' || selectedSlideshowBackground === '' || selectedSlideshowType === '') {
-          alert("Please select a Product, Background, and Slideshow Type for your slideshow.");
-          return;
-        }
-        operationPayload.commandCode = 301; // GENERATE_IMAGE_TIKTOK_SLIDESHOW
-        operationPayload.parameters.product_id = selectedSlideshowProduct;
-        operationPayload.parameters.background_id = selectedSlideshowBackground;
-        operationPayload.parameters.slideshow_type = selectedSlideshowType;
-        operationPayload.parameters.language = selectedSlideshowLanguage; // Use selected language
-        if (finalCommandText) {
-          operationPayload.parameters.user_prompt = finalCommandText;
-        }
+        console.log(`[Layout] Calling generateImageCallable with payload:`, imageGenPayload);
 
-      } else {
-        alert(`Creation mode "${creationMode}" is not supported for submission.`);
-        // Clear UI and return
-        setInputValue('');
-        setSuggestions([]);
-        setShowSuggestions(false);
-        setCreationMode(null);
-        // Reset all selected options
-        setSelectedVideoType(''); setSelectedVideoProduct(''); setSelectedVideoLanguage('en');
-        setSelectedImageType(''); setSelectedImageProduct('');
-        setSelectedSlideshowProduct(''); setSelectedSlideshowBackground(''); setSelectedSlideshowType(''); setSelectedSlideshowLanguage('en');
-        setIsChatInputVisible(false);
-        return;
-      }
-
-      // Now, call parseUserCommandCallable for all creation modes
-      if (operationPayload.commandCode !== 0) {
-        console.log(`[Layout] Calling parseUserCommandCallable for ${creationMode}:`, operationPayload);
+        // Set generating state for UI
+        setIsGeneratingImage(true);
         setGeneratingItem({
           type: itemName.toLowerCase(),
           status: 'initiating',
-          commandCode: operationPayload.commandCode,
           name: finalCommandText || `New ${itemName}`
         });
 
+        // Set up Firestore listener for real-time status updates
+        let statusUnsubscribe = null;
+        const setupStatusListener = (userId) => {
+          const statusRef = collection(db, 'users', userId, 'generation_status');
+          const statusQuery = query(statusRef, orderBy('createdAt', 'desc'), limit(1));
+          
+          statusUnsubscribe = onSnapshot(statusQuery, (snapshot) => {
+            if (!snapshot.empty) {
+              const statusDoc = snapshot.docs[0];
+              const statusData = statusDoc.data();
+              
+              console.log('[Layout] Real-time status update:', statusData);
+              
+              setGeneratingItem(prev => ({
+                ...prev,
+                status: statusData.status,
+                message: statusData.message,
+                step: statusData.step,
+                totalSteps: statusData.totalSteps
+              }));
+            }
+          });
+        };
+
+        setupStatusListener(user.uid);
+
         try {
-          // Token refresh logic (optional, but good practice if tokens might expire during long UI sessions)
-          if (user && user.getIdToken) { // Check if getIdToken method exists
+          // Token refresh logic
+          if (user && user.getIdToken) {
              try {
-                await user.getIdToken(true); // Force refresh
-                console.log(`[Layout] Token refreshed for user ${user.uid}`);
+                await user.getIdToken(true); 
+                console.log(`[Layout] Token refreshed for image generation.`);
              } catch (tokenError) {
                 console.warn('[Layout] Optional token refresh failed:', tokenError);
-                // Proceed anyway, backend will ultimately validate auth
              }
           }
 
-          const result = await parseUserCommandCallable(operationPayload);
-          console.log('[Layout] parseUserCommandCallable result:', result);
+          // DIRECTLY CALL THE NEW FUNCTION - Real status updates come from Firestore
+          const result = await generateImageCallable(imageGenPayload);
+          console.log('[Layout] generateImageCallable result:', result);
 
-          if (result.data?.success === false) { // Önce backend tarafından işaretlenmiş bir hata var mı?
-            alert(`Error generating ${itemName}: ${result.data.message || 'Unknown error from backend.'}`);
-            setGeneratingItem(null);
-          } else if (result.data?.data?.firestoreDocId) { // VİDEO DURUMU: result.data.data.firestoreDocId kontrolü
-            // Video generation - has firestoreDocId, will be handled by Firestore listener
-            console.log('[Layout] Video generation started, firestoreDocId:', result.data.data.firestoreDocId);
-            setGeneratingItem(prev => prev ? { 
-              ...prev, 
-              firestoreDocId: result.data.data.firestoreDocId, // Doğru yolu kullan
-              status: 'image_generation_pending' 
-            } : null);
-          } else if (result.data?.generationId || (result.data?.success && (itemName.toLowerCase() === 'image' || itemName.toLowerCase() === 'slideshow'))) { // IMAGE/SLIDESHOW DURUMU
-            // Image/Slideshow generation - direct/synchronous result
-            console.log(`[Layout] ${itemName} generation completed successfully (direct result).`);
-            notifyGenerationComplete(itemName.toLowerCase(), result.data?.generationId || `sync_${itemName.toLowerCase()}`);
+          if (result.data?.success) {
+            // Don't navigate - just show success and refresh data
+            console.log('[Layout] Image generated successfully:', result.data.image);
+            // Optionally refresh user data to show updated credits
+            refreshLayoutData(); 
           } else {
-            // Beklenmedik bir durum veya genel bir başarı mesajı (ama spesifik bir ID yok)
-            console.log('[Layout] parseUserCommandCallable returned an unhandled successful response structure:', result.data);
-            // Bu durumda ne yapılacağına karar vermek lazım. Belki sadece loglamak yeterli.
-            // Şimdilik, eğer itemName biliniyorsa ve bir hata değilse, tamamlanmış gibi davranalım.
-            if (itemName && result.data?.success) {
-              console.warn(`[Layout] Unhandled success for ${itemName}. Assuming completion.`);
-              notifyGenerationComplete(itemName.toLowerCase(), `unknown_success_${itemName.toLowerCase()}`);
-            } else {
-              setGeneratingItem(null); // Güvenlik önlemi olarak temizle
-            }
+            // Handle specific errors from backend
+            const errorMessage = result.data?.message || 'Unknown error from backend.';
+            alert(`Error generating Image: ${errorMessage}`);
           }
 
         } catch (error) {
-          console.error(`Error calling parseUserCommandCallable for ${creationMode}:`, error);
-          alert(`Error starting ${itemName} generation: ${error.message}`);
-          setGeneratingItem(null); // Clear on error
+          console.error('Error calling generateImageCallable:', error);
+          // Handle callable function errors (e.g., insufficient credits)
+          let userErrorMessage = error.message;
+          if (error.code === 'resource-exhausted') {
+            userErrorMessage = `Oops! You're out of credits for this action. Please buy more or upgrade your plan.`;
+          }
+          alert(`Error: ${userErrorMessage}`);
+        } finally {
+          // Clean up Firestore listener
+          if (statusUnsubscribe) {
+            statusUnsubscribe();
+          }
+          
+          // Reset generating state regardless of outcome
+          setTimeout(() => {
+            setGeneratingItem(null);
+            setIsGeneratingImage(false);
+          }, 2000); // Keep status visible for 2 seconds after completion
+          
+          // UI cleanup
+          setInputValue('');
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setCreationMode(null);
+          setSelectedImageType('');
+          setSelectedImageProduct('');
+          setSelectedImageQuality('high');
+          setIsChatInputVisible(false);
         }
         
-        // UI cleanup - moved out of finally block and called immediately after submit
-        setInputValue('');
-        setSuggestions([]);
-        setShowSuggestions(false);
-        setCreationMode(null);
-        setSelectedVideoType(''); setSelectedVideoProduct(''); setSelectedVideoLanguage('en');
-        setSelectedImageType(''); setSelectedImageProduct('');
-        setSelectedSlideshowProduct(''); setSelectedSlideshowBackground(''); setSelectedSlideshowType(''); setSelectedSlideshowLanguage('en');
-        setIsChatInputVisible(false); // Close chat input after submit button click
-        
-        return; // Explicitly return after handling a creationMode call.
+        return; // IMPORTANT: Return here to prevent falling through to old logic
+
+      } else if (creationMode === 'slideshow') {
+        alert("Slideshow generation is temporarily disabled.");
+        return;
+        // Slideshow logic that used parseUserCommandCallable is commented out
       }
+
     } else if (finalCommandText) {
-      // Text-only command (not using creationMode UI)
-      operationPayload.commandCode = 0; // Let backend parse it from text
-      operationPayload.parameters = { userId: user.uid }; // Base params
-
-      console.log('[Layout] Calling parseUserCommandCallable for text-only command:', operationPayload);
-      setGeneratingItem({ type: 'task', status: 'processing', name: finalCommandText });
-
-      try {
-        if (user && user.getIdToken) {
-            try { await user.getIdToken(true); console.log(`[Layout] Token refreshed for text command.`); } 
-            catch (tokenError) { console.warn('[Layout] Optional token refresh failed for text command:', tokenError); }
-        }
-        const result = await parseUserCommandCallable(operationPayload);
-        console.log('[Layout] parseUserCommandCallable (text-only) result:', result);
-        
-        // Handle result for text commands (could be UI, data, or even generation if AI parses it that way)
-        if (result.data?.success === false) {
-            alert(`Error: ${result.data.message || 'Unknown backend error.'}`);
-        } else if (result.data?.commandCode && result.data?.commandCode !== 0) {
-            console.log('[Layout] Received parsed command from text (backend):', result.data);
-            if (result.data.message) {
-                // alert(result.data.message);
-            }
-        } else if (result.data?.commandCode === 0 && result.data?.message) {
-             alert(result.data.message); // e.g., "Could not determine the operation..."
-        }
-
-      } catch (error) {
-        console.error('Error calling parseUserCommandCallable for text-only command:', error);
-        alert(`Error processing command: ${error.message}`);
-      }
-      
-      // UI cleanup for text commands - moved out of finally block
-      setGeneratingItem(null);
-      setInputValue('');
-      setSuggestions([]);
-      setShowSuggestions(false);
-      setIsChatInputVisible(false);
-      
-      return;
-
+       alert("Text-based commands are temporarily disabled.");
+       return;
+      // Text-only command logic commented out
     } else if (selectedAsset) {
       // This part might be deprecated or integrated differently
       alert("Asset selection action is not fully implemented yet.");
@@ -886,8 +910,6 @@ function Layout() {
       chatInputRef.current?.focus();
       return; 
     }
-    // Safeguard cleanup (most paths should handle this and return)
-    // setIsChatInputVisible(false); // Usually closed by specific paths
   };
 
   // Handle Enter key press in input
@@ -940,7 +962,7 @@ function Layout() {
       let IconComponent = Code; 
       
       // Determine icon based on command code range
-      if (suggestion.id < 100) IconComponent = Calendar;      // Planning
+      if (suggestion.id < 100) IconComponent = Sparkle; // Planning (Calendar yerine Sparkle)
       else if (suggestion.id < 200) IconComponent = VideoIcon; // Video Generation
       else if (suggestion.id < 300) IconComponent = ImageIcon; // Image Generation
       else if (suggestion.id < 400) IconComponent = VideoIcon; // Slideshow (using VideoIcon for now)
@@ -1054,28 +1076,11 @@ function Layout() {
                 };
 
                 try {
-                    const result = await parseUserCommandCallable(operationPayload);
-                    console.log(`[Layout Queue] parseUserCommand result for command ${commandToExecute.commandCode}:`, result);
-                    
-                    if (result.data?.success === false) {
-                        console.error(`[Layout Queue] Command ${commandToExecute.commandCode} failed:`, result.data.message);
-                        setGeneratingItem(null);
-                    } else if (result.data?.data?.firestoreDocId) {
-                        // Video generation - has firestoreDocId
-                        console.log(`[Layout Queue] Video generation started, firestoreDocId:`, result.data.data.firestoreDocId);
-                        setGeneratingItem(prev => prev ? { 
-                            ...prev, 
-                            firestoreDocId: result.data.data.firestoreDocId,
-                            status: 'image_generation_pending' 
-                        } : null);
-                    } else if (result.data?.success) {
-                        // Direct success (image/slideshow)
-                        console.log(`[Layout Queue] Command ${commandToExecute.commandCode} completed successfully`);
-                        refreshDashboardGenerations();
-                        setGeneratingItem(null);
-                    }
+                    // Temporarily disable other commands until they are re-implemented
+                    console.warn(`[Layout Queue] Command ${commandToExecute.commandCode} is temporarily disabled (parseUserCommand removed)`);
+                    setGeneratingItem(null);
                 } catch (parseError) {
-                    console.error(`[Layout Queue] Error calling parseUserCommand for command ${commandToExecute.commandCode}:`, parseError);
+                    console.error(`[Layout Queue] Error processing command ${commandToExecute.commandCode}:`, parseError);
                     throw parseError; // Re-throw to be handled by outer catch
                 }
                 // --- END NEW: Use parseUserCommand ---
@@ -1106,7 +1111,7 @@ function Layout() {
 
     processNextInQueueItem();
 
-  }, [isInitialDataLoaded, commandQueue, currentlyExecuting, pendingConfirmation, navigate, products, creators, backgrounds, user, toggleDarkMode, refreshDashboardGenerations, setGeneratingItem, fetchCreatorsAndBackgrounds, fetchProducts, setActiveImageData, auth, db, setPendingConfirmation, refreshLayoutData, parseUserCommandCallable]);
+  }, [isInitialDataLoaded, commandQueue, currentlyExecuting, pendingConfirmation, navigate, products, creators, backgrounds, user, toggleDarkMode, refreshDashboardGenerations, setGeneratingItem, fetchCreatorsAndBackgrounds, fetchProducts, setActiveImageData, auth, db, setPendingConfirmation, refreshLayoutData]);
 
   // --- NEW: Video Status Polling Effect (using Firestore onSnapshot) ---
   useEffect(() => {
@@ -1205,6 +1210,8 @@ function Layout() {
     refreshLayoutData,
     refreshDashboardGenerations,
     notifyGenerationComplete, // <-- ADDED
+    slideshowTypeOptions, // Pass down slideshow options
+    languageOptions, // Pass down language options
   }), [
     dashboardRefreshKey,
     generatingItem, // If generatingItem is an object, its reference changing will still trigger this
@@ -1230,6 +1237,8 @@ function Layout() {
     refreshLayoutData, // Assuming stable due to useCallback
     refreshDashboardGenerations, // Stable (useCallback)
     notifyGenerationComplete, // <-- ADDED
+    slideshowTypeOptions, // Add to dependency array
+    languageOptions, // Add to dependency array
   ]);
 
   // Function to get dynamic title and subtitle based on current route
@@ -1242,6 +1251,11 @@ function Layout() {
         return {
           title: 'Home',
           subtitle: 'Create amazing content with AI'
+        };
+      case '/studio':
+        return {
+          title: 'AI Content Studio',
+          subtitle: 'Create TikTok and Instagram content with AI'
         };
       case '/calendar':
         return {
@@ -1263,76 +1277,111 @@ function Layout() {
 
   const { title: currentTitle, subtitle: currentSubtitle } = getPageTitleAndSubtitle();
 
+  // Canvas sayfasında iken dot background'ı gizle
+  const isCanvasPage = location.pathname === '/studio';
+
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 font-sans relative overflow-hidden transition-colors duration-200">
-      {/* --- RE-ADD Animated background grid --- */}
-      <div className="grid-animation" />
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
+      {/* --- NEW: Dot Grid Background (Canvas sayfasında gizli) --- */}
+      {!isCanvasPage && (
+        <div className="absolute inset-0 h-full w-full bg-white dark:bg-neutral-950 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
+      )}
       
       {/* Main content container with relative positioning */}
       <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
         
-        {/* --- RE-ADD Fixed Header Area --- */}
-        <header className="mt-12 mb-12"> 
-          <div className="max-w-6xl mx-auto flex items-center justify-between px-4 xl:px-0"> 
-            {/* Left: Dynamic Title and Subtitle */}
-            <div className="flex-1">
-              <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
-                {currentTitle}
-              </h1>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5">
-                {currentSubtitle}
-              </p>
+        {/* --- Studio Header (Canvas sayfasında görünür) --- */}
+        {isCanvasPage && (
+          <header className="fixed top-0 left-0 right-0 z-40 bg-transparent dark:bg-transparent transition-colors duration-200">
+            <div className="flex items-center justify-between h-16 px-6 max-w-screen-2xl mx-auto">
+              {/* Sol Taraf: Logo */}
+              <div className="flex items-center gap-2">
+                <a href="/" className="flex items-baseline text-lg font-bold text-stone-800 dark:text-stone-200">
+                  <span>Lungo</span>
+                  <span className="text-xs font-semibold align-super">AI</span>
+                </a>
+              </div>
+              
+              {/* Orta: Dynamic Island */}
+              <div className="flex-1 flex justify-center">
+                <DynamicIsland 
+                  generatingItem={generatingItem}
+                  commandQueue={commandQueue}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+              
+              {/* Sağ Taraf: Dark Mode Toggle */}
+              <div className="flex items-center gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  onClick={toggleDarkMode}
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+                  aria-label="Toggle dark mode"
+                >
+                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                </motion.button>
+              </div>
             </div>
+          </header>
+        )}
 
-            {/* Center: Dynamic Island */}
-            <div className="flex justify-center">
-              <DynamicIsland 
-                generatingItem={generatingItem}
-                commandQueue={commandQueue}
-                isDarkMode={isDarkMode}
-              />
+        {/* --- Header Area (Canvas sayfasında gizli) --- */}
+        {!isCanvasPage && (
+          <header className="mt-12 mb-12"> 
+            <div className="max-w-6xl mx-auto flex items-center justify-between px-4 xl:px-0"> 
+              {/* Left: Dynamic Title and Subtitle */}
+              <div className="flex-1">
+                <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+                  {currentTitle}
+                </h1>
+                <p className="text-sm text-stone-600 dark:text-stone-400 mt-0.5">
+                  {currentSubtitle}
+                </p>
+              </div>
+
+              {/* Center: Dynamic Island */}
+              <div className="flex justify-center">
+                <DynamicIsland 
+                  generatingItem={generatingItem}
+                  commandQueue={commandQueue}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+
+              {/* Right: Action Buttons */}
+              <div className="flex-1 flex justify-end items-center gap-3"> 
+                {/* Dark Mode Toggle Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  onClick={toggleDarkMode}
+                  className="p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 text-stone-600 dark:text-stone-400 transition-colors flex items-center gap-1.5"
+                  aria-label="Toggle dark mode"
+                >
+                  {isDarkMode ? <Sun size={18} /> : <Moon size={18} />} 
+                  <span className="text-xs text-stone-700 dark:text-stone-300 opacity-60">(⌘M)</span>
+                </motion.button>
+              </div>
             </div>
-
-            {/* Right: Action Buttons */}
-            <div className="flex-1 flex justify-end items-center gap-3"> 
-              {/* Dark Mode Toggle Button */}
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                onClick={toggleDarkMode}
-                className="p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-400 transition-colors flex items-center gap-1.5"
-                aria-label="Toggle dark mode"
-              >
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />} 
-                <span className="text-xs text-neutral-700 dark:text-neutral-300 opacity-60">(⌘M)</span>
-              </motion.button>
-            </div>
-          </div>
-        </header>
-        {/* --- End Fixed Header Area --- */}
-
-        {/* --- REMOVED: Fixed Dynamic Island ---
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-30">
-          <DynamicIsland 
-            generatingItem={generatingItem}
-            commandQueue={commandQueue}
-            isDarkMode={isDarkMode}
-          />
-        </div>
-        --- End Dynamic Island --- */}
+          </header>
+        )}
+        {/* --- End Header Area --- */}
 
         {/* Render the child route's component */}
-        <main className="flex-grow max-w-6xl mx-auto w-full px-4 xl:px-0"> {/* Remove pt-8 from main */} 
+        <main className={`flex-grow w-full ${isCanvasPage ? '' : 'max-w-6xl mx-auto px-4 xl:px-0'}`}> 
           <Outlet context={outletContextValue} /> 
         </main>
 
         {/* Remove User Messages Display from here */}
         {/* 
         <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-4xl px-4 z-10 pointer-events-none"> 
-             <div className="max-h-40 overflow-y-auto bg-gray-50/80 dark:bg-zinc-800/80 backdrop-blur-md p-3 rounded-lg border border-gray-200 dark:border-zinc-700 shadow-sm text-xs pointer-events-auto flex flex-col-reverse">
+             <div className="max-h-40 overflow-y-auto bg-neutral-50/80 dark:bg-neutral-800/80 backdrop-blur-md p-3 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm text-xs pointer-events-auto flex flex-col-reverse">
                 {[...userMessages].reverse().map((msg, index) => (
-                    <p key={userMessages.length - 1 - index} className={`mt-1 ${msg.startsWith('>') ? 'text-gray-600 dark:text-zinc-400' : 'text-black dark:text-white'}`}>
+                    <p key={userMessages.length - 1 - index} className={`mt-1 ${msg.startsWith('>') ? 'text-stone-600 dark:text-stone-400' : 'text-black dark:text-white'}`}>
                         {msg}
                     </p>
                 ))}
@@ -1343,7 +1392,7 @@ function Layout() {
 
       {/* --- Bottom Menu --- */}
       <div className={`fixed bottom-4 left-1/2 transform -translate-x-1/2 z-20 transition-all duration-300 ${isChatInputVisible ? 'w-full max-w-2xl px-4' : 'w-full max-w-lg px-4'}`}>
-        <div className="flex flex-col items-center p-3 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border border-neutral-200/50 dark:border-neutral-700/50 rounded-xl shadow-sm">
+        <div className="flex flex-col items-center p-3 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border border-stone-200/50 dark:border-stone-700/50 rounded-xl shadow-sm">
           
           {/* New Wrapper Div for Chat Area Content */}
           <div 
@@ -1351,7 +1400,7 @@ function Layout() {
           >
             {/* --- Suggestions List --- */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="w-full mb-3 overflow-hidden max-h-60 overflow-y-auto border-b border-neutral-200/50 dark:border-neutral-700/50 pb-3">
+              <div className="w-full mb-3 overflow-hidden max-h-60 overflow-y-auto border-b border-stone-200/50 dark:border-stone-700/50 pb-3">
                 <ul className="space-y-1">
                   {suggestions.map((suggestion) => (
                     <li key={`${suggestion.type}-${suggestion.id}`}> 
@@ -1361,9 +1410,9 @@ function Layout() {
                       >
                         <div className="flex items-center gap-3">
                           {getSuggestionIcon(suggestion)}
-                          <span className="text-neutral-800 dark:text-neutral-200 text-sm truncate">{suggestion.name}</span>
+                          <span className="text-stone-800 dark:text-stone-200 text-sm truncate">{suggestion.name}</span>
                         </div>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-3">
+                        <span className="text-xs text-stone-500 dark:text-stone-400 ml-3">
                           {suggestion.type === 'command' ? 'Command' : 
                           suggestion.type === 'creator' ? 'Creator' : 'Background'}
                         </span>
@@ -1377,15 +1426,15 @@ function Layout() {
             {/* --- Input Area Wrapper --- */}
             <div className="relative w-full"> 
               <div className="w-full flex flex-col gap-3">
-                <div className="w-full flex items-center rounded-lg px-3 py-2 border border-neutral-200/50 dark:border-neutral-700/50 focus-within:border-neutral-400 dark:focus-within:border-neutral-500 transition-colors"> 
+                <div className="w-full flex items-center rounded-lg px-3 py-2 border border-stone-200/50 dark:border-stone-700/50 focus-within:border-red-400 dark:focus-within:border-red-500 transition-colors"> 
                   {/* --- Actual Input --- */}
                   <input 
                     type="text"
                     placeholder={
                         !inputValue && !creationMode
                             ? "Plan, create, or ask..." 
-                            : creationMode === 'video'
-                                ? "Describe action, expression (e.g., '@Product showcase, character surprised') (Optional)"
+                            :                             creationMode === 'video' 
+                                ? (creationSource === 'library' ? "Select video from library below" : "Describe action, expression (e.g., '@Product showcase, character surprised') (Optional)")
                             : creationMode === 'image'
                                 ? selectedImageType === 'ugc_model' 
                                     ? "e.g., 'blonde woman in a cafe, smiling' (Optional)"
@@ -1394,21 +1443,26 @@ function Layout() {
                                         : "Describe your image (Optional)" // Default for image if no specific type selected or type removed
                             : creationMode === 'slideshow'
                                 ? "Describe slideshow topic (e.g., 'benefits of @Product for busy moms') (Optional)"
+                            : creationMode === 'campaign'
+                                ? "Describe your campaign theme (e.g., 'fitness motivation content for summer') (Optional)"
                             : `Describe your ${creationMode} (Optional)` // Fallback for other modes if any
                     } 
-                    className={`flex-grow bg-transparent focus:outline-none text-sm text-neutral-900 dark:text-neutral-100 placeholder-neutral-500 dark:placeholder-neutral-400`} 
+                    className={`flex-grow bg-transparent focus:outline-none text-sm text-stone-900 dark:text-stone-100 placeholder-stone-500 dark:placeholder-stone-400 ${
+                      creationMode === 'video' && creationStep === 1 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`} 
                     value={inputValue} 
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDownInput}
                     ref={chatInputRef}
+                    disabled={creationMode === 'video' && creationStep === 1}
                   />
                   <button 
                     onClick={handleCommandSubmit}
                     disabled={!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset) || areSubOptionsRequiredAndMissing()}
                     className={`p-1.5 rounded-md transition-all duration-200 ease-in-out 
                                 ${((!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset)) || areSubOptionsRequiredAndMissing()) 
-                                  ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50' 
-                                  : 'bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 text-neutral-100 dark:text-neutral-900'}`}
+                                  ? 'bg-neutral-200 dark:bg-neutral-700 text-stone-400 dark:text-stone-500 cursor-not-allowed opacity-50' 
+                                  : 'bg-green-500 dark:bg-green-500 hover:bg-green-600 dark:hover:bg-green-600 text-white dark:text-white'}`}
                   >
                     <ArrowUpRight size={14} />
                   </button>
@@ -1416,55 +1470,155 @@ function Layout() {
 
                 {/* --- NEW: Conditional Sub-options based on creationMode --- */}
                 {isChatInputVisible && creationMode && (
-                  <div className="w-full pt-4 border-t border-neutral-200/50 dark:border-neutral-700/50">
+                  <div className="w-full pt-5 border-t border-stone-200/50 dark:border-stone-700/50">
                     {creationMode === 'video' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-                          <VideoIcon size={16} className="mr-2" />
+                      <div className="space-y-5">
+                        <div className="flex items-center text-xs font-medium text-stone-600 dark:text-stone-400 mb-4">
+                          <VideoIcon size={15} className="mr-2.5 text-red-500" />
                           Video Configuration
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <CustomDropdown
-                            options={videoProductOptions}
-                            selectedValue={selectedVideoProduct}
-                            onSelect={(option) => setSelectedVideoProduct(option.id)}
-                            placeholder="Product"
-                            icon={<Package size={16}/>}
-                            itemRenderFn={itemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                          <CustomDropdown
-                            options={videoCreatorOptions}
-                            selectedValue={selectedVideoType}
-                            onSelect={(option) => setSelectedVideoType(option.id)}
-                            placeholder="UGC Model"
-                            icon={<UserIcon size={16}/>}
-                            itemRenderFn={itemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                          <CustomDropdown
-                            options={languageOptions}
-                            selectedValue={selectedVideoLanguage}
-                            onSelect={(option) => setSelectedVideoLanguage(option.id)}
-                            placeholder="Language"
-                            icon={<span className="text-sm">🌐</span>}
-                            itemRenderFn={languageItemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                        </div>
+                        
+                        {creationStep === 1 && (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() => { 
+                                  if (firestoreUserData && firestoreUserData.general_credits >= 250) {
+                                    setCreationSource('custom'); 
+                                    setCreationStep(2); 
+                                  }
+                                }}
+                                disabled={!firestoreUserData || firestoreUserData.general_credits < 250}
+                                className={`p-4 border border-stone-200 dark:border-stone-700 rounded-lg transition-colors text-left ${
+                                  !firestoreUserData || firestoreUserData.general_credits < 250 
+                                    ? 'opacity-50 cursor-not-allowed' 
+                                    : 'hover:border-stone-300 dark:hover:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="font-medium text-stone-900 dark:text-stone-100">AI Generated</span>
+                                  <div className="flex items-center px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-md">
+                                    <img 
+                                      src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
+                                      alt="Credits" 
+                                      className="h-2 w-auto mr-1" 
+                                      style={{ transform: 'rotate(90deg)' }} 
+                                    />
+                                    <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">250</span>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-stone-600 dark:text-stone-400">Select UGC creator and generate new video with custom outfit & environment</p>
+                              </button>
+                              
+                              <button
+                                onClick={() => { 
+                                  if (firestoreUserData && firestoreUserData.general_credits >= 100) {
+                                    setCreationSource('library'); 
+                                    setCreationStep(2); 
+                                  }
+                                }}
+                                disabled={!firestoreUserData || firestoreUserData.general_credits < 100}
+                                className={`p-4 border border-stone-200 dark:border-stone-700 rounded-lg transition-colors text-left ${
+                                  !firestoreUserData || firestoreUserData.general_credits < 100 
+                                    ? 'opacity-50 cursor-not-allowed' 
+                                    : 'hover:border-stone-300 dark:hover:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="font-medium text-stone-900 dark:text-stone-100">UGC Library</span>
+                                  <div className="flex items-center px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-md">
+                                    <img 
+                                      src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
+                                      alt="Credits" 
+                                      className="h-2 w-auto mr-1" 
+                                      style={{ transform: 'rotate(90deg)' }} 
+                                    />
+                                    <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">100</span>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-stone-600 dark:text-stone-400">Choose from existing UGC videos in your library</p>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {creationStep === 2 && creationSource === 'custom' && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-sm text-stone-700 dark:text-stone-300">
+                                AI Generated Video Configuration
+                              </span>
+                              <button
+                                onClick={() => { setCreationStep(1); setCreationSource(''); }}
+                                className="text-xs text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 transition-colors"
+                              >
+                                ← Back
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                              <CustomDropdown
+                                options={videoProductOptions}
+                                selectedValue={selectedVideoProduct}
+                                onSelect={(option) => setSelectedVideoProduct(option.id)}
+                                placeholder="Product"
+                                                                 icon={<Package size={14} />}
+                                itemRenderFn={itemRenderer}
+                                className="w-full"
+                                dropdownWidthClass="w-full"
+                              />
+                              <CustomDropdown
+                                options={videoCreatorOptions}
+                                selectedValue={selectedVideoType}
+                                onSelect={(option) => setSelectedVideoType(option.id)}
+                                placeholder="UGC Model"
+                                                                 icon={<User size={14} />}
+                                itemRenderFn={gridItemRenderer}
+                                displayMode="grid"
+                                className="w-full"
+                                dropdownWidthClass="w-full"
+                              />
+                              <CustomDropdown
+                                options={languageOptions}
+                                selectedValue={selectedVideoLanguage}
+                                onSelect={(option) => setSelectedVideoLanguage(option.id)}
+                                placeholder="Language"
+                                itemRenderFn={languageItemRenderer}
+                                className="w-full"
+                                dropdownWidthClass="w-full"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {creationStep === 2 && creationSource === 'library' && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-sm text-stone-700 dark:text-stone-300">
+                                Select UGC Video from Library
+                              </span>
+                              <button
+                                onClick={() => { setCreationStep(1); setCreationSource(''); }}
+                                className="text-xs text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 transition-colors"
+                              >
+                                ← Back
+                              </button>
+                            </div>
+                            <div className="p-4 border border-stone-200 dark:border-stone-700 rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
+                              <p className="text-sm text-stone-600 dark:text-stone-400 text-center">
+                                Video library integration coming soon...
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     
                     {creationMode === 'image' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-                          <ImageIcon size={16} className="mr-2" />
-                          Image Configuration
-                        </div>
-                        <div className="w-full">
+                      <div className="space-y-5">
+                                                 <div className="mb-4">
+                           <span className="text-sm font-medium text-stone-900 dark:text-stone-100">Image Configuration</span>
+                         </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <CustomDropdown
                             options={imageTypeOptions}
                             selectedValue={selectedImageType}
@@ -1473,7 +1627,39 @@ function Layout() {
                               setSelectedImageProduct('');
                             }}
                             placeholder="Image Type"
-                            icon={<ImageIcon size={16}/>}
+                            icon={<ImageSquare size={14} />}
+                            className="w-full"
+                            dropdownWidthClass="w-full"
+                          />
+                          <CustomDropdown
+                            options={imageQualityOptions}
+                            selectedValue={selectedImageQuality}
+                            onSelect={(option) => setSelectedImageQuality(option.id)}
+                            placeholder="Quality"
+                            icon={<Gauge size={14} />}
+                            itemRenderFn={(option, isSelected) => (
+                              <div className="flex items-center gap-3 flex-grow">
+                                <div className="flex items-center p-1 border border-stone-200 dark:border-stone-800 rounded-md bg-neutral-200 dark:bg-neutral-950 bg-opacity-50 dark:bg-opacity-50">
+                                  <img 
+                                    src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
+                                    alt="Lungo AI Logo" 
+                                    className="h-2 w-auto mr-1" 
+                                    style={{ transform: 'rotate(90deg)' }} 
+                                  />
+                                  <span className="text-xs text-stone-600 dark:text-stone-300">
+                                    {option.credits}
+                                  </span>
+                                </div>
+                                <div className="flex flex-grow items-center justify-between min-w-0">
+                                  <span className={`truncate pr-2 text-stone-900 dark:text-stone-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
+                                    {option.name}
+                                  </span>
+                                  {isSelected && (
+                                    <Check size={13} weight="bold" className="text-red-500 flex-shrink-0" />
+                                  )}
+                                </div>
+                              </div>
+                            )}
                             className="w-full"
                             dropdownWidthClass="w-full"
                           />
@@ -1482,66 +1668,172 @@ function Layout() {
                     )}
                     
                     {creationMode === 'slideshow' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-                          <SlideshowIcon size={16} className="mr-2" />
-                          Slideshow Configuration
+                      <div className="space-y-5">
+                                                 <div className="mb-4">
+                           <span className="text-sm font-medium text-stone-900 dark:text-stone-100">Slideshow Configuration</span>
+                         </div>
+                                                 <div className="grid grid-cols-2 gap-4">
+                            <CustomDropdown
+                              options={slideshowProductOptions}
+                              selectedValue={selectedSlideshowProduct}
+                              onSelect={(option) => setSelectedSlideshowProduct(option.id)}
+                              placeholder="Product"
+                              icon={<Package size={14} />}
+                              itemRenderFn={itemRenderer}
+                              className="w-full"
+                              dropdownWidthClass="w-full"
+                            />
+                            <CustomDropdown
+                              options={slideshowTypeOptions}
+                              selectedValue={selectedSlideshowType}
+                              onSelect={(option) => setSelectedSlideshowType(option.id)}
+                              placeholder="Type"
+                              icon={<SlideshowIcon size={14} />}
+                              itemRenderFn={itemRenderer}
+                              className="w-full"
+                              dropdownWidthClass="w-full"
+                            />
+                            <CustomDropdown
+                              options={slideshowBackgroundOptions}
+                              selectedValue={selectedSlideshowBackground}
+                              onSelect={(option) => setSelectedSlideshowBackground(option.id)}
+                              placeholder="Background"
+                              icon={<ImageSquare size={14} />}
+                              itemRenderFn={gridItemRenderer}
+                              displayMode="grid"
+                              className="w-full"
+                              dropdownWidthClass="w-full"
+                            />
+                            <CustomDropdown
+                              options={languageOptions}
+                              selectedValue={selectedSlideshowLanguage}
+                              onSelect={(option) => setSelectedSlideshowLanguage(option.id)}
+                              placeholder="Language"
+                              itemRenderFn={languageItemRenderer}
+                              className="w-full"
+                              dropdownWidthClass="w-full"
+                            />
+                         </div>
+                      </div>
+                    )}
+                    
+                    {creationMode === 'schedule' && (
+                      <div className="space-y-5">
+                        <div className="flex items-center text-xs font-medium text-stone-600 dark:text-stone-400 mb-4">
+                          <Calendar size={15} className="mr-2.5 text-red-500" />
+                          Schedule Configuration
                         </div>
-                        <div className="grid grid-cols-3 gap-3 mb-3">
+                        <div className="px-5 py-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl border border-stone-200/50 dark:border-stone-700/50">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
+                            Describe what you want to schedule or view existing schedule...
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {creationMode === 'campaign' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center text-xs font-semibold text-stone-700 dark:text-stone-300 mb-3">
+                          <Calendar size={16} className="mr-2" />
+                          Campaign Configuration
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          {/* <CustomDropdown
+                            options={tiktokAccountOptions}
+                            selectedValue={selectedCampaignTikTok}
+                            onSelect={(option) => setSelectedCampaignTikTok(option.id)}
+                            placeholder="TikTok Account"
+                            icon={<UserIcon size={16}/>}
+                            itemRenderFn={itemRenderer}
+                            className="w-full"
+                            dropdownWidthClass="w-full"
+                          /> */}
                           <CustomDropdown
-                            options={slideshowProductOptions}
-                            selectedValue={selectedSlideshowProduct}
-                            onSelect={(option) => setSelectedSlideshowProduct(option.id)}
+                            options={videoProductOptions}
+                            selectedValue={selectedCampaignProduct}
+                            onSelect={(option) => setSelectedCampaignProduct(option.id)}
                             placeholder="Product"
                             icon={<Package size={16}/>}
                             itemRenderFn={itemRenderer}
                             className="w-full"
                             dropdownWidthClass="w-full"
                           />
-                          <CustomDropdown
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* <CustomDropdown
                             options={slideshowTypeOptions}
-                            selectedValue={selectedSlideshowType}
-                            onSelect={(option) => setSelectedSlideshowType(option.id)}
-                            placeholder="Type"
+                            selectedValue={selectedCampaignSlideshowType}
+                            onSelect={(option) => setSelectedCampaignSlideshowType(option.id)} // Single select
+                            placeholder="Slideshow Type"
                             icon={<SlideshowIcon size={16}/>}
                             className="w-full"
                             dropdownWidthClass="w-full"
-                          />
-                          <CustomDropdown
-                            options={slideshowBackgroundOptions}
-                            selectedValue={selectedSlideshowBackground}
-                            onSelect={(option) => setSelectedSlideshowBackground(option.id)}
-                            placeholder="Background"
-                            icon={<BackgroundIcon size={16}/>}
-                            itemRenderFn={itemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 gap-3">
+                          /> */}
                           <CustomDropdown
                             options={languageOptions}
-                            selectedValue={selectedSlideshowLanguage}
-                            onSelect={(option) => setSelectedSlideshowLanguage(option.id)}
+                            selectedValue={selectedCampaignLanguage}
+                            onSelect={(option) => setSelectedCampaignLanguage(option.id)} // Single select
                             placeholder="Language"
                             icon={<span className="text-sm">🌐</span>}
-                            itemRenderFn={languageItemRenderer}
+                            itemRenderFn={languageItemRenderer} // Uses its own specific renderer
                             className="w-full"
                             dropdownWidthClass="w-full"
                           />
                         </div>
-                      </div>
-                    )}
-                    
-                    {creationMode === 'schedule' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
-                          <Calendar size={16} className="mr-2" />
-                          Schedule Configuration
+                        {/* REVISED: Multi-select CustomDropdown for Backgrounds */}
+                        <div className="col-span-2">
+                          <CustomDropdown
+                            options={slideshowBackgroundOptions} // Use the same options as slideshow backgrounds
+                            selectedValue={selectedCampaignBackgrounds} // Pass the array of selected background objects/IDs
+                            onSelect={(selectedOptions) => setSelectedCampaignBackgrounds(selectedOptions)} // Directly set the array
+                            placeholder="Select Backgrounds (Multiple)"
+                            icon={<BackgroundPlaceholderIcon size={16}/>}
+                            className="w-full"
+                            // Adjusted width to better fit 3 grid items. Approx (item_width * 3) + (gap * 2) + (padding * 2)
+                            // Assuming itemRenderFn renders items that are roughly w-24 (96px) each.
+                            // (96px * 3) + (8px * 2) + (8px * 2) = 288 + 16 + 16 = 320px. Added some buffer.
+                            dropdownWidthClass="w-full sm:w-[330px]" 
+                            isMulti={true}
+                            closeOnSelect={false} // Keep open to select multiple
+                            itemRenderFn={(option, isSelected, isMulti) => { 
+                              // This itemRenderFn is specifically for the campaign background multi-selector
+                              // It will render items suitable for a 3-column grid
+                              return (
+                                <div 
+                                  // Each item in the grid will take 1/3 of the parent width minus gaps.
+                                  // The parent CustomDropdown.jsx div for options now uses `grid grid-cols-3 gap-2`
+                                  // So, this div just needs to style the content of a grid cell.
+                                  className={`p-1.5 rounded-md flex flex-col items-center justify-center gap-1 w-full h-full cursor-pointer ${isSelected ? 'bg-blue-500/10 dark:bg-blue-400/10' : 'hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50'}`}>
+                                  <div className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-md overflow-hidden border-2 ${isSelected ? 'border-blue-500' : 'border-transparent'}`}>
+                                    {option.imageUrl ? (
+                                      <img 
+                                        src={option.imageUrl} 
+                                        alt={option.name} 
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500">
+                                        <BackgroundPlaceholderIcon size={24} className="opacity-50"/>
+                                      </div>
+                                    )}
+                                    {/* Visual checkmark for selected items in multi-select grid */}
+                                    {isSelected && (
+                                      <div className="absolute top-1 right-1 bg-blue-500 rounded-full p-0.5 shadow">
+                                        <Check size={8} weight="bold" className="text-white" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className={`w-full truncate text-center text-[11px] sm:text-xs ${isSelected ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-stone-700 dark:text-stone-300'}`}>
+                                    {option.name}
+                                  </span>
+                                </div>
+                              );
+                            }}
+                          />
                         </div>
-                        <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200/50 dark:border-neutral-700/50">
-                          <p className="text-xs text-neutral-600 dark:text-neutral-400">
-                            Describe what you want to schedule or view existing schedule...
+                        <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-stone-200/50 dark:border-stone-700/50">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
+                            Create a month-long automated posting campaign with daily slideshow posts to your TikTok account.
                           </p>
                         </div>
                       </div>
@@ -1567,26 +1859,27 @@ function Layout() {
                      whileHover={{ scale: 1.02 }}
                      whileTap={{ scale: 0.98 }}
                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                     className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/' ? 'text-neutral-900 dark:text-neutral-100 bg-neutral-900/10 dark:bg-neutral-100/10' : 'text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900/10 dark:hover:bg-neutral-100/10'}`}
+                     className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
                      onClick={() => navigate('/')}
                    >
                      Home
                    </motion.button>
                  </div>
+                                   <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/studio' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
+                    onClick={() => navigate('/studio')}
+                  >
+                    Studio
+                  </motion.button>
+
                  <motion.button 
                    whileHover={{ scale: 1.02 }}
                    whileTap={{ scale: 0.98 }}
                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                   className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/calendar' ? 'text-neutral-900 dark:text-neutral-100 bg-neutral-900/10 dark:bg-neutral-100/10' : 'text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900/10 dark:hover:bg-neutral-100/10'}`}
-                   onClick={() => navigate('/calendar')}
-                 >
-                   Schedule
-                 </motion.button>
-                 <motion.button 
-                   whileHover={{ scale: 1.02 }}
-                   whileTap={{ scale: 0.98 }}
-                   transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                   className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/settings' ? 'text-neutral-900 dark:text-neutral-100 bg-neutral-900/10 dark:bg-neutral-100/10' : 'text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900/10 dark:hover:bg-neutral-100/10'}`}
+                   className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/settings' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
                    onClick={() => navigate('/settings')}
                  >
                    Settings
@@ -1612,10 +1905,10 @@ function Layout() {
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     onClick={isChatInputVisible ? toggleChatInput : undefined}
                     className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors ${isChatInputVisible
-                        ? 'bg-neutral-900/10 text-neutral-900 dark:bg-neutral-100/10 dark:text-neutral-100' // Style for "Close X" or when dropdown is open
+                        ? 'bg-neutral-950/10 text-stone-900 dark:bg-neutral-100/10 dark:text-stone-100' // Style for "Close X" or when dropdown is open
                         : isCreateDropdownOpen 
-                            ? 'bg-neutral-900/10 text-neutral-900 dark:bg-neutral-100/10 dark:text-neutral-100' // Style for "Create +" when dropdown is open
-                            : 'bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-200' // Default inverted style for "Create +"
+                            ? 'bg-green-50 text-red-600 dark:bg-green-900/20 dark:text-red-400' // Style for "Create +" when dropdown is open
+                            : 'bg-green-500 text-white dark:bg-green-500 dark:text-white hover:bg-green-600 dark:hover:bg-green-600' // Default red style for "Create +"
                     }`}
                   >
                     {isChatInputVisible ? (
@@ -1643,42 +1936,48 @@ function Layout() {
                           setIsCreateDropdownOpen(false);
                         }, 300); // 300ms delay before closing
                       }}
-                      className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-700 rounded-2xl shadow-md py-1 origin-bottom transition-all duration-200 ease-out opacity-100 scale-100 z-20"
+                      className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-neutral-50 dark:bg-neutral-950 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-md py-1 origin-bottom transition-all duration-200 ease-out opacity-100 scale-100 z-20"
                       style={{animation: 'dropdown-open 0.2s ease-out forwards'}}
                     >
                       {[
-                        {name: 'Video', icon: VideoIcon, mode: 'video', credits: 175},
-                        {name: 'Image', icon: ImageIcon, mode: 'image', credits: 90},
-                        {name: 'Slideshow', icon: SlideshowIcon, mode: 'slideshow', credits: 50}
+                        {name: 'Video', icon: VideoIcon, mode: 'video', credits: '100-250'},
+                        {name: 'Image', icon: ImageIcon, mode: 'image', credits: '50-90'},
+                        {name: 'Slideshow', icon: SlideshowIcon, mode: 'slideshow', credits: 50},
+                        {name: 'Bulk Creation', icon: Package, mode: 'bulk', credits: 'Variable', navigateTo: '/campaign'}
                       ].map((item) => {
-                        const hasEnoughCredits = firestoreUserData && firestoreUserData.general_credits >= item.credits;
+                        const minCreditsNeeded = typeof item.credits === 'string' ? 50 : item.credits; // For "50-90" range, use minimum
+                        const hasEnoughCredits = firestoreUserData && firestoreUserData.general_credits >= minCreditsNeeded;
                         return (
                           <button
                             key={item.name}
                             onClick={() => {
-                              if (!hasEnoughCredits) return;
-                              setCreationMode(item.mode);
-                              setIsChatInputVisible(true);
-                              setIsCreateDropdownOpen(false);
-                              // setSelectedItem(item.name); // setSelectedItem is not defined, consider removing or defining if needed
+                              if (!hasEnoughCredits && item.mode !== 'bulk') return;
+                              if (item.navigateTo) {
+                                navigate(item.navigateTo);
+                                setIsCreateDropdownOpen(false);
+                              } else {
+                                setCreationMode(item.mode);
+                                setIsChatInputVisible(true);
+                                setIsCreateDropdownOpen(false);
+                              }
                             }}
                             disabled={!hasEnoughCredits}
                             className={`flex items-center w-full px-3 py-2.5 text-sm text-left rounded-lg transition-colors duration-150 ease-in-out focus:outline-none 
                                         ${!hasEnoughCredits 
-                                          ? 'text-neutral-400 dark:text-neutral-600 cursor-not-allowed' 
-                                          : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:bg-neutral-100 dark:focus:bg-neutral-800'}
+                                          ? 'text-stone-400 dark:text-stone-600 cursor-not-allowed' 
+                                          : 'text-stone-700 dark:text-stone-200 hover:bg-green-50 dark:hover:bg-green-900/20 focus:bg-green-50 dark:focus:bg-green-900/20'}
                                       `}
                           >
                             <div className="flex items-center">
                               {/* Frame for logo and credits */}
-                              <div className="flex items-center p-1 mr-3 border border-neutral-200 dark:border-neutral-800 rounded-md bg-neutral-200 dark:bg-neutral-900 bg-opacity-50 dark:bg-opacity-50">
+                              <div className="flex items-center p-1 mr-3 border border-stone-200 dark:border-stone-600 rounded-md bg-neutral-200 dark:bg-neutral-700 bg-opacity-50 dark:bg-opacity-50">
                                 <img 
                                   src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
                                   alt="Lungo AI Logo" 
                                   className="h-2 w-auto mr-1" // Maintain aspect ratio, adjust height as needed
                                   style={{ transform: 'rotate(90deg)' }} 
                                 />
-                                <span className="text-xs text-neutral-600 dark:text-neutral-300">
+                                <span className="text-xs text-stone-600 dark:text-stone-300">
                                   {item.credits}
                                 </span>
                               </div>
@@ -1697,53 +1996,7 @@ function Layout() {
         </div>
       </div>
       
-      {/* --- Ensure Style Block for Grid Animation is present --- */}
-      {/* It should be the same as previously provided, containing .grid-animation, .grid-animation::before, @keyframes, and .dark overrides */}
       <style>{`
-        .grid-animation {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-image: 
-            linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
-          background-size: 40px 40px;
-          background-position: center center;
-          /* animation: grid-move 40s linear infinite; */ /* REMOVED ANIMATION */
-          z-index: 0; 
-        }
-        
-        .grid-animation::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-image: 
-            radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-          background-size: 60px 60px;
-          background-position: center center;
-          /* animation: dots-pulse 15s ease-in-out infinite alternate; */ /* REMOVED ANIMATION */
-          opacity: 0.3; /* Set a fixed opacity for the dots if pulse is removed */
-        }
-
-        /* @keyframes grid-move { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } */ /* REMOVED KEYFRAMES */
-        /* @keyframes dots-pulse { 0% { opacity: 0.2; } 50% { opacity: 0.3; } 100% { opacity: 0.2; } } */ /* REMOVED KEYFRAMES */
-
-        .dark .grid-animation {
-          background-image: 
-            linear-gradient(rgba(228, 228, 231, 0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(228, 228, 231, 0.06) 1px, transparent 1px);
-        }
-        
-        .dark .grid-animation::before {
-          background-image: 
-            radial-gradient(circle, rgba(161, 161, 170, 0.05) 1px, transparent 1px);
-        }
-
         @keyframes dropdown-open {
           from {
             opacity: 0;
@@ -1754,15 +2007,37 @@ function Layout() {
             transform: translateY(0) translateX(-50%);
           }
         }
+
+        /* Slider thumb styling */
+        .slider-red::-webkit-slider-thumb {
+          appearance: none;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: #ef4444;
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .slider-red::-moz-range-thumb {
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          background: #ef4444;
+          cursor: pointer;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
       `}</style>
       
       {isImageModalOpen && modalImageUrl && (
           <div 
-              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300"
+              className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300"
               onClick={() => setIsImageModalOpen(false)}
           >
               <div 
-                  className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-lg shadow-xl overflow-hidden"
+                  className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-neutral-900 rounded-lg shadow-xl overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
               >
                   <img 
@@ -1772,7 +2047,7 @@ function Layout() {
                   />
                   <button 
                       onClick={() => setIsImageModalOpen(false)}
-                      className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors z-10"
+                      className="absolute top-2 right-2 p-1.5 bg-neutral-900/50 text-white rounded-full hover:bg-neutral-900/70 transition-colors z-10"
                       aria-label="Close image modal"
                   >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -1787,18 +2062,18 @@ function Layout() {
       {/* --- NEW: Asset Selection Modal --- */}
       {isAssetModalOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300"
+          className="fixed inset-0 z-40 bg-neutral-900/70 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-300"
           onClick={() => setIsAssetModalOpen(false)} // Close on overlay click
         >
           <div 
-            className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[70vh]"
+            className="relative w-full max-w-md bg-white dark:bg-neutral-900 rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[70vh]"
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
           >
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-700">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Select an Asset</h3>
+            <div className="flex items-center justify-between p-4 border-b border-stone-200 dark:border-stone-700">
+              <h3 className="text-lg font-semibold text-stone-800 dark:text-white">Select an Asset</h3>
               <button 
                 onClick={() => setIsAssetModalOpen(false)}
-                className="p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
+                className="p-1.5 text-stone-500 dar00k:text-stone-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full"
                 aria-label="Close asset selection modal"
               >
                 <XCircle size={20} />
@@ -1806,18 +2081,18 @@ function Layout() {
             </div>
             
             {/* Todo: Add Search/Filter Input Here if desired */}
-            {/* <div className="p-3 border-b border-gray-200 dark:border-zinc-700"> */}
-            {/*   <input type="text" placeholder="Search assets..." className="w-full p-2 rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-sm" /> */}
+            {/* <div className="p-3 border-b border-stone-200 dark:border-stone-700"> */}
+            {/*   <input type="text" placeholder="Search assets..." className="w-full p-2 rounded-md border border-stone-300 dark:border-stone-600 bg-white dark:bg-neutral-800 text-sm" /> */}
             {/* </div> */}
 
             <div className="overflow-y-auto flex-grow p-2">
               {creators.length === 0 && backgrounds.length === 0 ? (
-                <p className="text-center text-gray-500 dark:text-zinc-400 py-8">No creators or backgrounds found. Add them in Settings.</p>
+                <p className="text-center text-stone-500 dark:text-stone-400 py-8">No creators or backgrounds found. Add them in Settings.</p>
               ) : (
                 <ul>
                   {/* Display Creators */}
                   {creators.length > 0 && (
-                    <li className="px-2 py-1.5 text-xs text-gray-400 dark:text-zinc-500 font-semibold">CREATORS</li>
+                    <li className="px-2 py-1.5 text-xs text-stone-400 dark:text-stone-500 font-semibold">CREATORS</li>
                   )}
                   {creators.map(creator => (
                     <li key={`asset-creator-${creator.id}`} className="mb-1 last:mb-0">
@@ -1826,20 +2101,20 @@ function Layout() {
                           setSelectedAsset({ ...creator, type: 'creator' });
                           setIsAssetModalOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors rounded-md"
                       >
                         <div className="flex items-center gap-3">
                           {getSuggestionIcon({ ...creator, type: 'creator' })}
-                          <span className="text-zinc-800 dark:text-zinc-200 text-sm truncate">{creator.name}</span>
+                          <span className="text-stone-800 dark:text-stone-200 text-sm truncate">{creator.name}</span>
                         </div>
-                        <ArrowRight size={16} className="text-zinc-400 dark:text-zinc-500" />
+                        <ArrowRight size={16} className="text-stone-400 dark:text-stone-500" />
                       </button>
                     </li>
                   ))}
 
                   {/* Display Backgrounds */}
                   {backgrounds.length > 0 && (
-                    <li className="px-2 py-1.5 mt-3 text-xs text-gray-400 dark:text-zinc-500 font-semibold">BACKGROUNDS</li>
+                    <li className="px-2 py-1.5 mt-3 text-xs text-stone-400 dark:text-stone-500 font-semibold">BACKGROUNDS</li>
                   )}
                   {backgrounds.map(background => (
                     <li key={`asset-background-${background.id}`} className="mb-1 last:mb-0">
@@ -1848,13 +2123,13 @@ function Layout() {
                           setSelectedAsset({ ...background, type: 'background' });
                           setIsAssetModalOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors rounded-md"
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors rounded-md"
                       >
                         <div className="flex items-center gap-3">
                           {getSuggestionIcon({ ...background, type: 'background' })}
-                          <span className="text-zinc-800 dark:text-zinc-200 text-sm truncate">{background.name}</span>
+                          <span className="text-stone-800 dark:text-stone-200 text-sm truncate">{background.name}</span>
                         </div>
-                        <ArrowRight size={16} className="text-zinc-400 dark:text-zinc-500" />
+                        <ArrowRight size={16} className="text-stone-400 dark:text-stone-500" />
                       </button>
                     </li>
                   ))}
@@ -1869,14 +2144,14 @@ function Layout() {
       {user && firestoreUserData && (
         <div 
           onClick={() => setIsBillingModalOpen(true)}
-          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-gray-100 dark:bg-zinc-800 backdrop-blur-md rounded-lg shadow-sm border border-gray-200 dark:border-zinc-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-red-200 dark:hover:border-red-700 transition-colors"
         >
           <img 
             src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"}
             alt="Lungo AI Logo"
             className="h-2.5 w-auto opacity-80 transform rotate-90"
           />
-          <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">
+          <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
             {firestoreUserData.general_credits?.toLocaleString() || '0'}
           </span>
         </div>
@@ -1895,7 +2170,7 @@ function Layout() {
             onClick={() => setIsBillingModalOpen(false)}
           >
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-xl" />
+            <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-xl" />
             
             {/* Modal Content */}
             <motion.div
@@ -1903,18 +2178,18 @@ function Layout() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between p-6 border-b border-stone-100 dark:border-stone-800">
                 <div className="flex items-center gap-6">
-                  <button className="text-sm font-medium text-gray-500 dark:text-zinc-400">Account Settings</button>
+                  <button className="text-sm font-medium text-stone-500 dark:text-stone-400">Account Settings</button>
                   <button className="text-sm font-medium text-black dark:text-white">Credits & Billing</button>
                 </div>
                 <button 
                   onClick={() => setIsBillingModalOpen(false)}
-                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 dark:text-zinc-500 transition-colors"
+                  className="p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-400 dark:text-stone-500 transition-colors"
                 >
                   <X size={20} />
                 </button>
@@ -1927,17 +2202,17 @@ function Layout() {
                   <h3 className="text-xl font-semibold text-black dark:text-white mb-1">
                     {firestoreUserData.stripePriceId ? planPriceMap[firestoreUserData.stripePriceId]?.split(' ')[0] || 'Pro' : 'Starter'}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-zinc-400 mb-4">Current Subscription</p>
+                  <p className="text-sm text-stone-500 dark:text-stone-400 mb-4">Current Subscription</p>
                   
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <p className="text-sm text-gray-500 dark:text-zinc-400">Current credits</p>
+                      <p className="text-sm text-stone-500 dark:text-stone-400">Current credits</p>
                       <p className="text-lg font-medium text-black dark:text-white">
                         {firestoreUserData.general_credits?.toLocaleString() || '0'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-500 dark:text-zinc-400">Renewal date</p>
+                      <p className="text-sm text-stone-500 dark:text-stone-400">Renewal date</p>
                       <p className="text-lg font-medium text-black dark:text-white">
                         {firestoreUserData.subscriptionStatus === 'active' && firestoreUserData.currentPeriodEnd
                           ? new Date(firestoreUserData.currentPeriodEnd * 1000).toLocaleDateString('en-US', {
@@ -1962,7 +2237,7 @@ function Layout() {
                     disabled={isPortalLoading}
                     className={`w-full py-3 font-medium rounded-xl transition-colors ${
                       isPortalLoading 
-                        ? 'bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 cursor-not-allowed'
+                        ? 'bg-neutral-300 dark:bg-neutral-700 text-stone-500 dark:text-stone-500 cursor-not-allowed'
                         : 'bg-green-500 hover:bg-green-600 text-white'
                     }`}>
                     {isPortalLoading ? 'Opening...' : 'Get 10,000 Credits $89/m'}
@@ -1970,16 +2245,16 @@ function Layout() {
                 </div>
 
                 {/* Extra Credits Purchase */}
-                <div className="border-t border-gray-100 dark:border-zinc-800 pt-6">
+                <div className="border-t border-stone-100 dark:border-stone-800 pt-6">
                   <h3 className="text-lg font-semibold text-black dark:text-white mb-3">Buy Extra Credits</h3>
-                  <p className="text-sm text-gray-500 dark:text-zinc-400 mb-4">
+                  <p className="text-sm text-stone-500 dark:text-stone-400 mb-4">
                     Purchase additional credits at $15 per 1,000 credits. <span className="text-xs opacity-75">(Monthly plans offer better value!)</span>
                   </p>
                   
                   {/* --- NEW: Slider for Credit Quantity --- */}
                   <div className="mb-4">
                     <div className="flex justify-between items-center mb-2">
-                        <label htmlFor="creditSlider" className="text-sm text-gray-600 dark:text-zinc-400">
+                        <label htmlFor="creditSlider" className="text-sm text-stone-600 dark:text-stone-400">
                             Credit Packs (1 pack = 1,000 credits):
                         </label>
                         <span className="text-sm font-medium text-black dark:text-white">
@@ -1994,13 +2269,13 @@ function Layout() {
                         step="1"
                         value={creditQuantity}
                         onChange={(e) => setCreditQuantity(Number(e.target.value))}
-                        className="w-full h-2 bg-gray-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-black dark:accent-white"
+                        className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider-red"
                     />
                   </div>
                   {/* --- END: Slider for Credit Quantity --- */}
 
-                  <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 dark:bg-zinc-800 rounded-lg">
-                    <span className="text-sm text-gray-600 dark:text-zinc-400">Total:</span>
+                  <div className="flex items-center justify-between mb-4 p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <span className="text-sm text-stone-600 dark:text-stone-400">Total:</span>
                     <span className="text-lg font-semibold text-black dark:text-white">
                       ${(creditQuantity * 15).toFixed(2)}
                     </span>
@@ -2011,8 +2286,8 @@ function Layout() {
                     disabled={isPurchasingCredits || creditQuantity < 1}
                     className={`w-full py-3 font-medium rounded-xl transition-colors ${
                       isPurchasingCredits || creditQuantity < 1
-                        ? 'bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 cursor-not-allowed'
-                        : 'bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200'
+                        ? 'bg-neutral-300 dark:bg-neutral-700 text-stone-500 dark:text-stone-500 cursor-not-allowed'
+                        : 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-stone-900 hover:bg-neutral-800 dark:hover:bg-neutral-200'
                     }`}
                   >
                     {isPurchasingCredits ? 'Processing...' : `Purchase ${(creditQuantity * 1000).toLocaleString()} Credits`}
@@ -2028,11 +2303,11 @@ function Layout() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-4xl font-bold text-black dark:text-white">{firestoreUserData.general_credits?.toLocaleString() || '0'}</h2>
-                      <p className="text-sm text-gray-500 dark:text-zinc-400">Credits remaining</p>
+                      <p className="text-sm text-stone-500 dark:text-stone-400">Credits remaining</p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium text-black dark:text-white">{firestoreUserData.general_credits_limit?.toLocaleString() || '0'}</p>
-                      <p className="text-sm text-gray-500 dark:text-zinc-400">Total limit</p>
+                      <p className="text-sm text-stone-500 dark:text-stone-400">Total limit</p>
                     </div>
                   </div>
                 </div>
@@ -2059,7 +2334,7 @@ function Layout() {
             onClick={() => setIsPricingModalOpen(false)} // Close on backdrop click
           >
             {/* Backdrop with 0 fill opacity, but still catching clicks */}
-            <div className="absolute inset-0 bg-black/5 dark:bg-white/5 backdrop-blur-xl" /> 
+            <div className="absolute inset-0 bg-neutral-900/5 dark:bg-white/5 backdrop-blur-xl" /> 
             
             {/* Modal Content Wrapper for Sizing and Positioning */}
             <motion.div
@@ -2073,7 +2348,7 @@ function Layout() {
                 {/* Close button for the pricing modal itself */}
                 <button 
                   onClick={() => setIsPricingModalOpen(false)}
-                  className="absolute top-4 right-4 z-10 p-2 bg-white/20 dark:bg-black/20 hover:bg-white/40 dark:hover:bg-black/40 backdrop-blur-sm rounded-full text-neutral-800 dark:text-neutral-200 transition-colors"
+                  className="absolute top-4 right-4 z-10 p-2 bg-white/20 dark:bg-neutral-900/20 hover:bg-white/40 dark:hover:bg-neutral-900/40 backdrop-blur-sm rounded-full text-stone-800 dark:text-stone-200 transition-colors"
                   aria-label="Close pricing plans"
                 >
                   <X size={20} />

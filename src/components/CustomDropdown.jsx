@@ -14,6 +14,7 @@ const CustomDropdown = ({
   isMulti = false, // New prop for multi-select
   closeOnSelect = true, // New prop to control closing on select (esp. for multi)
   displayMode = "list", // New prop: "list" or "grid"
+  onOpenStateChange, // New prop to notify parent about open state
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -30,6 +31,13 @@ const CustomDropdown = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Notify parent about open state changes
+  useEffect(() => {
+    if (onOpenStateChange) {
+      onOpenStateChange(isOpen);
+    }
+  }, [isOpen, onOpenStateChange]);
 
   const handleSelect = (option) => {
     if (isMulti) {

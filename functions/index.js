@@ -85,398 +85,6 @@ const slideshowTasksQueueName = 'slideshow-generation-queue';
 const slideshowTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performSlideshowGenerationTask`;
 const SLIDESHOW_GEN_TIMEOUT_SECONDS = 540; // Timeout for slideshow generation, adjust as needed
 
-// command.js içeriğini buraya alalım (veya ortak bir modülden import edelim)
-// !! ÖNEMLİ: Bu komut listesini src/command.js ile senkronize tutmalısın!
-const commandDefinitions = [
-  // --- VIDEO GENERATION COMMANDS (100-199) ---
-  {
-    "code": 101,
-    "name": "GENERATE_UGC_TIKTOK_VIDEO",
-    "description": "Creates a short UGC style video suitable for TikTok, usually featuring a character speaking or interacting.",
-    "parameters": [
-      {
-        "name": "subject_description",
-        "type": "string",
-        "description": "Physical description of the main character (e.g., 'blonde woman', 'man with beard', 'smiling girl'). Can contain @creator_name reference.",
-        "required": false
-      },
-      {
-        "name": "action_description",
-        "type": "string",
-        "description": "What the character should be doing (e.g., 'holding the product', 'talking to the camera', 'looking surprised'). Default: 'talking to camera'. Used for video prompt.",
-        "required": false
-      },
-      {
-          "name": "setting_description",
-          "type": "string",
-          "description": "The background or environment (e.g., 'in a bright kitchen', 'against a plain background', 'outdoors'). Default: 'neutral studio background'.",
-          "required": false
-      },
-      {
-        "name": "hook_text",
-        "type": "string",
-        "description": "A short, engaging text hook or caption for the video. If omitted, one will be generated.",
-        "required": false
-      },
-      {
-          "name": "character_reaction",
-          "type": "string",
-          "description": "The facial expression or emotion of the character (e.g., 'happy', 'surprised', 'neutral', 'thoughtful'). Default: 'neutral'.",
-          "required": false
-      },
-      {
-          "name": "language",
-          "type": "string",
-          "description": "Optional. The language for the generated hook text (e.g., 'en', 'es'). Default: 'en'.",
-          "required": false 
-      }
-      // Note: baseImageUrl is not a direct user parameter, added internally if creator is mentioned
-    ]
-  },
-  // --- IMAGE GENERATION COMMANDS (200-299) ---
-  {
-    "code": 201,
-    "name": "GENERATE_BACKGROUND_IMAGE",
-    "description": "Generates a background image based on a description.",
-    "parameters": [
-      { "name": "scene_description", "type": "string", "description": "Description of the background scene (e.g., 'serene beach at sunset', 'modern minimalist office', 'abstract colorful pattern').", "required": true },
-      { "name": "image_style", "type": "string", "description": "Artistic or stylistic direction (e.g., 'photorealistic', 'watercolor', 'cartoonish', 'cinematic lighting'). Default: 'photorealistic'.", "required": false }
-    ]
-  },
-  {
-    "code": 202,
-    "name": "GENERATE_UGC_IMAGE",
-    "description": "Generates a highly detailed and realistic image of a person, typically in a modern UGC or influencer style.",
-    "parameters": [
-       { "name": "subject_description", "type": "string", "description": "Detailed physical description of the character. Specify ethnicity, hair style/color, eye color, general body type (e.g., slim, athletic), and desired facial features (e.g., small face, specific nose shape). Include realistic details like freckles, moles, slight skin imperfections, vellus hair if desired for higher realism. Use existing creator name if specified.", "required": true },
-       { "name": "clothing_description", "type": "string", "description": "Describe the clothing. For women, specify modern styles like 'off-the-shoulder crop top', 'scoop neck', 'asymmetric top', 'v-neck', 'sports bra' paired with 'plain skirt', 'pants', or 'gym tights'. For men, suggest 'modern shirt' or similar contemporary attire. Keep clothing relatively basic, prints are okay. Mention preference for body jewelry over clothing-dependent jewelry.", "required": false },
-       { "name": "setting_description", "type": "string", "description": "Background/environment for the character (e.g., 'in a cafe', 'plain white background', 'urban street'). Default: 'neutral studio background'.", "required": false },
-       { "name": "image_style", "type": "string", "description": "Overall image style and quality. Aim for 'high quality realistic photo', 'UGC style photo', 'influencer portrait'. Specify lighting like 'soft natural light' or 'studio lighting'. Default: 'high quality realistic photo'.", "required": false },
-       { "name": "age", "type": "integer", "description": "Optional. Specify the approximate age of the character. Must be 18 or older.", "required": false },
-       { "name": "gender", "type": "string", "description": "Optional. Specify the gender of the character (e.g., 'woman', 'man').", "required": false }
-    ]
-  },
-  {
-    "code": 203,
-    "name": "GENERATE_RANDOM_IMAGE",
-    "description": "Generates a general image based on the provided subject and style.",
-    "parameters": [
-      { "name": "image_subject", "type": "string", "description": "The main subject or concept for the image (e.g., 'a cat wearing a hat', 'futuristic cityscape', 'a detailed product shot').", "required": true },
-      { "name": "image_style", "type": "string", "description": "Artistic or stylistic direction (e.g., 'photorealistic', 'oil painting', 'vector art', 'macro shot'). Default: 'photorealistic'.", "required": false }
-    ]
-  },
-  // --- SLIDESHOW GENERATION COMMANDS (300-399) ---
-  {
-    "code": 301,
-    "name": "GENERATE_IMAGE_TIKTOK_SLIDESHOW",
-    "description": "Generates a 4-slide TikTok-style slideshow using a product, background, and specified type.",
-     "parameters": [
-      { "name": "user_prompt", "type": "string", "description": "The user's textual description or topic for the slideshow content.", "required": false },
-      { "name": "product_id", "type": "string", "description": "The ID of the user's product to be featured or used as context.", "required": true },
-      { "name": "background_id", "type": "string", "description": "The ID of the user's background image to be used for the slideshow.", "required": true },
-      { "name": "slideshow_type", "type": "string", "description": "The type of slideshow to generate: 'safe_secure' (comfort and trust), 'learn_grow' (educational content), 'viral_fun' (trendy and engaging), or 'personal_stories' (relatable experiences).", "required": true },
-       { "name": "language", "type": "string", "description": "Optional. The language for the generated slide text (e.g., 'en', 'es', 'tr'). Default: 'en'.", "required": false }
-    ],
-    "jobType": "slideshow_generation",
-    "estimated_cost": 50
-  },
-  // --- EDITING COMMANDS (400-499) ---
-  {
-    "code": 401,
-    "name": "EDIT_IMAGE",
-    "description": "Applies edits to a previously generated image.",
-    "parameters": [
-      { "name": "image_id", "type": "string", "description": "The ID of the image to be edited (from the gallery).", "required": true },
-      { "name": "edit_instructions", "type": "string", "description": "Detailed instructions on how to modify the image (e.g., 'change background color to blue', 'add sunglasses to the person', 'make it look more cartoonish').", "required": true }
-    ]
-  },
-  // --- DATA MANAGEMENT COMMANDS (500-599) ---
-  {
-    "code": 501,
-    "name": "ADD_PRODUCT",
-    "description": "Adds a new product to the user's settings.",
-    "parameters": [
-      { "name": "product_name", "type": "string", "description": "The name of the product.", "required": true },
-      { "name": "product_description", "type": "string", "description": "A description of the product.", "required": true },
-      { "name": "product_logo_url", "type": "string", "description": "Optional URL for the product image.", "required": false },
-      { "name": "product_image_url", "type": "string", "description": "Optional URL for the product image.", "required": false }
-
-    ]
-  },
-  {
-    "code": 502,
-    "name": "DELETE_PRODUCT",
-    "description": "Deletes a product from the user's settings.",
-    "parameters": [ { "name": "product_identifier", "type": "string", "description": "The name or ID of the product to delete.", "required": true } ]
-  },
-  {
-    "code": 503,
-    "name": "ADD_CREATOR",
-    "description": "Adds a new UGC creator profile to the user's settings.",
-    "parameters": [
-      { "name": "creator_name", "type": "string", "description": "The name of the UGC creator.", "required": true },
-      { "name": "creator_image_url", "type": "string", "description": "Optional URL for the creator's image.", "required": false }
-    ]
-  },
-  {
-    "code": 504,
-    "name": "DELETE_CREATOR",
-    "description": "Deletes a UGC creator profile from the user's settings.",
-    "parameters": [ { "name": "creator_identifier", "type": "string", "description": "The name or ID of the creator to delete.", "required": true } ]
-  },
-   {
-    "code": 505,
-    "name": "ADD_BACKGROUND",
-    "description": "Adds a new background image to the user's settings using a previously generated image ID.",
-    "parameters": [ { "name": "image_id", "type": "string", "description": "The ID of the previously generated image to add as a background.", "required": true } ]
-  },
-  {
-    "code": 506,
-    "name": "DELETE_BACKGROUND",
-    "description": "Deletes a background image from the user's settings.",
-    "parameters": [ { "name": "background_identifier", "type": "string", "description": "The ID of the background image to delete.", "required": true } ]
-  },
-  // --- UI CONTROL COMMANDS (600-699) ---
-   {
-    "code": 601,
-    "name": "NAVIGATE_VIEW",
-    "description": "Changes the main view of the application.",
-    "parameters": [ { "name": "target_view", "type": "string", "description": "The view to navigate to. Must be one of: 'generator', 'calendar', 'settings'.", "required": true } ]
-  },
-   {
-    "code": 602,
-    "name": "NAVIGATE_SETTINGS_TAB",
-    "description": "Navigates to a specific tab within the Settings page.",
-    "parameters": [ { "name": "tab_name", "type": "string", "description": "The settings tab to navigate to. Must be one of: 'Product', 'Creators', 'Backgrounds', 'Features', 'General'.", "required": true } ]
-  },
-  {
-    "code": 603,
-    "name": "TOGGLE_THEME",
-    "description": "Switches the application theme between light and dark mode.",
-    "parameters": [ { "name": "target_mode", "type": "string", "description": "Optional. Specify 'light' or 'dark'. If omitted, it toggles the current mode.", "required": false } ]
-  },
-
-
-  // --- INTERNAL COMMANDS (Not directly parsed from user text) ---
-  {
-    "code": 507,
-    "name": "SAVE_CREATOR_FROM_GEN",
-    "description": "Internal: Saves a generated image as a creator.",
-    "parameters": [
-      { "name": "creator_name", "type": "string", "required": true },
-      { "name": "imageUrl", "type": "string", "required": true },
-      { "name": "original_generation_data", "type": "object", "required": true }
-    ]
-  },
-  {
-    "code": 508,
-    "name": "SAVE_BACKGROUND_FROM_GEN",
-    "description": "Internal: Saves a generated image as a background.",
-    "parameters": [
-      { "name": "background_name", "type": "string", "required": true },
-      { "name": "imageUrl", "type": "string", "required": true },
-      { "name": "original_generation_data", "type": "object", "required": true }
-    ]
-  }
-];
-
-// ----- SENİN EKLEYECEĞİN KISIM BAŞLANGICI -----
-// OpenAI API Anahtarını Environment Variables'dan al
-// Firebase CLI ile: firebase functions:config:set openai.key="YOUR_API_KEY"
-// Eğer emülatör kullanıyorsan, .runtimeconfig.json dosyasına ekleyebilirsin.
-// Global 'openai' değişkenini kaldırıyoruz. Her çağrıda yeniden oluşturulacak.
-// ----- SENİN EKLEYECEĞİN KISIM SONU -----
-
-// ----- Runway Client (Placeholder - Configure with your SDK/API details) -----
-// const { RunwayClient } = require("@runwayml/hosted-models"); // Example
-// let runway;
-// try {
-//   // Read key using user-specified name (likely lowercased)
-//   const runwayApiKey = functions.config().runway_key;
-//   // const runwayApiKey = functions.config().runway?.key; // Old line
-//
-//   if (runwayApiKey) {
-//      // Initialize Runway client here using only the API Key
-//      // runway = new RunwayClient({ apiKey: runwayApiKey }); // Example
-//      console.log("Runway client would be initialized here.");
-//   } else {
-//      console.warn("Runway API key not configured (checked runway_key).");
-//   }
-// } catch (error) {
-//    console.error("Error initializing Runway Client:", error);
-// }
-
-exports.parseUserCommand = onCall({ region: 'us-central1', timeoutSeconds: 540, memory: '1GB' }, async (request) => { // ADDED memory: '1GB'
-  // --- Authentication Check ---
-  const userId = request.auth?.uid;
-  if (!userId) {
-    logger.error("parseUserCommand called without authentication.");
-    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-  }
-
-  const data = request.data;
-  
-  // --- Initialize OpenAI Client (only if text processing is needed) ---
-  let openai;
-  try {
-    const apiKey = process.env.OPENAI_KEY; 
-    if (!apiKey) {
-      logger.error("OpenAI API Key not found in environment variables (OPENAI_KEY).");
-      throw new HttpsError('internal', 'OpenAI service is not available due to missing configuration.');
-    }
-    openai = new OpenAI({ apiKey: apiKey });
-    logger.info("OpenAI SDK initialized successfully for this invocation.");
-  } catch (error) {
-    logger.error("Error initializing OpenAI within handler:", error);
-    throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
-  }
-
-  // --- NEW FLOW: Check if frontend sent a fixed command code ---
-  if (data.commandCode && typeof data.commandCode === 'number' && data.commandCode !== 0) {
-    logger.info(`[parseUserCommand User ${userId}] Frontend sent fixed commandCode: ${data.commandCode}`);
-    
-    const commandDef = commandDefinitions.find(cmd => cmd.code === data.commandCode);
-    if (!commandDef) {
-      logger.error(`[parseUserCommand User ${userId}] Invalid command code received from frontend: ${data.commandCode}`);
-      throw new HttpsError('invalid-argument', `Invalid command code: ${data.commandCode}`);
-    }
-
-    // Use client-sent parameters directly
-    const finalParameters = data.parameters || {};
-    
-    logger.info(`[parseUserCommand User ${userId}] Using frontend parameters for command ${data.commandCode}:`, finalParameters);
-
-    // --- EXECUTE THE COMMAND ---
-    logger.info(`[parseUserCommand User ${userId}] Executing command ${data.commandCode} with final parameters:`, finalParameters);
-    
-    // Call the appropriate generation function based on command code
-    switch (data.commandCode) {
-      case 101: // GENERATE_UGC_TIKTOK_VIDEO
-        logger.info(`[parseUserCommand User ${userId}] Calling requestImageGeneration for video`);
-        try {
-          // Destructure mentionedCreatorId instead of creator_id from finalParameters
-          const { product_id, mentionedCreatorId, user_prompt, language } = finalParameters;
-
-          // Update the check to use mentionedCreatorId
-          if (!product_id || !mentionedCreatorId) {
-            logger.error(`[parseUserCommand User ${userId}] Missing required parameters for video: product_id=${product_id}, mentionedCreatorId=${mentionedCreatorId}`);
-            throw new HttpsError('invalid-argument', "Video generation requires Product and UGC Model selection.");
-          }
-          
-          const videoRequest = {
-            auth: request.auth,
-            data: finalParameters,
-            rawRequest: request.rawRequest || {}
-          };
-
-          const videoResult = await exports.requestImageGeneration.run(videoRequest);
-          logger.info(`[parseUserCommand User ${userId}] requestImageGeneration returned:`, videoResult);
-          return videoResult;
-
-        } catch (videoError) {
-          logger.error(`[parseUserCommand User ${userId}] Error in video generation:`, videoError);
-          if (videoError instanceof HttpsError) throw videoError;
-          throw new HttpsError('internal', `Video generation failed: ${videoError.message}`);
-        }
-
-      case 201: // GENERATE_BACKGROUND_IMAGE
-      case 202: // GENERATE_UGC_IMAGE  
-        logger.info(`[parseUserCommand User ${userId}] Calling generateImage for image command ${data.commandCode}`);
-        try {
-          const imageRequest = {
-            auth: request.auth,
-            data: { ...finalParameters, commandCode: data.commandCode }, // Pass commandCode here
-            rawRequest: request.rawRequest || {}
-          };
-
-          const imageResult = await exports.generateImage.run(imageRequest);
-          logger.info(`[parseUserCommand User ${userId}] generateImage returned:`, imageResult);
-          return imageResult;
-
-        } catch (imageError) {
-          logger.error(`[parseUserCommand User ${userId}] Error in image generation:`, imageError);
-          if (imageError instanceof HttpsError) throw imageError;
-          throw new HttpsError('internal', `Image generation failed: ${imageError.message}`);
-        }
-
-      case 301: // GENERATE_IMAGE_TIKTOK_SLIDESHOW
-        logger.info(`[parseUserCommand User ${userId}] Calling generateImageSlideshow for slideshow`);
-        try {
-          const { product_id, background_id, slideshow_type, user_prompt, language } = finalParameters;
-
-          if (!product_id || !background_id || !slideshow_type) {
-            logger.error(`[parseUserCommand User ${userId}] Missing required parameters for slideshow: product_id=${product_id}, background_id=${background_id}, slideshow_type=${slideshow_type}`);
-            throw new HttpsError('invalid-argument', "Slideshow generation requires Product, Background, and Type selection.");
-          }
-          
-          const productDoc = await db.collection('users').doc(userId).collection('products').doc(product_id).get();
-          if (!productDoc.exists) {
-            logger.error(`[parseUserCommand User ${userId}] Product with ID ${product_id} not found for slideshow.`);
-            throw new HttpsError('not-found', `Product not found: ${product_id}.`);
-          }
-          const productData = productDoc.data();
-
-          const backgroundDoc = await db.collection('users').doc(userId).collection('backgrounds').doc(background_id).get();
-          if (!backgroundDoc.exists) {
-            logger.error(`[parseUserCommand User ${userId}] Background with ID ${background_id} not found for slideshow.`);
-            throw new HttpsError('not-found', `Background not found: ${background_id}.`);
-          }
-          const backgroundData = backgroundDoc.data();
-          
-          const effectiveTopic = user_prompt || productData.name || 'AI Generated Slideshow Content';
-          
-          const slideshowParams = {
-            topic: effectiveTopic,
-            background_name: backgroundData.name, 
-            language: language || 'en',
-            _product_context: productData, 
-            _slideshow_type_context: slideshow_type,
-            product_id: product_id,
-            background_id: background_id,
-          };
-
-          logger.info(`[parseUserCommand User ${userId}] Final slideshow parameters:`, slideshowParams);
-
-          const slideshowRequest = {
-            auth: request.auth,
-            data: slideshowParams,
-            rawRequest: request.rawRequest || {}
-          };
-
-          const slideshowResult = await exports.generateImageSlideshow.run(slideshowRequest);
-          logger.info(`[parseUserCommand User ${userId}] generateImageSlideshow returned:`, slideshowResult);
-          return slideshowResult;
-
-        } catch (slideshowError) {
-          logger.error(`[parseUserCommand User ${userId}] Error in slideshow generation:`, slideshowError);
-          if (slideshowError instanceof HttpsError) throw slideshowError;
-          throw new HttpsError('internal', `Slideshow generation failed: ${slideshowError.message}`);
-        }
-
-      default:
-        logger.error(`[parseUserCommand User ${userId}] No handler for command code ${data.commandCode}`);
-        throw new HttpsError('invalid-argument', `Command ${data.commandCode} is not supported for direct execution.`);
-    }
-
-  } else {
-    // --- LEGACY TEXT-ONLY FLOW (for backwards compatibility) ---
-    const userText = data.text;
-    if (!userText || typeof userText !== 'string' || userText.trim().length === 0) {
-      throw new HttpsError('invalid-argument', 'Either a valid command code with parameters, or non-empty text is required.');
-    }
-
-    logger.info(`[parseUserCommand User ${userId}] Using legacy text-only parsing for: "${userText}"`);
-    
-    // [Keep the existing OpenAI parsing logic for text-only commands]
-    // This would be the original AI parsing code for backwards compatibility
-    // For now, return a simple response
-    return { 
-      commandCode: 0, 
-      parameters: {}, 
-      message: "Text-only commands are not fully implemented in the new flow. Please use the creation interface." 
-    };
-  }
-});
 
 // Helper function to generate the detailed prompt using GPT-4o
 async function generateDetailedUgcPrompt(params, openaiInstance) {
@@ -834,6 +442,270 @@ async function generateDetailedUgcPrompt(params, openaiInstance) {
     }
 }
 
+// --- NEW: Enhanced Prompt Generation Using Image Rules ---
+async function enhancePromptWithRules(originalPrompt, subtype, selectedFrame, openaiInstance) {
+    try {
+        logger.info(`[enhancePromptWithRules] Processing: "${originalPrompt}" for subtype=${subtype}, frame=${selectedFrame}`);
+        
+        // Get the image rules from imageRules.json
+        const imageRules = getImageSetRulesByFrameId(selectedFrame);
+        if (!imageRules) {
+            logger.warn(`[enhancePromptWithRules] No rules found for frame: ${selectedFrame}, using original prompt`);
+            return originalPrompt;
+        }
+        
+        // Apply general rules for UGC images
+        const generalRules = getGeneralRulesForUGC();
+        
+        let enhancedPrompt;
+        
+        if (subtype === 'ugc_character') {
+            // Use AI to enhance the prompt based on the selected frame rules
+            enhancedPrompt = await generateEnhancedUGCPrompt(originalPrompt, imageRules, generalRules, openaiInstance);
+        } else if (subtype === 'background') {
+            // For background images, apply background-specific rules
+            enhancedPrompt = await generateEnhancedBackgroundPrompt(originalPrompt, imageRules, openaiInstance);
+        } else {
+            // For general images, basic enhancement
+            enhancedPrompt = await generateEnhancedGeneralPrompt(originalPrompt, imageRules, openaiInstance);
+        }
+        
+        logger.info(`[enhancePromptWithRules] Enhanced prompt generated. Length: ${enhancedPrompt?.length}`);
+        return enhancedPrompt;
+        
+    } catch (error) {
+        logger.error(`[enhancePromptWithRules] Error enhancing prompt:`, error);
+        return originalPrompt; // Fallback to original prompt
+    }
+}
+
+function getImageSetRulesByFrameId(frameId) {
+    // Your detailed image rules from imageRules.json
+    const frameMapping = {
+        'car_selfie_glow': {
+            name: 'Car Selfie Glow',
+            rules: {
+                composition_and_perspective: {
+                    camera_type: "Smartphone front (selfie) camera, rare cases digital compact or mirrorless with flip screen",
+                    focal_length_mm: "23mm to 28mm equivalent (smartphone front camera standard; slight wide angle)",
+                    aperture_range: "f/2.0 - f/2.4 (typical of modern smartphone front cameras)",
+                    focus_mode: "Autofocus or fixed focus; primary focus on face and upper torso",
+                    framing: "Loose close-up to chest-up framing (selfie). Single subject centered or slightly off-center within the car seat area. Minimal cropping of facial features.",
+                    orientation: "Vertical portrait orientation preferred; occasional casual landscape orientation selfie",
+                    camera_position: "Camera held in hand at arm's length or just above face level; sometimes angled downward for flattering perspective"
+                },
+                location_and_background: {
+                    setting: "Inside a car during daytime. Visible seats, seatbelts, windows, sunroofs, and sometimes dashboard details.",
+                    background_elements: "Car interiors are sharp and distinct: headrests, full or partial windows, sun visors, leather/fabric textures.",
+                    background_blur: "Very minimal; deep depth of field typical of smartphones. Environment and background are in focus.",
+                    depth_of_field: "Very wide (face, hair, and car interior all clearly visible)"
+                },
+                lighting: {
+                    lighting_type: "Natural daylight (direct or indirect sun) entering car from windows or sunroof. May cast clear shadows or bright highlights across face and upper body.",
+                    white_balance: "Auto, calibrated for natural sunlight (approx. 5000-6500K)",
+                    exposure_compensation: "Autoexposure, sometimes with intentional face brightening. Mild highlight clipping in direct sun is acceptable.",
+                    ISO_setting: "50-200 (smartphone base ISO in daylight)",
+                    shutter_speed: "1/100 to 1/2000s, fast enough to capture sharp details even with some movement"
+                },
+                subject_pose_and_expression: {
+                    poses: "Single subject, seated in car seat, relaxed or casually posed. Head slightly tilted, subtle angles for flattering silhouette.",
+                    facial_expression: "Soft smile, neutral face, duck face, or playful pout. Expressions are calm or confident (not overly dramatic).",
+                    gaze_direction: "Directly into the camera or slightly gaze away; classic selfie engagement"
+                },
+                fashion_and_style: {
+                    clothing: "Trendy casual wear—tank tops, sunglasses, puffer jackets, minimal jewelry. Simple, solid colors or subtle patterns.",
+                    accessories: "Sunglasses, earrings, subtle necklaces. Accessories chosen for personal style rather than for statement effect.",
+                    hair: "Smooth, styled or gently tousled. May include small braids, center or side parting, or loose and flowing."
+                }
+            }
+        },
+                 'city_street_style': {
+             name: 'City Street Style',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Modern smartphone main camera or compact/mirrorless digital camera",
+                     focal_length_mm: "24mm to 35mm equivalent (true-to-life perspective with a slight wide field for urban context)",
+                     aperture_range: "f/1.8 - f/2.8 (smartphone default or prime lens; provides natural depth)",
+                     focus_mode: "Autofocus, always focused on subject (usually full body or half body); no artificial blur",
+                     framing: "Mid-shot (knees up) to full-body; subjects often placed off-center, leaving space for urban background elements. Some shots taken slightly from below for extra attitude.",
+                     orientation: "Vertical or portrait orientation for social sharing and emphasizing outfit. Occasional slight tilt for dynamism.",
+                     camera_position: "Handheld at waist to chest level, 1.5–3 meters from subject; mix of candid and modeled stances."
+                 },
+                 location_and_background: {
+                     setting: "Urban streets, building facades, gas stations, sidewalk corners, crosswalks, storefronts",
+                     background_elements: "Urban architecture, road textures, signage (like STOP), cars, greenery, metal, glass, street furniture. May include street reflections, shop windows, and city props.",
+                     background_blur: "Minimal. Street and city details remain recognizable and part of scene.",
+                     depth_of_field: "Moderate to deep; subject pops, but environment is contextually present."
+                 },
+                 lighting: {
+                     lighting_type: "Natural daylight, usually direct sun or open shade; shadows for depth and realness, no flash",
+                     white_balance: "Auto daylight (5000-6500K), slight warmth from sun or hint of coolness in shadow",
+                     exposure_compensation: "0EV to +0.7EV; aiming for bright, snappy street exposure, moderate dynamic range",
+                     ISO_setting: "ISO 50–200 (daylight, clean look)",
+                     shutter_speed: "1/400s–1/2000s for crisp capture and slight movement"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Candid, leaning, sitting, walking, or interacting with props/signs; often hands in pockets, crossed arms, looking away, slouched, or relaxed",
+                     facial_expression: "Neutral, confident, chill, nonchalant, or 'effortless cool'. Sometimes obscured by sunglasses, hats, or cigarettes.",
+                     gaze_direction: "Looking away from camera, down, or at their phone; rarely direct eye contact"
+                 },
+                 fashion_and_style: {
+                     clothing: "Streetwear, loose fits, statement layers, graphic tees, oversized pants, vests, open shirts, retro sneakers, chains, bold accessories. Genderless or vintage-inspired details encouraged.",
+                     accessories: "Baseball caps, sunglasses, visible jewelry, belts, beanies, cigarettes, drinks, statement socks",
+                     hair: "Natural, slightly messy, under hats/caps, effortless"
+                 }
+             }
+         },
+         'wide_angle_pov': {
+             name: 'Wide-Angle POV Walk',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Modern smartphone with ultra-wide lens or action camera (e.g. GoPro) with wide field of view",
+                     focal_length_mm: "13mm to 18mm equivalent (ultra-wide angle for distinctive distortion and immersive POV)",
+                     aperture_range: "f/1.8 - f/2.4 (smartphone or action cam default for ultra-wide)",
+                     focus_mode: "Fixed focus or autofocus, focus point usually on subject's face or upper torso; depth of field is extremely large",
+                     framing: "Shoot from slightly above or at head level; arm extended fully with camera facing subject (classic 'walk-and-hold-hands' or selfie-follow POV). The holding hand/arm is prominent in the foreground, stretching toward the camera, subject takes up lower two-thirds of the frame.",
+                     orientation: "Portrait orientation standard (for Instagram Reels/Stories/TikTok), occasional landscape for cinematic effect.",
+                     camera_position: "Handheld, arm fully extended, camera 30–50cm from the subject's face. Downward diagonal or straight above eye-level angle creates dynamic composition."
+                 },
+                 location_and_background: {
+                     setting: "Outdoor urban or park environments: residential streets, busy sidewalks, city parks, green lawns. Ample depth between subject and background enhances wide look.",
+                     background_elements: "Urban buildings, streets, trees, benches, parked cars, city signs—everything kept natural and un-staged. Environmental context is important and always visible.",
+                     background_blur: "None; ultra-wide lens and large depth of field keep all elements in sharp focus.",
+                     depth_of_field: "Extremely deep; subject, hand, arm, and environment all clearly resolved."
+                 },
+                 lighting: {
+                     lighting_type: "Natural daylight, bright sun or open shade. Light direction creates clear rim or facial highlights and natural shadows.",
+                     white_balance: "Auto, typically 5000-6500K (daylight calibrated)",
+                     exposure_compensation: "Auto; face-optimized exposure with some tolerance for blown sky or strong shadow",
+                     ISO_setting: "ISO 30–150 (smartphone daylight base ISO; exceptionally clean)",
+                     shutter_speed: "1/500 to 1/2000s to prevent motion blur from walking or sudden arm movement"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Casual, relaxed, or playful walking stance. Arm extended forward, sometimes holding a drink, keys, or small object; the hand/arm lead toward the camera exaggerates the POV effect.",
+                     facial_expression: "Natural, smiling, focused ahead or making direct soft eye contact with camera; sometimes neutral or contemplative. Expression is unstaged and authentic.",
+                     gaze_direction: "Looking at camera or forward, rarely away; the emphasis is on the feeling of shared activity."
+                 },
+                 fashion_and_style: {
+                     clothing: "Simple or trendy urban/casual: crop tops, headphones, loose pants, cardigans or light coats, sunglasses, tote bags, sneakers.",
+                     accessories: "Prominent headphones, sunglasses, jewelry, tote bags, coffee cups.",
+                     hair: "Loose, natural, flowing with some movement from walking."
+                 }
+             }
+         }
+    };
+    
+    return frameMapping[frameId] || null;
+}
+
+function getGeneralRulesForUGC() {
+    return {
+        color_palette: "Natural, muted tones dominate. Soft pastels, beige, cream, olive, muted blue used for both backgrounds and clothing. Only minimal pops of color for accessories (e.g. sunglasses, hairclips). Never use neon or highly saturated colors as main focus.",
+        skin_tones: "True-to-life, realistic.",
+        white_balance: "Neutral or slightly warm. No unnatural color casts.",
+        contrast: "Moderate to low. Details must be visible in both shadows and highlights. No harsh lights or exaggerated contrast.",
+        lighting: "Soft, ambient, diffuse. Use daylight, window light, or indirect interior lighting. No heavy flash or dramatic shadows. Natural daylight, gentle household bulbs, sometimes neon, but never theatrical lighting.",
+        camera: "Casual digital (compact camera or smartphone look). No high-end DSLR or cinematic sharpness. Slight grain in low light is acceptable. Mild background blur if subject is close, but majority of frame generally in focus. Never extreme bokeh.",
+        composition: "Subject is often centered or slightly off. Allow natural cropping (edges cut, not fully within frame). Frame fills with subject, avoid excessive negative space. Eye-level or slightly above. Mix of close-up and full-body shots. Occasional dynamic tilt, but should always feel candid.",
+        background: "Authentic urban streets, cafes, rooms, elevators, cars, natural locations. Visual information is present but never cluttered. Subtle blur allowed, especially if subject is in foreground. Never overly artificial or digital blur.",
+        style_and_pose: "Candid, relaxed, never overly staged. Subjects may look directly at camera or away. Authentic and natural, not 'model-like'. Sitting, leaning, casual movements preferred. Genuine, cool, relaxed moods. Expressions can be pensive, neutral, slightly playful—never exaggerated smiling or forced.",
+        clothing: "Modern, trendy, urban streetwear, relaxed chic. Layers, oversized fits, minimal or subtle logos. Accessories include sunglasses, rings, hair clips. No retro, formal or costume styles.",
+        post_processing: "Light, natural edits only. No heavy filters. Natural grain allowed. No obvious retouch, skin smoothing, or artificial effects. No studio look, glamour retouch, over-brightened skin, high dynamic range, cartoonish colors or contrasts.",
+        overall_aesthetic: "Effortlessly cool, youthful, documentary-inspired, modern and realistic. Always avoid commercial, stylized, or studio portrait vibe."
+    };
+}
+
+async function generateEnhancedUGCPrompt(originalPrompt, frameRules, generalRules, openaiInstance) {
+    try {
+        // Extract all rules into a comprehensive prompt
+        const rules = frameRules.rules;
+        
+        const systemPrompt = `You are an expert at creating detailed image prompts for UGC (User Generated Content) style photographs. 
+
+You will enhance the user's basic prompt with detailed visual specifications while keeping the original subject.
+
+Original prompt: "${originalPrompt}"
+Style: ${frameRules.name}
+
+INSTRUCTIONS:
+1. Keep the original subject/person exactly as described
+2. Add detailed visual specifications based on the style rules below
+3. Create a comprehensive, single-paragraph prompt that includes camera, lighting, pose, clothing, and setting details
+4. Make it sound natural and specific, not like a technical manual
+
+STYLE RULES TO INCORPORATE:
+
+Camera & Composition:
+- Camera: ${rules.composition_and_perspective?.camera_type}
+- Focal length: ${rules.composition_and_perspective?.focal_length_mm}
+- Framing: ${rules.composition_and_perspective?.framing}
+- Position: ${rules.composition_and_perspective?.camera_position}
+
+Setting & Environment:
+- Location: ${rules.location_and_background?.setting}
+- Background: ${rules.location_and_background?.background_elements}
+- Depth: ${rules.location_and_background?.depth_of_field}
+
+Lighting:
+- Type: ${rules.lighting?.lighting_type}
+- White balance: ${rules.lighting?.white_balance}
+- Exposure: ${rules.lighting?.exposure_compensation}
+
+Pose & Expression:
+- Poses: ${rules.subject_pose_and_expression?.poses}
+- Expression: ${rules.subject_pose_and_expression?.facial_expression}
+- Gaze: ${rules.subject_pose_and_expression?.gaze_direction}
+
+Fashion & Style:
+- Clothing: ${rules.fashion_and_style?.clothing}
+- Accessories: ${rules.fashion_and_style?.accessories}
+- Hair: ${rules.fashion_and_style?.hair}
+
+General UGC Aesthetic:
+- Color palette: ${generalRules.color_palette}
+- Overall aesthetic: ${generalRules.overall_aesthetic}
+
+Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original subject`;
+
+        const userPrompt = `Please create an enhanced, detailed prompt for "${originalPrompt}" using the ${frameRules.name} style. 
+
+Make it a natural, single paragraph that includes specific camera settings, lighting conditions, pose details, clothing, and environment while keeping the original subject exactly as described.`;
+
+        const completion = await openaiInstance.chat.completions.create({
+            model: "gpt-4.1-nano-2025-04-14",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ],
+            max_tokens: 2500,
+            temperature: 0.7
+        });
+
+        const enhancedPrompt = completion.choices[0]?.message?.content?.trim();
+        if (!enhancedPrompt) {
+            logger.error('[generateEnhancedUGCPrompt] OpenAI returned empty response');
+            return originalPrompt;
+        }
+
+        logger.info(`[generateEnhancedUGCPrompt] Enhanced prompt generated successfully`);
+        return enhancedPrompt;
+
+    } catch (error) {
+        logger.error('[generateEnhancedUGCPrompt] Error calling OpenAI:', error);
+        return originalPrompt;
+    }
+}
+
+async function generateEnhancedBackgroundPrompt(originalPrompt, frameRules, openaiInstance) {
+    // For background images, simpler enhancement
+    return originalPrompt;
+}
+
+async function generateEnhancedGeneralPrompt(originalPrompt, frameRules, openaiInstance) {
+    // For general images, basic enhancement
+    return originalPrompt;
+}
+
 // NEW HELPER FUNCTION FOR ENVIRONMENT DETAILS
 async function generateEnvironmentDetailsPrompt(baseSettingDescription, requestedStyle, baseClothingDescription, openaiInstance) {
     const settingExamples = [
@@ -1031,8 +903,22 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
 
         logger.info(`[generateImage User: ${userId}] Processing command code: ${commandCode}, Params:`, data);
 
+        // NEW: Check for new flow with simple prompt and selectedFrame
+        if (data.originalPrompt && data.subtype && data.selectedFrame) {
+            logger.info(`[generateImage User: ${userId}] ====== NEW FLOW WITH PROMPT ENHANCEMENT ======`);
+            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Prompt: "${data.originalPrompt}"`);
+            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Subtype: ${data.subtype}`);
+            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Selected Frame: ${data.selectedFrame}`);
+            
+            finalPromptToUse = await enhancePromptWithRules(data.originalPrompt, data.subtype, data.selectedFrame, openai);
+            imageStyle = imageStyle || 'photorealistic';
+            
+            logger.info(`[generateImage User: ${userId}] ====== PROMPT ENHANCEMENT COMPLETED ======`);
+            logger.info(`[generateImage User: ${userId}] ENHANCED PROMPT (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
+            logger.info(`[generateImage User: ${userId}] ====== END PROMPT ENHANCEMENT ======`);
+        }
         // Check if enhanced prompt is provided from frontend (using image rules)
-        if (data.enhancedPrompt) {
+        else if (data.enhancedPrompt) {
             logger.info(`[generateImage User: ${userId}] Using enhanced prompt from frontend with image rules. Length: ${data.enhancedPrompt.length}`);
             finalPromptToUse = data.enhancedPrompt;
             imageStyle = imageStyle || 'photorealistic';
@@ -1081,9 +967,9 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             }
         }
         
-        logger.info(`[generateImage User: ${userId}] Preparing to call Vertex AI Imagen 4. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
+        logger.info(`[generateImage User: ${userId}] Preparing to call Vertex AI Imagen directly. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
 
-        // Determine aspect ratio for Imagen 4
+        // Determine aspect ratio for Imagen
         let aspectRatio = "9:16"; // Default
         if (data.aspectRatio === "1:1") {
             aspectRatio = "1:1";
@@ -1098,7 +984,7 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         });
         const accessToken = await auth.getAccessToken();
 
-        // Prepare the request for Imagen 4
+        // Use the correct Imagen 3 model
         const requestBody = {
             instances: [{
                 prompt: finalPromptToUse
@@ -1110,9 +996,15 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             }
         };
 
+        // Updated model name for Imagen 3
+        const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
         const apiUrl = `https://${VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_AI_PROJECT}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/${IMAGEN_MODEL}:predict`;
 
-        logger.info(`[generateImage User: ${userId}] Calling Vertex AI Imagen 4 API directly`);
+        logger.info(`[generateImage User: ${userId}] ====== SENDING TO VERTEX AI IMAGEN 3 ======`);
+        logger.info(`[generateImage User: ${userId}] Model: ${IMAGEN_MODEL}`);
+        logger.info(`[generateImage User: ${userId}] Aspect Ratio: ${aspectRatio}`);
+        logger.info(`[generateImage User: ${userId}] FINAL PROMPT TO IMAGEN (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
+        logger.info(`[generateImage User: ${userId}] Request Body:`, JSON.stringify(requestBody, null, 2));
         
         const imageGenResponse = await axios.post(apiUrl, requestBody, {
             headers: {
@@ -1121,12 +1013,20 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             }
         });
 
-        logger.info(`[generateImage User: ${userId}] Vertex AI Imagen 4 API call completed. Response received.`);
+        logger.info(`[generateImage User: ${userId}] ====== VERTEX AI IMAGEN 3 RESPONSE RECEIVED ======`);
+        logger.info(`[generateImage User: ${userId}] Full response:`, JSON.stringify(imageGenResponse.data, null, 2));
 
         // Extract the image data from the response
         const predictions = imageGenResponse.data.predictions;
-        if (!predictions || predictions.length === 0 || !predictions[0].bytesBase64Encoded) {
-            logger.error(`[generateImage User: ${userId}] Vertex AI response did not contain image data.`, imageGenResponse.data);
+        logger.info(`[generateImage User: ${userId}] Predictions:`, predictions);
+        
+        if (!predictions || predictions.length === 0) {
+            logger.error(`[generateImage User: ${userId}] No predictions in response. Full response:`, imageGenResponse.data);
+            throw new HttpsError('internal', "AI did not return predictions.");
+        }
+        
+        if (!predictions[0].bytesBase64Encoded) {
+            logger.error(`[generateImage User: ${userId}] No bytesBase64Encoded in first prediction. Prediction:`, predictions[0]);
             throw new HttpsError('internal', "AI did not return image data.");
         }
 
@@ -1157,13 +1057,17 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
                 userId: userId,
                 type: typeString,
                 prompt: finalPromptToUse,
+                originalPrompt: data.originalPrompt || null, // Store original prompt if available
+                enhancedPrompt: finalPromptToUse, // Store enhanced prompt
+                selectedFrame: data.selectedFrame || null, // Store selected frame
+                subtype: data.subtype || null, // Store subtype
                 imageStyle: imageStyle,
                 imageUrl: publicUrl,
                 originalParameters: data,
                 commandCode: commandCode,
                 quality: data.quality || "high",
-                source: 'direct_generateImage_call_imagen4',
-                model: 'imagen-4.0-generate-preview-06-06',
+                source: 'direct_generateImage_call_vertex_imagen3',
+                model: 'imagen-3.0-generate-001',
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 gender: commandCode === 202 ? detectedGender : null
             };
@@ -1185,24 +1089,24 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             
             return {
                 success: true,
-                message: "Image generated and uploaded successfully using Imagen 4.",
+                message: "Image generated and uploaded successfully using Vertex AI Imagen 3.",
                 imageUrl: publicUrl,
                 firestoreDocId: generationDocRef.id,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                model: 'imagen-4.0-generate-preview-06-06'
+                model: 'imagen-3.0-generate-001'
             };
 
         } catch (firestoreError) {
             logger.error(`[generateImage User: ${userId}] Failed to write to generations collection or run transaction:`, firestoreError);
             return { 
                 success: true, 
-                message: "Image generated using Imagen 4, but failed to save metadata to Firestore.",
+                message: "Image generated using Vertex AI Imagen 3, but failed to save metadata to Firestore.",
                 imageUrl: publicUrl,
                 firestoreDocId: null,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                model: 'imagen-4.0-generate-preview-06-06',
+                model: 'imagen-3.0-generate-001',
                 errorSavingMetadata: true
             };
         }
@@ -1213,132 +1117,10 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             logger.error(`[generateImage User: ${userId}] Vertex AI Error:`, error);
             throw new HttpsError('internal', `Vertex AI Error: ${error.message}`);
         }
-        throw new HttpsError('internal', `Failed to generate image with Imagen 4: ${error.message}`);
+        throw new HttpsError('internal', `Failed to generate image with Vertex AI Imagen 3: ${error.message}`);
     }
 });
 
-// --- NEW: performDirectImageGenerationTask Function (HTTP Triggered by Cloud Task) ---
-// exports.performDirectImageGenerationTask = onRequest(...); 
-// [Bu fonksiyonun tüm içeriği silinecek]
-
-// --- Video Generation Hooks (Gen Z Style) ---
-const videoHooksList = [
-  "I'm crying, my little bro asked me to get this when I moved out :')",
-  "told my bestie i missed her and she started doing this everyday-",
-  "i found the PERFECT app for long distances besties",
-  "pov: you found the best way to stay in touch for spring semester",
-  "HOWWW did i not know about this >>>",
-  "app of the summerrrr >>>",
-  "i'm crying my bf is so cute look what he asked to start doing 😭",
-  "Life after deleting snap",
-  "When your friend group gets a shared calendar app so you actually make plans",
-  "pov: you finally delete snap",
-  "yo explicándoles a mis amigos que solo tenemos 4 DIAS para descargarnos Yope para a partir del 1 de enero mandarmoa fotos diarias asi al final de año tenemos un recap de todo nuestro 2025",
-  "yo diciendole a mis amigos que si nos descargamos Yope, el 1 de enero y mandamos fotos diarias hasta fin de año, vamos a tener una película con la recopilación de nuestro año",
-  "yo diciendole a mis amigos que si nos descargamos yope y el 1 de enero armamos un album secreto donde todos los dias agregamos una foto, a fin de año vamos a tener una película con todos nuestros recuerdos del 2025!! <3'",
-  "pov: u don't use snap anymore",
-  "what's it like without snapchat??",
-  "HELP i made out with someone last night and now they just sent me a partiful invite titled \"what are we\"",
-  "howww did i not know about this >>>",
-  "Pov: you move away from home and ur brother asks to do this together 😅😆",
-  "Leaving for college and my mom made the whole family get this :')",
-  "normalize sending dramatic invites to your friends for literally anything",
-  "You're telling me I've done long distance for two years and I never knew about this???",
-  "yall. i think my friend group just started a trend",
-  "y si nos descargamos una app para mandar fotos de nuestro día y tenemos una racha juntos? enviar'",
-  "Wait STOP bc my friends and I started doing the cutest thing together",
-  "madurar es POR FIN borrar Snapchat e instalar esta app en su lugar >>>>",
-  "como que puedo mandarle notitas a mi novio directo a su pantalla de bloqueo? 😝❤️'",
-  "when you start a new hobby with your bestie>>>",
-  "Crying because my mom asked the whole fam to get this together>>😭",
-  "When you realise you can put how long you've been together on your Lock Screen!!",
-  "hay widgets para contar hace cuantos días estamos juntos, cuantos días faltan para vernos y nuestra distancia 😝",
-  "when you don't use snap anymore>>",
-  "My long distance boyfriend and I deleted snap and started doing this instead>>",
-  "low effort way I stay close with my friend group",
-  "pov: your bestfriend made you download this and now it's all you use",
-  "me explaining to my friends that we only have 4 DAYS to download Yope and create a group album so that on January 1st we will have a recap of photos from the entire year of 2025 to watch like a movie",
-  "HELP, my best friend won't stop sending me invites to talk about her situationship'",
-  "Cutest lock screen widget 😍❤️'",
-  "la forma más divertida de mantener al día a tus amigos a distancia :)",
-  "como que puedo mandarle notitas a la pantalla de bloqueo a mi novio? 😚'",
-  "yo cuando me llega la notificación de que estamos por perder la racha pero mi amiga no aparece por ningún lado'",
-  "La mejor forma de mantenerte al día con tus amigos :)",
-  "i found the PERFECT app for long distance!!!",
-  "life without snap >>>",
-  "3 señales de que vas a sobrevivir a una relación a distancia <3",
-  "y si nos descargamos una app para mandarnos fotos de nuestro día y mantener una racha?'",
-  "SHUT UP MY LONG DISTANCE BOYFRIEND IS THE CUTEST EVER😍❤️",
-  "remembering how my gf used to send me lockets then seeing them now",
-  "luego voy y lo arruino todo diciendo algo tonto como...",
-  "Why did nobody tell me my long distance boyfriend could send messages to my lockscreen???'",
-  "how life looks when all the girls finally delete snap",
-  "You're telling me I didn't know we could put the number of days we've been together on my lockscreen ??'",
-  "In literal tears bc my mom and dad asked if we could do this as a family :')",
-  "POV: you and your boyfriend delete snap",
-  "LITERally EVERYONE needs this with their bffs before college starts 🧠",
-  "Life after you delete snap",
-  "Ideas de citas a distancia 💕🌍'",
-  "... YALL I can't believe my parents wanted to do this with me🤔🙏",
-  "f*ck spotify, show me your travel wrapped",
-  "pov: you delete snap but still wanna see faces",
-  "i'm crying look at what my best friend does every single day 😭",
-  "como se ve mi pantalla de bloqueo desde que convencí a mis amigos de descargarnos yope para mantenernos al día:",
-  "Over shared about my Situationship to my co workers and he's picking me up from work core'",
-  "Pov: you and your bffs make distance so much easier 😢",
-  "pov: ur best friend gets you hooked>",
-  "Lo que me envía mi novio vs lo que yo le envío'",
-  "I'm crying....just moved out and my mom asked if we could do this together😢",
-  "End of year raises will be based on performance",
-  "captured a wholesome nyc moment today",
-  "....okay CRYing bc my mom and dad asked us if we could do this as a family😢",
-  "yo con esa amiga con la que tenemos la racha mas alta y nunca la perdimos",
-  "Wait STOP bc my long distance boyfriend just asked me to do the cutest thing with him😭🥰❤️",
-  "Us thinking long distance would be too hard...",
-  "pov: you finally delete snap",
-  "pov you have a friend group that constantly updates each other on what we're doing",
-  "You and your parents found the cutest way to stay in close 😢😢",
-  "why do you always take pictures of everything?",
-  "mi novio a distancia me hizo descargar esta app para dejarnos notitas en la pantalla de bloqueo 😳❤️'",
-  "i wish i had friends to Interrail Europe with",
-  "luego voy y lo arruino todo diciendo algo estupido como...'",
-  "long distance is hard but..",
-  "la forma más divertida de mantener al día a tus amigos a distancia :)",
-  "pov: you're updating your long distance friends in this cute app'",
-  "I can't believe my mom had us get this as a family :')",
-  "my best friend and i just found the most wholesome app >>>",
-  "when you make the dinner reservation'",
-  "just found out you can put the number of days you've been together on your lockscreen?!",
-  "every day apart is another day closer to reuniting!",
-  "POV: your long distance bf made you download this to stay closer",
-  "DELETING SNAPCHAT SAVEDDDDD MY RELATIONSHIP 😏",
-  "I just got my bf to do this with me for Vday and it was actually so sweet ;",
-  "my best friend and i do this everyday>>",
-  "My boyfriend figured out how to send messages to my lockscreen whenever we're apart during long distance 😢'",
-  "Long distance is hard but not everyone can say that they loved someone deeply enough to be spend lots of days alone in exchange for a few days together. 😢",
-  "My long distance boyfriend and I deleted snap and started doing this instead>>",
-  "When ur dad doesn't like texting so you tell him to do this instead 😂😂",
-  "Dime si te gustaría...'",
-  "found the perfect way to stay in touch this summer>>",
-  "how life feels when the app you quit your job to build is on the charts at #13 on launch day (above BeReal too!!)",
-  "chemistry so good the universe had to make us long distance 😢",
-  "2025 ins/outs (social media)",
-];
-
-// --- NEW: Runway Video Prompts (Positive, focus on facial expressions, avoid hands) ---
-const runwayVideoPrompts = [
-    "The person tilts their head slightly to the side with a curious expression, maintaining eye contact with the camera.",
-    "The person blinks slowly, then looks down briefly before returning their gaze to the camera.",
-    "The person gently nods once in acknowledgment, lips closed in a calm expression.",
-    "The person furrows their brows subtly, as if puzzled, then relaxes their face into a neutral expression.",
-    "The person closes their eyes for a moment, takes a silent breath, and opens them again with a serene look.",
-    "The person tilts their head back slightly and smiles with just their eyes.",
-    "The person shifts their weight slightly from one leg to the other while maintaining a steady facial expression.",
-    "The person leans forward ever so slightly, as if interested, with a focused look in their eyes.",
-    "The person gives a short, subtle shrug with their shoulders while keeping a neutral face.",
-    "The person raises their eyebrows slowly, as if in realization, then softens their expression."
-  ];;
-// --- END: Runway Video Prompts ---
 
 // --- NEW: generateImageForVideo Function --- // RENAMED TO requestImageGeneration
 exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds: 60 }, async (request) => { // Shorter timeout
@@ -1462,185 +1244,6 @@ exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds:
         throw new HttpsError('internal', `We couldn\'t request the image generation due to an internal error: ${error.message}. Please try again. If the issue persists, our team is working on it.`);
     }
 });
-
-// --- handleVideoPollingTask Function (MODIFIED) ---
-// --- handleVideoPollingTask Function (MODIFIED) ---
-exports.handleVideoPollingTask = onRequest(
-    { region: 'us-central1', timeoutSeconds: 300, memory: '1GiB' }, 
-    async (request, response) => {
-        // Basic security check for Cloud Tasks: Verify the User-Agent header.
-        // This is a common way to ensure requests are from Cloud Tasks.
-        // You might want to add more robust checks if needed (e.g., OIDC tokens for Gen 2 targets).
-        if (!request.headers['user-agent'] || !request.headers['user-agent'].includes('Google-Cloud-Tasks')) {
-            logger.warn('handleVideoPollingTask received request not from Google-Cloud-Tasks');
-            // response.status(403).send('Forbidden'); // Be cautious with 403 as tasks might retry indefinitely
-            // return;
-        }
-
-        let payload;
-        try {
-            if (typeof request.body === 'string') {
-                 payload = JSON.parse(request.body);
-            } else {
-                 payload = request.body;
-            }
-        } catch (e) {
-            logger.error('Failed to parse request body in handleVideoPollingTask:', e, { body: request.body });
-            response.status(400).send('Invalid request body.');
-            return;
-        }
-
-        const { userId, firestoreDocId, runwayTaskId, startTime, attempt = 1 } = payload;
-        const MAX_ATTEMPTS = 5; // Max polling attempts for a task if it keeps processing
-
-        if (!userId || !firestoreDocId || !runwayTaskId || !startTime) {
-            logger.error('handleVideoPollingTask: Missing required parameters in payload.', payload);
-            response.status(400).send('Bad Request: Missing parameters.');
-            return;
-        }
-
-        const postDocRef = db.collection('users').doc(userId).collection('tiktok-posts').doc(firestoreDocId);
-
-        // Check if polling duration exceeded
-        const elapsedTimeSeconds = (Date.now() - startTime) / 1000;
-        if (elapsedTimeSeconds > MAX_POLLING_DURATION_SECONDS) {
-            logger.warn(`Polling for Runway task ${runwayTaskId} (Doc: ${firestoreDocId}) exceeded max duration. Setting status to timeout.`);
-            try {
-             await postDocRef.update({
-                    status: 'runway_timeout',
-                    error: `Polling exceeded ${MAX_POLLING_DURATION_SECONDS / 60} minutes.`,
-                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (dbError) {
-                logger.error(`DB error updating to runway_timeout for ${firestoreDocId}:`, dbError);
-            }
-            response.status(200).send('Polling timed out, status updated.'); // Ack to prevent task retry
-            return;
-        }
-
-        try {
-            const runwayApiKey = process.env.RUNWAY_API_KEY; // Ensure this is set
-            if (!runwayApiKey) {
-                logger.error("Runway API key (RUNWAY_API_KEY) is not configured.");
-                throw new Error("Runway API key not configured.");
-            }
-
-            logger.info(`Polling Runway task ${runwayTaskId} (Doc: ${firestoreDocId}), Attempt: ${attempt}`);
-            const runwayResponse = await axios.get(`https://api.dev.runwayml.com/v1/tasks/${runwayTaskId}`, { // URL is already api.dev.runwayml.com
-                headers: { 
-                    'Authorization': `Bearer ${runwayApiKey}`,
-                    'Accept': 'application/json',
-                    'X-Runway-Version': '2024-11-06' // RE-ADDED X-Runway-Version header
-                }
-            });
-
-            const runwayData = runwayResponse.data;
-             const runwayStatus = runwayData?.status;
-
-             if (runwayStatus === 'SUCCEEDED') {
-                 logger.info(`Runway task ${runwayTaskId} SUCCEEDED (Polled).`);
-                const runwayGeneratedVideoUrl = Array.isArray(runwayData.output) && runwayData.output.length > 0 && typeof runwayData.output[0] === 'string' ? runwayData.output[0] : null;
-                if (!runwayGeneratedVideoUrl) {
-                    logger.error(`Runway task ${runwayTaskId} succeeded but output video URL was missing or invalid.`, { output: runwayData.output });
-                    throw new Error('Runway succeeded but output video URL was missing.');
-                }
-                logger.info(`Found Runway output URL: ${runwayGeneratedVideoUrl} for doc ${firestoreDocId}`);
-
-                const postSnapshot = await postDocRef.get();
-                const postData = postSnapshot.data();
-                const productUrlToAppend = postData?.productToAppendUrl;
-                const productTypeToAppend = postData?.productToAppendType;
-
-                await postDocRef.update({
-                    status: 'pending_concatenation', // Still set this, will be processing_concatenation soon
-                    runwayVideoUrl: runwayGeneratedVideoUrl,
-                    error: null,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-                logger.info(`Firestore document ${firestoreDocId} updated with Runway video URL: ${runwayGeneratedVideoUrl}.`); // Modified log
-
-                if (productUrlToAppend && productTypeToAppend) {
-                    // MODIFIED: Do not enqueue concatenation. Instead, mark as completed.
-                    logger.info(`Product media found for doc ${firestoreDocId}, but concatenation is now bypassed. Marking as complete with Runway video.`);
-                    await postDocRef.update({
-                        status: 'ready-to-edit',
-                        videoUrl: runwayGeneratedVideoUrl, // Final URL is the Runway URL
-                        error: null, // Clear any previous error
-                        // Optionally, you might want to clear productToAppendUrl/Type here if they are no longer relevant
-                        // productToAppendUrl: admin.firestore.FieldValue.delete(),
-                        // productToAppendType: admin.firestore.FieldValue.delete(),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                    response.status(200).send('Runway video ready and marked as complete. Concatenation bypassed.');
-                } else {
-                    logger.warn(`Runway video generated for doc ${firestoreDocId}, but no product media was specified for appending. Marking as complete.`);
-                 await postDocRef.update({
-                        status: 'completed', // Directly completed as no concatenation needed
-                        videoUrl: runwayGeneratedVideoUrl, // Final URL is the Runway URL
-                     error: null,
-                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                 });
-                    response.status(200).send('Runway video ready and no product to append. Marked as complete.');
-                }
-                return; // Important: return after handling SUCCEEDED
-
-             } else if (runwayStatus === 'FAILED') {
-                logger.error(`Runway task ${runwayTaskId} FAILED (Polled). Error: ${runwayData?.error || 'Unknown Runway error'}`);
-                 await postDocRef.update({
-                     status: 'runway_failed',
-                    error: runwayData?.error || 'Runway task failed.',
-                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                 });
-                response.status(200).send('Runway task failed, status updated.');
-                return;
-            } else { // Still processing (e.g., 'PROCESSING', 'PENDING')
-                if (attempt >= MAX_ATTEMPTS) {
-                    logger.warn(`Runway task ${runwayTaskId} (Doc: ${firestoreDocId}) reached max polling attempts (${MAX_ATTEMPTS}) without completion. Setting to timeout.`);
-                    await postDocRef.update({
-                        status: 'runway_timeout',
-                        error: `Reached max polling attempts (${MAX_ATTEMPTS}) without completion.`,
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                    response.status(200).send('Max polling attempts reached, status updated.');
-                    return;
-                }
-
-                logger.info(`Runway task ${runwayTaskId} is still ${runwayStatus}. Rescheduling poll.`);
-                const nextAttempt = attempt + 1;
-                const pollTaskPayload = { userId, firestoreDocId, runwayTaskId, startTime, attempt: nextAttempt }; // Include nextAttempt
-                const pollTask = {
-                     httpRequest: {
-                         httpMethod: 'POST',
-                        url: runwayTaskHandlerUrl, // Use the polling handler URL
-                         headers: { 'Content-Type': 'application/json' },
-                        body: Buffer.from(JSON.stringify(pollTaskPayload)).toString('base64')
-                     },
-                     scheduleTime: {
-                         seconds: Math.floor(Date.now() / 1000) + POLLING_INTERVAL_SECONDS
-                     }
-                 };
-                const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, runwayTasksQueueName); // Use runway polling queue
-                await tasksClient.createTask({ parent: parent, task: pollTask });
-                response.status(200).send('Task still processing, poll rescheduled.');
-                return;
-             }
-        } catch (error) {
-            logger.error(`Error in handleVideoPollingTask for ${firestoreDocId} (Runway Task: ${runwayTaskId}):`, error);
-            try {
-             await postDocRef.update({
-                 status: 'internal_error',
-                    error: `Polling task error: ${error.message}`,
-                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (dbUpdateError) {
-                logger.error(`DB error updating to internal_error for ${firestoreDocId}:`, dbUpdateError);
-            }
-            // It's important to send a 200 OK to Cloud Tasks to prevent retries for non-transient errors.
-            // The error is logged, and Firestore is updated.
-            response.status(200).send(`Polling task encountered an error: ${error.message}`);
-        }
-    }
-);
 
 exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
     const userId = request.auth?.uid;
@@ -2136,108 +1739,6 @@ exports.editImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (
      return { success: false, message: "Image editing not implemented yet.", data: null };
 }); // <-- Ensure semicolon if needed
 
-exports.saveCreatorFromGeneration = onCall({ region: 'us-central1', timeoutSeconds: 180 }, async (request) => { // Increased timeout slightly
-    const userId = request.auth?.uid;
-    if (!userId) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-    const { creator_name, imageUrl, original_generation_data } = request.data;
-    if (!creator_name || !imageUrl) {
-        throw new HttpsError('invalid-argument', 'Missing creator_name or imageUrl.');
-    }
-    try {
-        const creatorData = {
-            name: creator_name,
-        imageUrl: imageUrl,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            sourceGeneration: original_generation_data || null 
-        };
-        await db.collection('users').doc(userId).collection('creators').add(creatorData);
-        logger.info(`Creator "${creator_name}" saved for user ${userId} from generation.`);
-        return { success: true, message: 'Creator saved successfully.' };
-    } catch (error) {
-        logger.error(`Error saving creator from generation for user ${userId}:`, error);
-        throw new HttpsError('internal', 'Failed to save creator.');
-    }
-});
-
-exports.saveBackgroundFromGeneration = onCall({ region: 'us-central1', timeoutSeconds: 240 }, async (request) => { // Increased timeout for description gen
-    const userId = request.auth?.uid;
-    if (!userId) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-    const { background_name, imageUrl, original_generation_data } = request.data;
-    if (!background_name || !imageUrl) {
-        throw new HttpsError('invalid-argument', 'Missing background_name or imageUrl.');
-    }
-
-    let description = 'No description generated.'; // Default description
-    try {
-        logger.info(`Attempting to generate description for background image: ${imageUrl} for user ${userId}`);
-        // Call the generateImageDescription function internally (not as a direct callable from here, but invoke its logic or a helper)
-        // For simplicity here, assuming direct OpenAI call or a helper that encapsulates it.
-        // This part needs to be robust based on how generateImageDescription is structured if it were a helper.
-        // For a direct call if it were a helper:
-        // description = await internalGenerateDescriptionHelper(imageUrl);
-
-        // Since generateImageDescription IS a callable, we can't directly await it here without making an HTTP call to itself.
-        // Let's simulate calling the core logic of generateImageDescription here.
-        let openai_desc_gen;
-        try {
-            const apiKey = process.env.OPENAI_KEY;
-            if (!apiKey) throw new Error('OpenAI key not found for internal description gen.');
-            openai_desc_gen = new OpenAI({ apiKey: apiKey });
-        } catch (initError) {
-            logger.error('Failed to init OpenAI for internal background description:', initError);
-            // Proceed without description, or throw if critical
-        }
-
-        if (openai_desc_gen) {
-            const desc_completion = await openai_desc_gen.chat.completions.create({
-                model: "gpt-4o",
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: "Provide a concise, factual description of this image in 5-10 words. Description:" },
-                            { type: "image_url", image_url: { "url": imageUrl, "detail": "low" } }
-                        ]
-                    }
-                ],
-                temperature: 0.2,
-                max_tokens: 60
-            });
-            const aiDesc = desc_completion.choices[0]?.message?.content?.trim();
-            if (aiDesc) {
-                description = aiDesc;
-                logger.info(`Internally generated description for background: "${description}"`);
-                } else {
-                logger.warn(`Internal description generation yielded no content for ${imageUrl}.`);
-            }
-        }
-
-    } catch (descError) {
-        logger.error(`Error generating description internally for background ${imageUrl} for user ${userId}:`, descError);
-        // Not throwing an error here, will save background with default description
-    }
-
-    try {
-        const backgroundData = {
-            name: background_name,
-            imageUrl: imageUrl,
-            description: description, // Add the generated or default description
-            isFromLibrary: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            sourceGeneration: original_generation_data || null
-        };
-        await db.collection('users').doc(userId).collection('backgrounds').add(backgroundData);
-        logger.info(`Background "${background_name}" (with description) saved for user ${userId} from generation.`);
-        return { success: true, message: 'Background saved successfully with description.' };
-  } catch (error) {
-        logger.error(`Error saving background from generation for user ${userId}:`, error);
-        throw new HttpsError('internal', 'Failed to save background.');
-    }
-});
 
 // --- NEW: Function to Create Stripe Checkout Session ---
 exports.createStripeCheckoutSession = onCall(async (request) => { // Removed secrets option
@@ -2745,1016 +2246,94 @@ exports.refreshMonthlyCredits = onSchedule(
 );
 // --- END Scheduled Function ---
 
-// --- NEW: Video Concatenation Function (HTTP Triggered by Cloud Task) ---
-exports.performVideoConcatenation = onCall( // MODIFIED from onRequest
-    { region: 'us-central1', timeoutSeconds: VIDEO_CONCAT_TIMEOUT_SECONDS, memory: '2GiB' }, 
-    async (request) => { // MODIFIED: (request, response) -> (request)
-        const ffmpeg = require('fluent-ffmpeg');
-        const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-        ffmpeg.setFfmpegPath(ffmpegPath);
-        const fsPromises = require('fs').promises; 
-
-        // MODIFIED: Get userId from auth context
-        const callingUserId = request.auth?.uid;
-        if (!callingUserId) {
-            logger.error("performVideoConcatenation: Authentication Error. User not authenticated.");
-            throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-        }
-
-        // MODIFIED: Get data from request.data
-        const {
-            userId, // Keep userId from data for now, but verify against callingUserId
-            firestoreDocId,
-            runwayVideoUrl,
-            productToAppendUrl, 
-            productToAppendType, 
-        } = request.data;
-
-        // Verification: Ensure the authenticated user matches the userId in the data
-        if (callingUserId !== userId) {
-            logger.error(`performVideoConcatenation: Authenticated user (${callingUserId}) does not match userId in data (${userId}).`);
-            throw new HttpsError('permission-denied', 'Authenticated user does not match the user ID for this operation.');
-        }
-        
-        logger.info("performVideoConcatenation onCall request received for user:", userId, "Data:", request.data);
-
-
-        if (!userId || !firestoreDocId || !runwayVideoUrl) {
-            logger.error("Missing required parameters for video concatenation.", request.data);
-            // MODIFIED: Throw HttpsError instead of response.send
-            throw new HttpsError('invalid-argument', "Bad Request: Missing userId, firestoreDocId, or runwayVideoUrl.");
-        }
-
-        const postDocRef = db.collection('users').doc(userId).collection('tiktok-posts').doc(firestoreDocId);
-        const tempDir = path.join('/tmp', `concat_${firestoreDocId}_${Date.now()}`);
-        
-        let currentVideoPath; 
-        let finalVideoToUploadPath; 
-        let filesToCleanup = [];
-        let postDataForLogging = {};
-
-        try {
-            logger.info(`Starting video processing for doc ${firestoreDocId}. Runway Video URL: ${runwayVideoUrl}`);
-            await postDocRef.update({
-                status: 'processing_concatenation',
-                concatenationDetails: 'Starting concatenation process...',
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            await fsPromises.mkdir(tempDir, { recursive: true });
-            logger.info(`Created temp directory: ${tempDir}`);
-
-            const postSnapshot = await postDocRef.get();
-            if (!postSnapshot.exists) {
-                throw new Error(`Firestore document ${firestoreDocId} not found.`);
-            }
-            postDataForLogging = postSnapshot.data();
-            const hookText = postDataForLogging?.hookText;
-
-            if (!hookText) {
-                logger.warn(`No hookText found for doc ${firestoreDocId}. Proceeding without text overlay.`);
-            } else {
-                logger.info(`Hook text for doc ${firestoreDocId}: "${hookText}"`);
-            }
-
-            const originalRunwayVideoPath = path.join(tempDir, 'runway_video_original.mp4');
-            filesToCleanup.push(originalRunwayVideoPath);
-            logger.info(`Downloading Runway video from ${runwayVideoUrl} to ${originalRunwayVideoPath}`);
-            await downloadFile(runwayVideoUrl, originalRunwayVideoPath);
-            logger.info("Runway video downloaded successfully.");
-            currentVideoPath = originalRunwayVideoPath;
-
-            if (hookText && hookText.trim() !== '') {
-                const runwayVideoWithTextPath = path.join(tempDir, `runway_with_text.mp4`);
-                filesToCleanup.push(runwayVideoWithTextPath);
-                logger.info(`Attempting to add hook text: "${hookText}" to ${currentVideoPath}`);
-                
-                let processedHookTextForDrawtext = '';
-                    const words = hookText.split(' ');
-                    let currentLine = '';
-                    for (const word of words) {
-                        if (currentLine === '') {
-                            currentLine = word;
-                        } else if ((currentLine + ' ' + word).length <= 30) {
-                            currentLine += ' ' + word;
-                        } else {
-                        processedHookTextForDrawtext += currentLine + '\n'; 
-                            currentLine = word;
-                        }
-                    }
-                processedHookTextForDrawtext += currentLine;
-                
-                const escapedHookText = processedHookTextForDrawtext
-                                        .replace(/\\/g, '\\\\')
-                                        .replace(/'/g, "\\\'\\\'")
-                                        .replace(/%/g, '\\%')
-                                        .replace(/:/g, '\\:')
-                                        .replace(/\n/g, '\\\\N');
-
-                try {
-                    await new Promise((resolve, reject) => {
-                        ffmpeg(currentVideoPath)
-                    .videoFilter(
-                                `drawtext=text='${escapedHookText}':fontfile=/usr/share/fonts/truetype/msttcorefonts/Arial.ttf:fontcolor=white:fontsize=45:borderw=2:bordercolor=black@0.8:x=(w-text_w)/2:y=(h*0.75-text_h/2)`
-                    )
-                    .outputOptions([
-                                '-c:v', 'libx264',
-                                '-preset', 'medium',
-                                '-crf', '23',
-                                '-c:a', 'aac',
-                                '-b:a', '192k',
-                                '-ar', '48000'
-                            ])
-                            .on('start', commandLine => logger.info('FFmpeg drawtext started:', commandLine))
-                    .on("error", (err, stdout, stderr) => {
-                                logger.error("Error adding hook text:", err.message, {stdout, stderr});
-                                reject(new Error(`FFmpeg hook text error: ${err.message}`));
-                    })
-                    .on("end", () => {
-                                logger.info("Hook text added successfully to video.");
-                                currentVideoPath = runwayVideoWithTextPath;
-                      resolve();
-                    })
-                            .save(runwayVideoWithTextPath);
-                });
-                    await postDocRef.update({ concatenationDetails: 'Hook text added.'});
-              } catch (textError) {
-                    logger.error("Failed to add hook text, proceeding with video as is.", textError);
-                    await postDocRef.update({ concatenationDetails: 'Hook text addition failed, proceeding without it.'});
-              }
-            } else {
-                logger.info("No hook text found or hook text is empty, skipping text overlay.");
-                await postDocRef.update({ concatenationDetails: 'No hook text provided.'});
-            }
-
-            const standardizedRunwayVideoPath = path.join(tempDir, 'runway_standardized.mp4');
-            filesToCleanup.push(standardizedRunwayVideoPath);
-            logger.info(`Standardizing Runway video from ${currentVideoPath} to ${standardizedRunwayVideoPath}`);
-            
-            await new Promise((resolve, reject) => {
-                ffmpeg(currentVideoPath)
-                    .outputOptions([
-                        '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1',
-                        '-r', '30',
-                        '-c:v', 'libx264',
-                        '-preset', 'medium',
-                        '-crf', '23',
-                        '-c:a', 'aac',
-                        '-b:a', '192k',
-                        '-ar', '48000',
-                        '-pix_fmt', 'yuv420p'
-                    ])
-                    .on('start', commandLine => logger.info('FFmpeg standardization (Runway) started:', commandLine))
-                    .on('end', () => { logger.info('Runway video standardized successfully.'); resolve(); })
-                    .on('error', (err, stdout, stderr) => {
-                        logger.error('Error standardizing Runway video:', err.message, {stdout, stderr});
-                        reject(new Error(`Failed to standardize Runway video: ${err.message}`));
-                    })
-                    .save(standardizedRunwayVideoPath);
-            });
-            currentVideoPath = standardizedRunwayVideoPath;
-            finalVideoToUploadPath = currentVideoPath;
-            await postDocRef.update({ concatenationDetails: 'Runway video standardized.'});
-
-            if (productToAppendUrl && productToAppendType === 'video') {
-                logger.info(`Product media is a video: ${productToAppendUrl}. Attempting standardization and concatenation.`);
-                const originalProductVideoPath = path.join(tempDir, `product_original.${productToAppendUrl.split('.').pop().split('?')[0] || 'mp4'}`);
-                const standardizedProductVideoPath = path.join(tempDir, 'product_standardized.mp4');
-                const concatenatedVideoPath = path.join(tempDir, 'final_concatenated.mp4');
-                filesToCleanup.push(originalProductVideoPath, standardizedProductVideoPath, concatenatedVideoPath);
-
-                try {
-                    logger.info(`Downloading product video from ${productToAppendUrl} to ${originalProductVideoPath}`);
-                    await downloadFile(productToAppendUrl, originalProductVideoPath);
-                    logger.info("Product video downloaded.");
-                    await postDocRef.update({ concatenationDetails: 'Runway video standardized. Product video downloaded.'});
-
-                    logger.info(`Standardizing product video: ${originalProductVideoPath} to ${standardizedProductVideoPath}`);
-                await new Promise((resolve, reject) => {
-                        ffmpeg(originalProductVideoPath)
-                            .outputOptions([
-                                '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1',
-                                '-r', '30',
-                                '-c:v', 'libx264',
-                                '-preset', 'medium',
-                                '-crf', '23',
-                                '-c:a', 'aac',
-                                '-b:a', '192k',
-                                '-ar', '48000',
-                                '-pix_fmt', 'yuv420p'
-                            ])
-                            .on('start', commandLine => logger.info('FFmpeg standardization (Product) started:', commandLine))
-                            .on('end', () => { logger.info('Product video standardized successfully.'); resolve(); })
-                            .on('error', (err, stdout, stderr) => {
-                                logger.error('Error standardizing product video:', err.message, {stdout, stderr});
-                                reject(new Error(`Failed to standardize product video: ${err.message}`));
-                            })
-                            .save(standardizedProductVideoPath);
-                    });
-                    await postDocRef.update({ concatenationDetails: 'Runway & Product videos standardized.'});
-
-                    logger.info(`Concatenating ${standardizedRunwayVideoPath} and ${standardizedProductVideoPath} into ${concatenatedVideoPath}`);
-                    const concatListPath = path.join(tempDir, 'concat_list.txt');
-                    filesToCleanup.push(concatListPath);
-                    const contentForListFile = `file '${standardizedRunwayVideoPath.replace(/\\/g, '/')}'\nfile '${standardizedProductVideoPath.replace(/\\/g, '/')}'`;
-                    await fsPromises.writeFile(concatListPath, contentForListFile);
-                    
-                    await new Promise((resolve, reject) => {
-                        ffmpeg()
-                            .input(concatListPath)
-                            .inputOptions(['-f', 'concat', '-safe', '0'])
-                            .outputOptions(['-c', 'copy'])
-                            .on('start', commandLine => logger.info('FFmpeg concatenation (-c copy) started:', commandLine))
-                            .on('end', () => { logger.info('Videos concatenated successfully with -c copy.'); resolve(); })
-                            .on('error', (err, stdout, stderr) => {
-                                logger.error('Error during video concatenation (-c copy):', err.message, {stdout, stderr});
-                                logger.info('Retrying concatenation with full re-encode...');
-                                ffmpeg()
-                                    .input(standardizedRunwayVideoPath)
-                                    .input(standardizedProductVideoPath)
-                                    .complexFilter('[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[outv][outa]')
-                                    .outputOptions([
-                                        '-map', '[outv]', 
-                                        '-map', '[outa]',
-                                        '-r', '30',
-                                        '-c:v', 'libx264',
-                                        '-preset', 'medium',
-                                        '-crf', '23',
-                                        '-c:a', 'aac',
-                                        '-b:a', '192k',
-                                        '-ar', '48000',
-                                        '-pix_fmt', 'yuv420p'
-                                    ])
-                                    .on('start', cmd => logger.info('FFmpeg re-encode concatenation started:', cmd))
-                                    .on('end', () => { logger.info('Videos concatenated successfully with re-encode.'); resolve(); })
-                                    .on('error', (reEncodeErr, reEncodeStdout, reEncodeStderr) => {
-                                        logger.error('Error during video concatenation (re-encode):', reEncodeErr.message, {reEncodeStdout, reEncodeStderr});
-                                        reject(new Error(`Failed to concatenate videos even with re-encode: ${reEncodeErr.message}`));
-                                    })
-                                    .save(concatenatedVideoPath);
-                            })
-                            .save(concatenatedVideoPath);
-                    });
-                    finalVideoToUploadPath = concatenatedVideoPath;
-                    await postDocRef.update({ concatenationDetails: 'Runway & Product videos standardized and concatenated.'});
-
-                } catch (productProcessingError) {
-                    logger.error(`Error processing product video or during concatenation for doc ${firestoreDocId}:`, productProcessingError);
-                    await postDocRef.update({
-                        concatenationDetails: `Product video processing/concatenation failed: ${productProcessingError.message}. Using Runway video only.`,
-                        concatenationError: `Product video error: ${productProcessingError.message}`
-                    });
-                    logger.warn(`Falling back to using only the standardized Runway video for doc ${firestoreDocId}.`);
-                }
-            } else if (productToAppendUrl && productToAppendType === 'image') {
-                logger.warn(`Product media for doc ${firestoreDocId} is an image. Image overlay not yet implemented. Using (hooked) standardized Runway video as final.`);
-                await postDocRef.update({ concatenationDetails: 'Product is image, using Runway video.'});
-            } else {
-                logger.info(`No product video to append for doc ${firestoreDocId}. Using (hooked) standardized Runway video as final.`);
-                await postDocRef.update({ concatenationDetails: 'No product video, using Runway video.'});
-            }
-
-            const finalVideoStoragePath = `users/${userId}/generated_videos/${firestoreDocId}_final_${Date.now()}.mp4`;
-            logger.info(`Uploading final video from ${finalVideoToUploadPath} to Storage: ${finalVideoStoragePath}`);
-            
-            if (!finalVideoToUploadPath || !(await fsPromises.stat(finalVideoToUploadPath).catch(() => false))) {
-                 logger.error(`Final output video path is invalid or file does not exist: ${finalVideoToUploadPath}. Current video path was: ${currentVideoPath}`);
-                 throw new Error(`Final video file is missing before upload: ${finalVideoToUploadPath}`);
-            }
-
-            const [uploadedFile] = await bucket.upload(finalVideoToUploadPath, {
-                destination: finalVideoStoragePath,
-                metadata: { contentType: 'video/mp4' },
-                public: true,
-            });
-            const finalPublicUrl = uploadedFile.publicUrl();
-            logger.info(`Final video uploaded successfully. URL: ${finalPublicUrl}`);
-
-            await postDocRef.update({
-                status: 'completed',
-                finalVideoUrl: finalPublicUrl,
-                concatenationDetails: 'Video processing completed successfully.',
-                error: null,
-                concatenationError: null,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            logger.info(`Firestore document ${firestoreDocId} updated to status 'completed' with finalVideoUrl.`);
-            // MODIFIED: Return success object
-            return { success: true, message: "Video processing completed successfully.", finalVideoUrl: finalPublicUrl };
-
-        } catch (error) {
-            logger.error(`Critical error in performVideoConcatenation for doc ${firestoreDocId}:`, error.message, error.stack);
-            try {
-                await postDocRef.update({
-                    status: 'concatenation_failed',
-                    error: `Concatenation process error: ${error.message}`,
-                    concatenationDetails: `Failed at: ${postDataForLogging?.concatenationDetails || 'unknown step'}. Error: ${error.message}`,
-                    finalVideoUrl: null,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (dbUpdateError) {
-                logger.error(`Failed to update Firestore with critical failed status for doc ${firestoreDocId}:`, dbUpdateError);
-            }
-            // MODIFIED: Throw HttpsError
-            throw new HttpsError('internal', `Internal Server Error during video processing: ${error.message}`);
-        } finally {
-            if (tempDir) {
-                logger.info(`Cleaning up temporary files in: ${tempDir}`);
-                for (const filePath of filesToCleanup) {
-                    await fsPromises.rm(filePath, { force: true, recursive: false }).catch(err => logger.warn(`Error cleaning up temp file ${filePath}:`, err.message));
-                }
-                await fsPromises.rm(tempDir, { recursive: true, force: true }).catch(err => logger.error(`Error cleaning up temp dir ${tempDir}:`, err.message));
-                logger.info("Temp directory cleanup finished.");
-            }
-        }
-    }
-);
-// --- NEW: performImageGenerationTask Function (HTTP Triggered by Cloud Task) ---
 exports.performImageGenerationTask = onRequest(
-    { region: 'us-central1', timeoutSeconds: IMAGE_GEN_TIMEOUT_SECONDS, memory: '2GiB' }, // Use new timeout
+    { region: 'us-central1', timeoutSeconds: IMAGE_GEN_TIMEOUT_SECONDS, memory: '2GiB' },
     async (request, response) => {
         logger.info("performImageGenerationTask request received:", request.body);
 
-        const {
-            userId,
-            firestoreDocId,
-            generationParams // Parameters needed for generation (prompt, style, etc.)
-        } = request.body;
+        const { userId, firestoreDocId, generationParams } = request.body;
+        const { originalPrompt, subtype, selectedFrame, ...legacyParams } = generationParams || {};
+
+        const docRef = db.collection('generations').doc(firestoreDocId);
 
         if (!userId || !firestoreDocId || !generationParams) {
             logger.error("performImageGenerationTask: Missing required parameters.", request.body);
-            response.status(400).send("Bad Request: Missing parameters.");
+            await docRef.set({ status: 'failed', error: 'Internal error: Missing crucial task parameters.' }, { merge: true });
+            response.status(400).send("Missing required parameters.");
             return;
         }
 
-        const postDocRef = db.collection('users').doc(userId).collection('tiktok-posts').doc(firestoreDocId);
-
-        // --- Initialize OpenAI Client ---
         let openai;
         try {
-            const apiKey = process.env.OPENAI_KEY;
-            if (!apiKey) throw new Error('OpenAI service configuration error.');
-            openai = new OpenAI({ apiKey: apiKey });
+            const openAIKey = await getOpenAIKeyForUser(userId);
+            openai = new OpenAI({ apiKey: openAIKey });
         } catch (error) {
             logger.error("performImageGenerationTask: Failed to initialize OpenAI service:", error);
-            try {
-                await postDocRef.update({ status: 'image_gen_failed', error: `OpenAI Init Error: ${error.message}` });
-            } catch (dbErr) { logger.error("DB update error on OpenAI init fail:", dbErr); }
-            response.status(200).send("OpenAI Init Error"); // Ack task, prevent retry for init error
+            await docRef.set({ status: 'failed', error: `Failed to initialize AI service: ${error.message}` }, { merge: true });
+            response.status(500).send("Failed to initialize OpenAI service.");
             return;
         }
-        // --- End OpenAI Client Initialization ---
-
-        let initialImageUrl = null; // Storage URL
-        let generatedImagePrompt = null;
-        let base64DataForUpload = null;
-        let generatedFileName = null;
-        let detectedSubjectTerm = null; // Initialize detectedSubjectTerm here
 
         try {
-            // Update status to generating
-            await postDocRef.update({ status: 'image_generating', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-            logger.info(`Status updated to 'image_generating' for doc ${firestoreDocId}`);
+            await docRef.set({ status: 'image_generation_in_progress' }, { merge: true });
+            
+            let finalPromptToUse = '';
 
-            const {
-                subject_description, // May be "person from base image" if baseImageUrl is used
-                action_description, // General action, less critical if editing specific things
-                setting_description, // Crucial for new background if baseImageUrl is used
-                character_reaction, // Less critical if editing specific things
-                baseImageUrl,       // <<< THIS IS THE KEY PARAMETER FROM CREATOR
-                clothing_description, // Crucial for new clothes if baseImageUrl is used
-                image_style,        // Can be applied/mentioned in edit prompt
-                age,                // Less critical if editing existing person, but can be in prompt
-                gender              // Less critical if editing existing person, but can be in prompt
-            } = generationParams;
+            // --- New Prompt Enhancement Flow ---
+            if (originalPrompt && subtype && selectedFrame) {
+                logger.info(`[Task ${firestoreDocId}] Using new enhancement flow with frame: ${selectedFrame}`);
+                finalPromptToUse = await enhancePromptWithRules(originalPrompt, subtype, selectedFrame, openai);
+            } 
+            // --- Legacy Flow (Fallback) ---
+            else if (legacyParams.subject_description) {
+                logger.info(`[Task ${firestoreDocId}] Using legacy flow with subject_description.`);
+                const { detailedPrompt } = await generateDetailedUgcPrompt(legacyParams, openai);
+                finalPromptToUse = detailedPrompt;
+            } 
+            // --- Error Case ---
+            else {
+                throw new Error("Not enough parameters for any generation flow.");
+            }
+            
+            logger.info(`[Task ${firestoreDocId}] Final prompt for generation (length: ${finalPromptToUse.length}): "${finalPromptToUse}"`);
+            await docRef.set({ status: 'generating_image', finalPrompt: finalPromptToUse }, { merge: true });
+            
+            // ... (rest of the image generation logic using finalPromptToUse)
+            // Example call to the image generation model:
+            const imageResponse = await openai.images.generate({
+                model: "dall-e-3", // or your preferred model
+                prompt: finalPromptToUse,
+                n: 1,
+                size: "1024x1024",
+                quality: legacyParams.quality || 'standard',
+                style: legacyParams.style || 'vivid'
+            });
 
-            if (baseImageUrl) {
-                // **** Scenario B: baseImageUrl provided - Use openai.images.edit ****
-                logger.info(`[Task ${firestoreDocId}] BaseImageUrl: ${baseImageUrl}. Attempting image edit for clothes/background.`);
+            const imageUrl = imageResponse.data[0].url;
 
-                // --- NEW: Define arrays needed for random selection during edit ---
-                const maleClothingExamples = [
-                    "in a well-fitting plain white crew-neck t-shirt and dark wash jeans",
-                    "in a classic black v-neck t-shirt and chino pants",
-                    "in a light blue button-down shirt (top button undone) and beige shorts",
-                    "in a grey Henley shirt with sleeves rolled up and dark jeans",
-                    "in a fitted dark grey polo shirt and comfortable trousers",
-                    "in a simple black tank top (showing athletic arms) and casual shorts",
-                    "in an open casual flannel shirt (red and black plaid) over a plain white t-shirt and ripped black jeans",
-                    "in a comfortable charcoal knit sweater and dark chino pants",
-                    "in a stylish black bomber jacket over a grey t-shirt and slim-fit black jeans",
-                    "in a modern athletic zip-up hoodie (navy blue) and grey jogger pants",
-                    "in a tailored light grey linen shirt (casually untucked) and white cuffed shorts",
-                    "in a black turtleneck sweater and smart grey wool trousers",
-                    "in a denim jacket over a striped t-shirt and black jeans",
-                    "in a relaxed-fit olive green utility shirt and cargo pants",
-                    "in a cream-colored cable-knit cardigan over a chambray shirt and brown corduroy pants",
-                    "in a fitted black leather jacket, white graphic tee, and dark distressed jeans",
-                    "in a modern navy blue Harrington jacket, a simple white long-sleeve top, and stone-colored chinos",
-                    "in a light-wash denim shirt (worn open) over a black muscle-fit tank top and black skinny jeans",
-                    "in a burgundy short-sleeve button-up shirt with a subtle print and tailored navy shorts",
-                    "in an oversized neutral-toned hoodie, slightly distressed light-wash jeans, and clean white sneakers (implied)"
-                ];
-                const femaleClothingExamples = [
-                    "in a black backless crop top highlighting cleavage",
-                    "in a white halter neck top showing shoulders and subtle cleavage",
-                    "in a red asymmetric one-shoulder top with a plunging neckline",
-                    "in a sheer black mesh top over a visible bralette showing cleavage",
-                    "in a structured navy blue corset top with bust-enhancing design, paired with jeans",
-                    "in a charcoal twist-front crop top that subtly reveals cleavage",
-                    "in a grey long sleeve top with bust-level cut-out details",
-                    "in a white tie-front blouse revealing a hint of cleavage",
-                    "in a black tube top (bandeau style) with chest exposure",
-                    "in an oversized sleeveless knitted top in off-black with visible neckline",
-                    "in a satin cowl neck top in pearl grey, softly draping around the chest",
-                    "in a fitted 90s-style baby tee in off-white, slightly low-cut",
-                    "in a bralette top with matching mini shrug in graphite grey, showing cleavage",
-                    "in a layered sheer mesh long sleeve top in black over a low-cut bra",
-                    "in a puff sleeve off-the-shoulder top in soft white with romantic cleavage reveal",
-                    "in a wrap crop top tied at the side in deep red, exposing bust line",
-                    "in a ribbed tank top in charcoal with modest chest exposure"
-                    // ... Add more diverse and SFW examples as needed, aligning with generateDetailedUgcPrompt list
-                ];
-                const settingExamples = [
-                    "Seated at a cozy, modern café — sunlight pouring through large windows, sitting at a wooden table with a coffee cup, plants and minimal decor around.",
-                    "Leaning against a brick wall on a quiet city street during golden hour, with soft lighting and subtle street activity in the background.",
-                    "Standing inside a bright loft-style studio apartment — large windows, natural shadows, a few plants, and a clean, minimalist setup.",
-                    "Relaxing in a well-decorated living room — aesthetic furniture, wall art, and a few indoor plants creating a warm, homey vibe.",
-                    "Sitting on a park bench near a fountain in a public park — trees in the background, casual people walking by, a peaceful urban setting.",
-                    "Standing in front of a clean, white indoor backdrop — neutral tones to keep the focus on the subject, ideal for a minimal profile shot.",
-                    "Browsing inside a cozy local bookstore — surrounded by warm lighting and tall bookshelves filled with colorful covers.",
-                    "Walking through a university campus — classic architecture in the background, paved walkways, and scattered groups of students nearby.",
-                    "Standing at the entrance of a small art gallery — framed artworks visible behind glass doors, warm indoor lighting spilling outside.",
-                    "Waiting at a tram stop or bus station in the city — realistic urban elements like maps, benches, and subtle motion in the background.",
-                    "Sitting on a bench in a park — trees in the background, casual people walking by, a peaceful urban setting."
-                ];
-                // --- END NEW ---
-
-                let imageBufferFromUrl;
-                try {
-                    const downloadResponse = await axios.get(baseImageUrl, { responseType: 'arraybuffer' });
-                    imageBufferFromUrl = Buffer.from(downloadResponse.data);
-                    logger.info(`[Task ${firestoreDocId}] Downloaded baseImageUrl (${baseImageUrl}). Size: ${imageBufferFromUrl.length} bytes.`);
-                } catch (downloadError) {
-                    logger.error(`[Task ${firestoreDocId}] Failed to download baseImageUrl (${baseImageUrl}):`, downloadError.message);
-                    throw new Error(`Failed to download baseImage for editing: ${downloadError.message}`);
-                }
-
-                const imageForEdit = await toFile(
-                    imageBufferFromUrl, 
-                    'source_image.png',
-                    { type: 'image/png' }
-                );
-                logger.info('Prepared downloaded image for SDK, explicitly setting type to image/png.');
-
-                // Determine clothing and setting, using user inputs or random selections
-                const genderForClothing = generationParams.gender ? generationParams.gender.toLowerCase() : 'woman'; // Default to woman if not specified
-                let clothingToUse = generationParams.clothing_description;
-                if (!clothingToUse) {
-                    if (genderForClothing === 'man') {
-                        clothingToUse = maleClothingExamples[Math.floor(Math.random() * maleClothingExamples.length)];
-                    } else {
-                        clothingToUse = femaleClothingExamples[Math.floor(Math.random() * femaleClothingExamples.length)];
-                    }
-                    logger.info(`[Task ${firestoreDocId}] User did not provide clothing_description. Randomly selected (gender: ${genderForClothing}): "${clothingToUse}"`);
-                }
-
-                let settingToUse = generationParams.setting_description;
-                if (!settingToUse) {
-                    settingToUse = settingExamples[Math.floor(Math.random() * settingExamples.length)];
-                    logger.info(`[Task ${firestoreDocId}] User did not provide setting_description. Randomly selected: "${settingToUse}"`);
-                }
-                
-                const finalImageStyle = generationParams.image_style || 'ultra-realistic photograph, modern influencer aesthetic, sharp focus, natural lighting';
-
-                let pronoun = 'their';
-                let possessivePronoun = 'their';
-                if (generationParams.gender) {
-                    if (generationParams.gender.toLowerCase() === 'woman') {
-                        pronoun = 'her';
-                        possessivePronoun = 'her';
-                    } else if (generationParams.gender.toLowerCase() === 'man') {
-                        pronoun = 'him';
-                        possessivePronoun = 'his';
-                    }
-                }
-
-                // Construct the new detailed prompt for images.edit
-                generatedImagePrompt = `This image depicts a highly detailed, AI-generated person. This is not a real individual.
-Please change ${possessivePronoun} clothing to: "${clothingToUse}".
-And place ${pronoun} in the following background setting: "${settingToUse}".
-
-It is important to maintain ${possessivePronoun} original facial features, hairstyle, body shape, and general pose as seen in the input image. Only the outfit and background should be adjusted. The core appearance of the subject should remain consistent.
-
-The visual style of the final image should be: "${finalImageStyle}".
-- The full image, including the subject and background, should be rendered in sharp focus. Please avoid depth-of-field blur, artificial bokeh, or low-detail areas.
-- Lighting should appear natural and dynamic, matching the characteristics of '${settingToUse}'. Please reflect realistic light direction, softness or hardness, and an appropriate color temperature.
-- The final image should resemble a high-quality modern smartphone photo, with balanced natural colors, soft digital texture, and subtle detail in both highlights and shadows.
-- Apply cinematic-style color grading with moderate contrast and realistic tones.
-
-Please ensure the subject's identity — including their face, hair, expression, and pose — is preserved clearly and accurately.`;
-                
-                logger.info(`[Task ${firestoreDocId}] Using new detailed prompt for images.edit: "${generatedImagePrompt}"`);
-
-                try {
-                    const editResponse = await openai.images.edit({
-                        model: "gpt-image-1", // DALL-E 3 for edits
-                        image: imageForEdit,
-                        prompt: generatedImagePrompt,
-                        n: 1,
-                        size: "1024x1536", 
-                    });
-                    base64DataForUpload = editResponse.data?.[0]?.b64_json;
-                    if (!base64DataForUpload) {
-                        logger.error(`[Task ${firestoreDocId}] images.edit no b64 data. Prompt: "${generatedImagePrompt}"`);
-                        throw new Error("Image edit operation (images.edit) did not return base64 data.");
-                    }
-                    logger.info(`[Task ${firestoreDocId}] Image edit successful using images.edit.`);
-                    generatedFileName = `video_inputs/${userId}/${firestoreDocId}_edited_creator.png`;
-                } catch (editError) {
-                    let errMsg = editError.message;
-                    if (editError.response?.data?.error?.message) {
-                        errMsg = `OpenAI API Error (images.edit): ${editError.response.data.error.message}`;
-                        logger.error(`[Task ${firestoreDocId}] OpenAI API Error (images.edit):`, JSON.stringify(editError.response.data.error));
-                    } else {
-                        logger.error(`[Task ${firestoreDocId}] Error calling images.edit:`, editError);
-                    }
-                    throw new Error(errMsg);
-                }
-            } else {
-                // **** Scenario A: No baseImageUrl - Generate new image using detailed prompt ****
-                logger.info(`[Task ${firestoreDocId}] No baseImageUrl. Generating new image with detailed prompt.`);
-                // Ensure subject_description is present for new image generation
-                if (!subject_description) {
-                    logger.error(`[Task ${firestoreDocId}] subject_description is missing for new image generation (no baseImage).`);
-                    throw new Error("Cannot generate new image without subject_description when no base image is provided.");
-                }
-                
-                // Call generateDetailedUgcPrompt and destructure its result
-                const promptResult = await generateDetailedUgcPrompt(
-                    {
-                        subject_description,
-                        clothing: clothing_description, // Pass clothing_description here as well
-                        setting: setting_description,   // Pass setting_description here as well
-                        style: image_style, age, gender,
-                        commandCode: generationParams.commandCode // Pass commandCode for context if needed by prompt gen
-                    },
-                    openai
-                );
-                generatedImagePrompt = promptResult.detailedPrompt; // Get the string prompt
-                detectedSubjectTerm = promptResult.subjectTerm; // Assign value in Scenario A
-
-                logger.info(`[Task ${firestoreDocId}] Generating image with detailed prompt: "${generatedImagePrompt}" (Subject Term: ${detectedSubjectTerm})`);
-                
-                const imageResponseA = await openai.images.generate({
-                    model: "gpt-image-1", prompt: generatedImagePrompt, n: 1,
-                    size: "1024x1536", quality: "high",
-                });
-                base64DataForUpload = imageResponseA.data?.[0]?.b64_json;
-                if (!base64DataForUpload) {
-                    logger.error(`[Task ${firestoreDocId}] gpt-image-1 (detailed) no b64 data. Prompt: "${generatedImagePrompt}"`);
-                    throw new Error("gpt-image-1 (detailed prompt) did not return base64 image data.");
-                }
-                generatedFileName = `video_inputs/${userId}/${firestoreDocId}_initial_new.png`;
+            if (!imageUrl) {
+                throw new Error("Image generation API did not return a URL.");
             }
 
-            const imageBufferToUpload = Buffer.from(base64DataForUpload, 'base64');
-            const file = bucket.file(generatedFileName);
-            logger.info(`[Task ${firestoreDocId}] Uploading to Storage: ${generatedFileName}`);
-            await file.save(imageBufferToUpload, { metadata: { contentType: 'image/png' }, public: true });
-            initialImageUrl = file.publicUrl();
-            logger.info(`[Task ${firestoreDocId}] Uploaded. URL: ${initialImageUrl}`);
+            // ... (logic to save image to bucket if needed) ...
 
-            await postDocRef.update({
-                status: 'image_generated', initialImageUrl, 
-                generatedImagePrompt: generatedImagePrompt, // Ensure this is the string prompt
-                subjectTerm: detectedSubjectTerm, // Store the detected subject term
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(), error: null
-            });
-            logger.info(`[Task ${firestoreDocId}] Firestore updated: 'image_generated'.`);
+            await docRef.set({
+                status: 'completed',
+                imageUrl: imageUrl,
+                completedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
 
-            const pipelineTaskPayload = { userId, firestoreDocId };
-            const task = {
-                httpRequest: {
-                    httpMethod: 'POST', url: videoPipelineTaskHandlerUrl,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: Buffer.from(JSON.stringify(pipelineTaskPayload)).toString('base64'),
-                },
-                scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 5 },
-            };
-            const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, videoPipelineTasksQueueName);
-            await tasksClient.createTask({ parent, task });
-            logger.info(`[Task ${firestoreDocId}] Video pipeline task enqueued to ${videoPipelineTasksQueueName}.`);
-
-            response.status(200).send("Image generation successful. Video pipeline task enqueued.");
+            logger.info(`[Task ${firestoreDocId}] Task completed successfully. Image URL: ${imageUrl}`);
+            response.status(200).send("Image generation completed successfully.");
 
         } catch (error) {
-            const errorMessage = error.message || 'Unknown image gen error';
+            const errorMessage = error.message || "An unknown error occurred.";
             logger.error(`[Task ${firestoreDocId}] Overall error in performImageGenerationTask: ${errorMessage}`, error);
-            try {
-                await postDocRef.update({
-                    status: 'image_gen_failed', error: errorMessage,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (dbUpdateError) {
-                logger.error(`[Task ${firestoreDocId}] DB update error on overall fail:`, dbUpdateError);
-            }
-            response.status(200).send(`Image Generation Error: ${errorMessage}`);
+            await docRef.set({ status: 'failed', error: errorMessage }, { merge: true });
+            response.status(500).send(`Task failed: ${errorMessage}`);
         }
     }
 );
-
-// --- NEW: startVideoPipeline Function (HTTP Triggered by Cloud Task) ---
-exports.startVideoPipeline = onRequest(
-    { region: 'us-central1', timeoutSeconds: VIDEO_PIPELINE_TIMEOUT_SECONDS, memory: '1GiB' }, 
-    async (request, response) => {
-        logger.info("startVideoPipeline request received:", request.body);
-
-        const { userId, firestoreDocId } = request.body;
-
-        if (!userId || !firestoreDocId) {
-            logger.error('startVideoPipeline: Missing userId or firestoreDocId in task payload.', request.body);
-            response.status(400).send('Bad Request: Missing userId or firestoreDocId.');
-            return;
-        }
-
-        const userRef = db.collection('users').doc(userId);
-        const postDocRef = userRef.collection('tiktok-posts').doc(firestoreDocId);
-
-        try { // Main try block for the entire function logic
-            const docSnapshot = await postDocRef.get();
-            if (!docSnapshot.exists) {
-                logger.error(`[${firestoreDocId}] Firestore document not found in startVideoPipeline.`);
-                response.status(200).send(`Document ${firestoreDocId} not found.`); // Ack task, no retry
-                return;
-            }
-            const postData = docSnapshot.data();
-            const initialImageUrl = postData.initialImageUrl;
-            const originalParameters = postData.originalParameters || {}; // hook_text, language, descriptions are here
-
-            if (!initialImageUrl) {
-                logger.error(`[${firestoreDocId}] initialImageUrl is missing in startVideoPipeline. This indicates an issue upstream.`);
-                await postDocRef.update({ status: 'pipeline_error_no_image', error: 'Initial image URL was missing when video pipeline was triggered.'});
-                response.status(200).send('Critical Error: Initial image URL missing.'); // Ack task, no retry
-                return;
-            }
-
-            logger.info(`Starting video pipeline for user: ${userId}, doc: ${firestoreDocId}. Image: ${initialImageUrl}`);
-
-            // --- 1. Fetch User Products (Logic from original triggerVideoGenerationAndHook) ---
-            let selectedProduct = null;
-            let productToUseForAppending = { // NEW: Object to hold product details for appending
-                url: null,
-                type: null,
-                isStandardized: false,
-                originalUrl: null
-            };
-            try {
-                const productsRef = db.collection('users').doc(userId).collection('products');
-                const productsSnapshot = await productsRef.limit(1).get(); // Get only the first one
-                if (!productsSnapshot.empty) {
-                    const productDoc = productsSnapshot.docs[0];
-                    const productData = productDoc.data();
-                    selectedProduct = { // Keep selectedProduct for hook text generation context for now
-                        id: productDoc.id,
-                        name: productData.name || productData.product_name,
-                        description: productData.description || productData.product_description,
-                        // mediaUrl, mediaType, standardizedVideoUrl, isVideoStandardized are now in productData
-                    };
-
-                    const originalMediaUrl = productData.mediaUrl;
-                    productToUseForAppending.originalUrl = originalMediaUrl; // Store original URL
-
-                    if (productData.isVideoStandardized && productData.standardizedVideoUrl) {
-                        productToUseForAppending.url = productData.standardizedVideoUrl;
-                        productToUseForAppending.isStandardized = true;
-                        logger.info(`Using standardized product video for appending: ${productData.standardizedVideoUrl}`);
-                    } else if (originalMediaUrl) {
-                        productToUseForAppending.url = originalMediaUrl; // Fallback to original if not standardized
-                        productToUseForAppending.isStandardized = false;
-                        logger.warn(`Product video for ${productDoc.id} is not standardized or standardized URL is missing. Falling back to original: ${originalMediaUrl}`);
-                    } else {
-                        logger.warn(`Selected product ${productDoc.id} for user ${userId} is missing any mediaUrl. Cannot append.`);
-                        // productToUseForAppending.url will remain null
-                    }
-                    // Determine type based on the URL that will be used (standardized or original)
-                    if (productToUseForAppending.url) {
-                         productToUseForAppending.type = productData.mediaType || (productToUseForAppending.url.includes('.mp4') || productToUseForAppending.url.includes('.mov') ? 'video' : 'image');
-                    }
-
-                    logger.info(`Selected product ${selectedProduct?.id} for appending to video ${firestoreDocId}. URL to use: ${productToUseForAppending.url}, Type: ${productToUseForAppending.type}, Standardized: ${productToUseForAppending.isStandardized}`);
-                } else {
-                    logger.warn(`User ${userId} has no products defined. Cannot append product media to video ${firestoreDocId}.`);
-                    // Proceed without appending
-                }
-            } catch (error) {
-                logger.error(`Error fetching products for user ${userId} in startVideoPipeline:`, error);
-                // Proceed without appending, don't throw error for this
-                // productToUseForAppending remains with null url
-            }
-            // --- End Fetch User Products --- 
-
-            // --- 2. Generate Hook Text (Logic from original triggerVideoGenerationAndHook) ---
-            let openai;
-            try {
-                const apiKey = process.env.OPENAI_KEY;
-                if (!apiKey) {
-                    throw new HttpsError('internal', 'OpenAI API Key not configured for hook generation.');
-                }
-                openai = new OpenAI({ apiKey: apiKey });
-            } catch (initError) { // Catch OpenAI initialization error specifically
-                logger.error("Error initializing OpenAI for hook text in startVideoPipeline:", initError);
-                await postDocRef.update({ status: 'pipeline_error_openai_init', error: `OpenAI Init Error for hook: ${initError.message}` });
-                response.status(200).send('OpenAI initialization failed for hook text.'); // Ack task
-                return; 
-            }
-
-            let finalHookText = originalParameters.hook_text; // Get from original params stored in Firestore
-            const language = originalParameters.language || 'en';
-
-            if (!finalHookText) {
-                try {
-                    let productContext = '';
-                    if (selectedProduct && selectedProduct.name && selectedProduct.description) {
-                        productContext = `\n\nConsider this product: ${selectedProduct.name}: ${selectedProduct.description.substring(0,150)}...\n`;
-                    }
-                    
-                    // Format the entire list of examples
-                    const exampleHooks = videoHooksList.map(hook => `- "${hook}"`).join("\n");
-
-                    const hookPrompt = `Generate ONE very short, catchy hook text (under 10 words) suitable for a TikTok video intro, in ${language}.
-product context is that, don't mention it in the hook, write hook like example hooks:
-${productContext}
-
-Style Reference (Use these ONLY for understanding the desired tone and style. DO NOT copy them directly. Your output must be relevant to the video description above):
-${exampleHooks}
-
-Generate the hook text now. Output ONLY the text itself, no quotes or labels.`;
-
-                    const completion = await openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: hookPrompt }], temperature: 0.8, max_tokens: 30 });
-                    finalHookText = completion.choices[0]?.message?.content?.trim().replace(/"/g, '');
-                    if (!finalHookText) { 
-                        logger.warn("GPT-4o-mini failed to generate hook, using default."); 
-                        finalHookText = "Check this out!"; 
-                    }
-                } catch (hookError) { 
-                    logger.error("Error generating hook text in startVideoPipeline:", hookError); 
-                    finalHookText = "Check this out!"; // Default on error
-                }
-            }
-
-            // --- 3. Call RunwayML (Logic from original triggerVideoGenerationAndHook) ---
-            let runwayTaskId;
-            try {
-                const runwayApiKey = process.env.RUNWAY_KEY;
-                if (!runwayApiKey) { throw new HttpsError('internal', 'Runway API key not configured.'); }
-                
-                const videoPrompt = runwayVideoPrompts[Math.floor(Math.random() * runwayVideoPrompts.length)];
-                const runwayApiEndpoint = "https://api.dev.runwayml.com/v1/image_to_video";
-                const requestBody = {
-                    model: "gen4_turbo", promptImage: initialImageUrl, promptText: videoPrompt, 
-                    seed: Math.floor(Math.random() * 1000000), duration: 5, ratio: "720:1280", motion: 4
-                };
-                const runwayResponse = await axios.post(runwayApiEndpoint, requestBody, {
-                    headers: { 'Authorization': `Bearer ${runwayApiKey}`, 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Runway-Version': '2024-11-06' }
-                });
-                runwayTaskId = runwayResponse.data?.uuid || runwayResponse.data?.task_id || runwayResponse.data?.id;
-                if (!runwayTaskId) { throw new HttpsError('internal', 'RunwayML API response did not contain a recognizable task ID.'); }
-                logger.info(`RunwayML task submitted. Task ID: ${runwayTaskId} for doc ${firestoreDocId}`);
-            } catch (runwayError) {
-                const errorMessage = runwayError.response?.data?.error || (runwayError instanceof HttpsError ? runwayError.message : 'Failed to submit to RunwayML.');
-                logger.error(`Error calling RunwayML API for doc ${firestoreDocId} in startVideoPipeline: ${errorMessage}`, runwayError.response?.data);
-                await postDocRef.update({ status: 'runway_submission_failed', error: `RunwayML Error: ${errorMessage}`, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-                response.status(200).send(`Runway submission failed: ${errorMessage}`); // Ack task
-                return;
-            }
-
-            // --- 4. Update Firestore (Video Credit Check + Polling Info) & Schedule Poll (Logic from original triggerVideoGenerationAndHook) ---
-            const startTime = Date.now();
-            const updatePayload = {
-                status: 'processing', // Video is now processing with Runway
-                hookText: finalHookText, 
-                runwayTaskId: runwayTaskId, 
-                pollingStartTime: startTime,
-                // MODIFIED: Use details from productToUseForAppending
-                productToAppendUrl: productToUseForAppending.url, 
-                productToAppendType: productToUseForAppending.type,
-                isProductToAppendStandardized: productToUseForAppending.isStandardized,
-                originalProductMediaUrl: productToUseForAppending.originalUrl, // Store original for reference/fallback
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            };
-            
-            await db.runTransaction(async (transaction) => {
-                const userSnapshot = await transaction.get(userRef);
-                const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0; // MODIFIED to general_credits
-                if (currentCredits < 250) { // MODIFIED to 250
-                    // This specific HttpsError will be caught by the main try-catch block
-                    throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 250).'); // MODIFIED message
-                }
-                transaction.update(postDocRef, updatePayload);
-                transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-250) }); // MODIFIED to general_credits and -250
-            });
-            logger.info(`Transaction successful: Updated tiktok-post ${firestoreDocId} (status, hook, runwayId, product) & decremented general_credits by 250.`); // MODIFIED log
-
-            const pollTaskPayload = { userId, firestoreDocId, runwayTaskId, startTime, attempt: 1 };
-            const task = {
-                httpRequest: { httpMethod: 'POST', url: runwayTaskHandlerUrl, headers: { 'Content-Type': 'application/json' }, body: Buffer.from(JSON.stringify(pollTaskPayload)).toString('base64') },
-                scheduleTime: { seconds: Math.floor(Date.now() / 1000) + POLLING_INTERVAL_SECONDS },
-            };
-            const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, runwayTasksQueueName);
-            await tasksClient.createTask({ parent: parent, task: task });
-            logger.info(`Runway polling task enqueued for doc ${firestoreDocId} (Runway Task ID: ${runwayTaskId}).`);
-
-            response.status(200).send('Video pipeline initiated and Runway polling task scheduled.');
-
-        } catch (error) { // Main catch for the entire function logic
-            logger.error(`Error in startVideoPipeline for doc ${firestoreDocId}:`, error);
-            // Attempt to update Firestore with a generic error if not already handled by more specific catches
-            try {
-                const currentDoc = await postDocRef.get(); // Check current status before overwriting
-                if (currentDoc.exists() && !['runway_submission_failed', 'pipeline_error_openai_init', 'pipeline_error_no_image'].includes(currentDoc.data().status)) {
-                    let errorToStore = (error instanceof HttpsError && error.code === 'resource-exhausted') ? error.message : `Video pipeline internal error: ${error.message}`;
-                    await postDocRef.update({
-                        status: (error instanceof HttpsError && error.code === 'resource-exhausted') ? 'pipeline_error_credits' : 'pipeline_internal_error',
-                        error: errorToStore, // errorToStore will contain "Insufficient general credits..."
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-            } catch (dbUpdateError) {
-                logger.error(`DB error attempting to update pipeline_internal_error for ${firestoreDocId}:`, dbUpdateError);
-            }
-            // Ensure a response is sent to the task if not already handled by specific error cases above
-            if (!response.headersSent) {
-                 // For credit exhaustion, it's good to return a distinct message if possible, but task queue might not care.
-                response.status(200).send(`Internal Server Error or unhandled condition in video pipeline: ${error.message}`); // Ack task
-            }
-        }
-    }
-);
-
-async function downloadFile(url, destPath) {
-    const fs = require('fs'); // Make sure fs is available
-    const writer = fs.createWriteStream(destPath);
-    const response = await axios({
-        url,
-        method: 'GET',
-        responseType: 'stream',
-    });
-
-    return new Promise((resolve, reject) => {
-        response.data.pipe(writer);
-        writer.on('finish', resolve);
-        writer.on('error', (err) => {
-            writer.close(() => { // Ensure writer is closed
-                fs.unlink(destPath, (unlinkErr) => { // Attempt to delete partial file
-                    if (unlinkErr && unlinkErr.code !== 'ENOENT') { // Ignore if file already gone
-                        logger.error(`Error unlinking partial file ${destPath} after download write error:`, unlinkErr);
-                    }
-                });
-                reject(new Error(`Failed to write ${url} to ${destPath}: ${err.message}`));
-            });
-        });
-        response.data.on('error', (err) => { // Handle errors on the response stream itself
-             writer.close(() => {
-                fs.unlink(destPath, (unlinkErr) => {
-                    if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-                        logger.error(`Error unlinking partial file ${destPath} after response stream error:`, unlinkErr);
-                    }
-                });
-                reject(new Error(`Stream error during download of ${url}: ${err.message}`));
-            });
-        });
-    });
-}
-
-// --- NEW: Cloud Function to Standardize Product Video (onCall) ---
-exports.manuallyStandardizeProductVideo = onCall({
-    cpu: 2,
-    memory: '2GiB',
-    timeoutSeconds: 540,
-    region: 'us-central1', // Keep region for the function itself
-}, async (request) => { // MODIFIED: (data, context) -> (request)
-    const ffmpeg = require('fluent-ffmpeg');
-    const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-    ffmpeg.setFfmpegPath(ffmpegPath);
-    const os = require('os');
-    const fsPromises = require('fs').promises;
-    const path = require('path');
-
-    // Validate auth context
-    if (!request.auth) { // MODIFIED: context.auth -> request.auth
-        logger.error('Authentication required for manuallyStandardizeProductVideo.');
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-    const callingUserId = request.auth.uid; // MODIFIED: context.auth.uid -> request.auth.uid
-
-    // Validate input data
-    const { userId, productId, originalVideoPathInStorage, originalFileExtension } = request.data; // MODIFIED: data -> request.data
-    if (!userId || !productId || !originalVideoPathInStorage || !originalFileExtension) {
-        logger.error('Missing required data for manuallyStandardizeProductVideo:', { userId, productId, originalVideoPathInStorage, originalFileExtension });
-        throw new HttpsError('invalid-argument', 'Required data (userId, productId, originalVideoPathInStorage, originalFileExtension) is missing.');
-    }
-    
-    // Security check: Ensure the calling user matches the userId in the data, or implement admin override if needed.
-    // For now, we'll assume the calling user IS the target user.
-    if (callingUserId !== userId) {
-        logger.error(`User ID mismatch: Caller ${callingUserId} attempting to process video for ${userId}.`);
-        throw new HttpsError('permission-denied', 'You do not have permission to process this video.');
-    }
-    
-    const filePath = originalVideoPathInStorage; // Use the path from data
-
-    logger.info(`manuallyStandardizeProductVideo: Request for UserID=${userId}, ProductID=${productId}, File=${filePath}`);
-
-    // No resourceState or metageneration checks needed for onCall
-
-    // No need to match with regex, path is provided directly
-    // No need to check contentType here, assume it's a video if this function is called
-
-    const tempDir = path.join(os.tmpdir(), `standardize_${userId}_${productId}_${Date.now()}`);
-    const originalVideoTempPath = path.join(tempDir, `original.${originalFileExtension}`); // Use provided extension
-    const standardizedVideoTempPath = path.join(tempDir, 'standardized.mp4');
-    const productDocRef = db.collection('users').doc(userId).collection('products').doc(productId);
-
-    try {
-        await fsPromises.mkdir(tempDir, { recursive: true });
-        const sourceFile = bucket.file(filePath); // bucket is admin.storage().bucket()
-        
-        // Check if file exists before attempting download
-        const [exists] = await sourceFile.exists();
-        if (!exists) {
-            logger.error(`Original video file does not exist at path: ${filePath} for product ${productId}`);
-            await productDocRef.set({
-                isVideoStandardized: false,
-                standardizationError: `Original video not found at ${filePath}.`,
-                standardizationAttemptTimestamp: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-            throw new HttpsError('not-found', `Original video file not found: ${filePath}`);
-        }
-        
-        await sourceFile.download({ destination: originalVideoTempPath });
-        logger.info(`Downloaded ${filePath} to ${originalVideoTempPath}.`);
-
-        await new Promise((resolve, reject) => {
-            ffmpeg(originalVideoTempPath)
-                .fps(25)
-                .videoFilters('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black')
-                .outputOptions(['-pix_fmt yuv420p', '-an']) // Mute
-                .on('start', cmd => logger.info(`FFmpeg (product ${productId}) started: ${cmd}`))
-                .on('end', resolve)
-                .on('error', (err, stdout, stderr) => {
-                    logger.error(`FFmpeg error (product ${productId}):`, { msg: err.message, stdout, stderr });
-                    reject(err);
-                })
-                .save(standardizedVideoTempPath);
-        });
-        logger.info(`Product video ${productId} standardized to ${standardizedVideoTempPath}.`);
-
-        const standardizedStoragePath = `users/${userId}/products/${productId}/standardized_video.mp4`;
-        const [uploadedFile] = await bucket.upload(standardizedVideoTempPath, {
-            destination: standardizedStoragePath,
-            metadata: { contentType: 'video/mp4', customMetadata: { originalPath: filePath } },
-            public: true
-        });
-        const standardizedPublicUrl = uploadedFile.publicUrl();
-        logger.info(`Uploaded standardized ${productId} to ${standardizedStoragePath}. URL: ${standardizedPublicUrl}`);
-
-        await productDocRef.set({
-            standardizedVideoUrl: standardizedPublicUrl,
-            isVideoStandardized: true,
-            standardizationTimestamp: admin.firestore.FieldValue.serverTimestamp(),
-            standardizationError: null,
-            originalVideoPath: filePath // Store original path for reference
-        }, { merge: true });
-        logger.info(`Firestore updated for product ${productId} with standardized URL.`);
-        return null;
-
-    } catch (error) {
-        logger.error(`Error in manuallyStandardizeProductVideo for ${filePath}:`, error);
-        try {
-            await productDocRef.set({
-                isVideoStandardized: false,
-                standardizationError: String(error.message || error),
-                standardizationAttemptTimestamp: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-        } catch (dbError) {
-            logger.error(`Failed to log error to Firestore for product ${productId}:`, dbError);
-        }
-        return null;
-    } finally {
-        try {
-            if (await fsPromises.stat(tempDir).catch(() => false)) {
-                await fsPromises.rm(tempDir, { recursive: true, force: true });
-                logger.info(`Cleaned up temp dir: ${tempDir}`);
-            }
-        } catch (cleanupError) {
-            logger.error(`Error cleaning up temp dir ${tempDir}:`, cleanupError);
-        }
-    }
-});
-// --- END NEW Cloud Function ---
-
-// --- NEW: TikTok OAuth Integration Functions ---
 
 // NEW: Function to generate the TikTok OAuth Authorization URL
 exports.getTikTokAuthUrl = onCall({ region: 'us-central1' }, async (request) => {
@@ -3959,205 +2538,6 @@ exports.exchangeTikTokAuthCode = onCall({region: 'us-central1'}, async (request)
   }
 });
 
-// ... fetchTikTokUserInfo function should remain as is ...
-// ... updateTikTokUserDetails function should remain as is ...
-// ... existing code ...
-
-exports.updateTikTokUserDetails = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("updateTikTokUserDetails: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    const { integrationId } = request.data;
-    if (!integrationId) {
-        logger.error("updateTikTokUserDetails: Missing integrationId in request data.");
-        throw new HttpsError('invalid-argument', 'Missing "integrationId" in the request data.');
-    }
-
-    logger.info(`updateTikTokUserDetails called for user ${userId}, integrationId: ${integrationId}`);
-
-    try {
-        const integrationDocRef = db.collection('users').doc(userId).collection('integrations').doc(integrationId);
-        const integrationDocSnap = await integrationDocRef.get();
-
-        if (!integrationDocSnap.exists) {
-            logger.error(`Integration document ${integrationId} not found for user ${userId}.`);
-            throw new HttpsError('not-found', `TikTok integration with ID ${integrationId} not found.`);
-        }
-
-        const integrationData = integrationDocSnap.data();
-        if (integrationData.type !== 'tiktok') {
-             logger.error(`Integration document ${integrationId} for user ${userId} is not of type 'tiktok'. Type is: ${integrationData.type}`);
-             throw new HttpsError('failed-precondition', `Integration ${integrationId} is not a TikTok integration.`);
-        }
-
-        const { accessToken, openId } = integrationData;
-
-        if (!accessToken || !openId) {
-            logger.error(`Missing accessToken or openId in integration document ${integrationId} for user ${userId}.`);
-            throw new HttpsError('internal', 'TikTok integration data is incomplete. Cannot fetch user details.');
-        }
-
-        logger.info(`Fetching TikTok user info for openId: ${openId} using integration ${integrationId}.`);
-        const tikTokUserInfo = await fetchTikTokUserInfo(accessToken, openId); // Reuses the existing internal helper
-
-        if (!tikTokUserInfo) {
-            logger.error(`fetchTikTokUserInfo returned no data for openId ${openId}, integration ${integrationId}.`);
-            throw new HttpsError('internal', 'Failed to retrieve user details from TikTok API.');
-        }
-        
-        // Construct the user_info object with desired fields
-        // The fetchTikTokUserInfo helper returns: open_id, union_id, avatar_url, display_name, is_verified, follower_count, following_count, likes_count, video_count
-        const userInfoToUpdate = {
-            open_id: tikTokUserInfo.open_id,
-            union_id: tikTokUserInfo.union_id,
-            avatar_url: tikTokUserInfo.avatar_url,
-            display_name: tikTokUserInfo.display_name,
-            username: tikTokUserInfo.username || tikTokUserInfo.display_name, // TikTok might not always have a distinct username; fallback to display_name
-            is_verified: tikTokUserInfo.is_verified,
-            follower_count: tikTokUserInfo.follower_count,
-            following_count: tikTokUserInfo.following_count,
-            likes_count: tikTokUserInfo.likes_count,
-            video_count: tikTokUserInfo.video_count,
-            // Construct profile_deep_link if possible (TikTok's v2 User Info API doesn't directly provide it)
-            // Example for web: `https://www.tiktok.com/@${username_or_unique_id}` - requires a stable username or unique ID field from API.
-            // For now, we'll omit it unless display_name can be reliably used.
-            // profile_deep_link: tikTokUserInfo.display_name ? `https://www.tiktok.com/@${tikTokUserInfo.display_name}` : null, 
-            last_synced_at: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        await integrationDocRef.update({ user_info: userInfoToUpdate });
-
-        logger.info(`Successfully updated TikTok user_info for integration ${integrationId}, user ${userId}.`);
-        return { success: true, message: 'TikTok user details updated successfully.', user_info: userInfoToUpdate };
-
-    } catch (error) {
-        logger.error(`Error in updateTikTokUserDetails for user ${userId}, integration ${integrationId}:`, error.message, error.stack);
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `An unexpected error occurred while updating TikTok user details: ${error.message}`);
-    }
-});
-
-// ... fetchTikTokUserInfo function should remain as is ...
-// ... updateTikTokUserDetails function should remain as is ...
-// ... existing code ...
-
-// --- NEW: TikTok Direct Posting API Functions ---
-
-// 1. Query Creator Info
-exports.queryTikTokCreatorInfo = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("queryTikTokCreatorInfo: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    const { accessToken } = request.data;
-    if (!accessToken) {
-        logger.error(`queryTikTokCreatorInfo: User ${userId} called without accessToken.`);
-        throw new HttpsError('invalid-argument', 'Missing "accessToken" in the request.');
-    }
-
-    const TIKTOK_CREATOR_INFO_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/';
-    logger.info(`User ${userId} querying TikTok creator info.`);
-
-    try {
-        const response = await axios.post(TIKTOK_CREATOR_INFO_ENDPOINT,
-            {}, // Empty body as per TikTok API cURL example
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json; charset=UTF-8',
-                }
-            }
-        );
-
-        const responseData = response.data;
-        if (responseData.error && responseData.error.code !== "ok") {
-            logger.error(`queryTikTokCreatorInfo: TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
-            throw new HttpsError('aborted', `TikTok API error: ${responseData.error.message} (Code: ${responseData.error.code})`);
-        }
-
-        logger.info(`queryTikTokCreatorInfo: Successfully fetched creator info for user ${userId}.`, responseData.data);
-        return { success: true, data: responseData.data };
-
-    } catch (error) {
-        logger.error(`queryTikTokCreatorInfo: Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
-            const tiktokError = error.response.data.error;
-            throw new HttpsError('aborted', `TikTok API error: ${tiktokError.message} (Code: ${tiktokError.code})`);
-        }
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `Failed to query TikTok creator info: ${error.message}`);
-    }
-});
-
-// 2. Initiate Video Post
-exports.initiateTikTokVideoPost = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("initiateTikTokVideoPost: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    // MODIFIED: Only accessToken and sourceInfo are expected for inbox/draft uploads.
-    // const { accessToken, postInfo, sourceInfo } = request.data; // OLD
-    const { accessToken, sourceInfo } = request.data; // NEW
-
-    if (!accessToken || !sourceInfo) { // MODIFIED: Check only for accessToken and sourceInfo
-        logger.error(`initiateTikTokVideoPost: User ${userId} called with missing parameters.`, { hasToken: !!accessToken, hasSourceInfo: !!sourceInfo });
-        // MODIFIED: Updated error message
-        throw new HttpsError('invalid-argument', 'Missing "accessToken" or "sourceInfo" in the request for draft video upload.');
-    }
-    // MODIFIED: Simplified sourceInfo check as postInfo is removed for this endpoint
-    if (!sourceInfo.source || (sourceInfo.source === "PULL_FROM_URL" && !sourceInfo.video_url) || (sourceInfo.source === "FILE_UPLOAD" && (!sourceInfo.video_size || !sourceInfo.chunk_size || !sourceInfo.total_chunk_count))) {
-        logger.error(`initiateTikTokVideoPost: User ${userId} provided invalid sourceInfo.`, sourceInfo);
-        throw new HttpsError('invalid-argument', 'Invalid "sourceInfo" provided for draft video upload. Check required fields for your source type.');
-    }
-
-    // MODIFIED: Changed endpoint to send to inbox/draft
-    const TIKTOK_VIDEO_INIT_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
-    // MODIFIED: Updated log message
-    logger.info(`User ${userId} initiating TikTok video upload to inbox (draft). Source: ${sourceInfo.source}`);
-
-    try {
-        // MODIFIED: Removed post_info from the request body
-        const response = await axios.post(TIKTOK_VIDEO_INIT_ENDPOINT,
-            {
-                // post_info: postInfo, // REMOVED for inbox/draft
-                source_info: sourceInfo
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json; charset=UTF-8',
-                }
-            }
-        );
-
-        const responseData = response.data;
-        if (responseData.error && responseData.error.code !== "ok") {
-            logger.error(`initiateTikTokVideoPost (draft): TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
-            throw new HttpsError('aborted', `TikTok API error (draft video): ${responseData.error.message} (Code: ${responseData.error.code})`);
-        }
-
-        logger.info(`initiateTikTokVideoPost (draft): Successfully initiated video upload to inbox for user ${userId}. Publish ID: ${responseData.data.publish_id}`);
-        return { success: true, data: responseData.data };
-
-    } catch (error) {
-        logger.error(`initiateTikTokVideoPost (draft): Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
-            const tiktokError = error.response.data.error;
-            throw new HttpsError('aborted', `TikTok API error (draft video): ${tiktokError.message} (Code: ${tiktokError.code})`);
-        }
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `Failed to initiate TikTok video upload to inbox (draft): ${error.message}`);
-    }
-});
 
 // 3. Initiate Photo Post
 exports.initiateTikTokPhotoPost = onCall({ region: 'us-central1' }, async (request) => {
@@ -4248,234 +2628,6 @@ exports.initiateTikTokPhotoPost = onCall({ region: 'us-central1' }, async (reque
     }
 });
 
-// 4. Get Post Status
-exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("getTikTokPostStatus: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    const { accessToken, publishId } = request.data;
-    if (!accessToken || !publishId) {
-        logger.error(`getTikTokPostStatus: User ${userId} called with missing accessToken or publishId.`);
-        throw new HttpsError('invalid-argument', 'Missing "accessToken" or "publishId" in the request.');
-    }
-
-    const TIKTOK_STATUS_FETCH_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
-    logger.info(`User ${userId} fetching status for TikTok publish ID: ${publishId}`);
-
-    try {
-        const response = await axios.post(TIKTOK_STATUS_FETCH_ENDPOINT,
-            { publish_id: publishId },
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json; charset=UTF-8',
-                }
-            }
-        );
-
-        const responseData = response.data;
-        if (responseData.error && responseData.error.code !== "ok") {
-            logger.error(`getTikTokPostStatus: TikTok API error for user ${userId}, publishId ${publishId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
-            throw new HttpsError('aborted', `TikTok API error: ${responseData.error.message} (Code: ${responseData.error.code})`);
-        }
-
-        logger.info(`getTikTokPostStatus: Successfully fetched status for user ${userId}, publishId ${publishId}. Status: ${responseData.data.status}`);
-        return { success: true, data: responseData.data };
-
-    } catch (error) {
-        logger.error(`getTikTokPostStatus: Error for user ${userId}, publishId ${publishId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-        if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
-            const tiktokError = error.response.data.error;
-            throw new HttpsError('aborted', `TikTok API error: ${tiktokError.message} (Code: ${tiktokError.code})`);
-        }
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `Failed to fetch TikTok post status: ${error.message}`);
-    }
-});
-
-// --- NEW FUNCTION: Render text on an image and update a specific generation document ---
-exports.renderAndReplaceGenerationImage = onCall({ region: 'us-central1', timeoutSeconds: 300, memory: '1GB' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error('renderAndReplaceGenerationImage: Authentication required.');
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { backgroundUrl, textToRender, targetGenerationId } = request.data;
-
-    if (!backgroundUrl || typeof textToRender === 'undefined' || !targetGenerationId) {
-        logger.error(`renderAndReplaceGenerationImage: Missing required parameters for user ${userId}.`, 
-            { 
-                backgroundUrlProvided: !!backgroundUrl, 
-                textToRenderProvided: typeof textToRender !== 'undefined', 
-                targetGenerationIdProvided: !!targetGenerationId 
-            }
-        );
-        throw new HttpsError('invalid-argument', 'Missing required parameters: backgroundUrl, textToRender, and targetGenerationId.');
-    }
-
-    logger.info(`[${targetGenerationId}] User ${userId} initiated renderAndReplaceGenerationImage. Background: ${backgroundUrl}`);
-
-    // Assuming os, path, fs (fs.promises), downloadFile, ffmpeg, admin, db, logger, HttpsError are available in the global scope
-    const tempDir = os.tmpdir();
-    const operationSuffix = `replaced_${targetGenerationId}_${Date.now()}`;
-    const backgroundFileName = `background_${operationSuffix}.png`; // Output of downloadFile should be controllable or checked
-    const backgroundFilePath = path.join(tempDir, backgroundFileName);
-    const outputSlideFileName = `rendered_output_${operationSuffix}.png`;
-    const outputSlideFilePath = path.join(tempDir, outputSlideFileName);
-
-    try {
-        // 1. Download the background image
-        logger.info(`[${targetGenerationId}] Downloading background image: ${backgroundUrl} to ${backgroundFilePath}`);
-        await downloadFile(backgroundUrl, backgroundFilePath); 
-        logger.info(`[${targetGenerationId}] Background image downloaded successfully to ${backgroundFilePath}`);
-
-        // 2. Process text (split into lines)
-        let processedSlideText = '';
-        if (textToRender) {
-            const words = textToRender.split(' ');
-            let currentLine = '';
-            for (const word of words) {
-                if (currentLine === '') {
-                    currentLine = word;
-                } else if ((currentLine + ' ' + word).length <= 35) { // Approx 35 chars per line
-                    currentLine += ' ' + word;
-                } else {
-                    processedSlideText += currentLine + '\n';
-                    currentLine = word;
-                }
-            }
-            processedSlideText += currentLine;
-            if (processedSlideText.endsWith('\n')) {
-                processedSlideText = processedSlideText.slice(0, -1); // Remove trailing newline
-            }
-        }
-        logger.info(`[${targetGenerationId}] Processed text for rendering: "${processedSlideText}"`);
-
-        // 3. Escape text for FFmpeg command
-        const escapedText = processedSlideText
-                        .replace(/\\/g, '\\\\') // Escape actual backslashes first
-                        .replace(/%/g, '%%')
-                        .replace(/'/g, "\\'")
-                        .replace(/:/g, '\\:'); 
-
-        // 4. Define FFmpeg drawtext filter
-        const fontPath = '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf'; // Ensure this font exists in the environment
-        const drawTextFilter = `drawtext=text='${escapedText}':fontfile='${fontPath}':fontcolor=white:fontsize=50:borderw=2:bordercolor=black@0.7:x=(w-text_w)/2:y=(h-text_h)/2`;
-
-        // 5. Execute FFmpeg to render text on image
-        logger.info(`[${targetGenerationId}] Starting FFmpeg rendering. Input: ${backgroundFilePath}, Output: ${outputSlideFilePath}`);
-        await new Promise((resolve, reject) => {
-            ffmpeg(backgroundFilePath)
-                .outputOptions('-y') 
-                .videoFilter(drawTextFilter)
-                .save(outputSlideFilePath) 
-                .on('end', () => {
-                    logger.info(`[${targetGenerationId}] FFmpeg successfully rendered image to ${outputSlideFilePath}`);
-                    resolve();
-                })
-                .on('error', (err, stdout, stderr) => {
-                    logger.error(`[${targetGenerationId}] FFmpeg error during rendering: ${err.message}`);
-                    if (stdout) logger.error(`[${targetGenerationId}] FFmpeg stdout: ${stdout}`);
-                    if (stderr) logger.error(`[${targetGenerationId}] FFmpeg stderr: ${stderr}`);
-                    reject(new Error(`FFmpeg error: ${err.message}`));
-                });
-        });
-
-        // 6. Upload the rendered image to Firebase Storage
-        const storagePath = `generations/${userId}/${targetGenerationId}/replaced_image_${Date.now()}.png`;
-        const currentBucket = admin.storage().bucket(); 
-        const [file] = await currentBucket.upload(outputSlideFilePath, {
-            destination: storagePath,
-            metadata: { contentType: 'image/png' }, // Explicitly set content type
-            public: true,
-        });
-        const newImageUrl = file.publicUrl();
-        logger.info(`[${targetGenerationId}] Uploaded new image to ${storagePath}. URL: ${newImageUrl}`);
-
-        // 7. Update Firestore document
-        const generationDocRef = db.collection('users').doc(userId).collection('generations').doc(targetGenerationId);
-        await generationDocRef.update({
-            processedImageUrls: [newImageUrl], 
-            lastModified: admin.firestore.FieldValue.serverTimestamp(),
-            status: 'updated_with_new_render' // Optional: a status field indicating this change
-        });
-        logger.info(`[${targetGenerationId}] Firestore document ${generationDocRef.path} updated with new image URL.`);
-
-        return { success: true, message: "Image rendered and generation document updated successfully.", imageUrl: newImageUrl };
-
-    } catch (error) {
-        logger.error(`[${targetGenerationId}] Error in renderAndReplaceGenerationImage for user ${userId}: ${error.message}`, { stack: error.stack, details: error });
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to render and replace image: ${error.message}`);
-    } finally {
-        // 8. Cleanup temporary files
-        try {
-            if (await fs.stat(backgroundFilePath).catch(() => false)) {
-                await fs.unlink(backgroundFilePath);
-                logger.info(`[${targetGenerationId}] Deleted temp background file: ${backgroundFilePath}`);
-            }
-            if (await fs.stat(outputSlideFilePath).catch(() => false)) {
-                await fs.unlink(outputSlideFilePath);
-                logger.info(`[${targetGenerationId}] Deleted temp output file: ${outputSlideFilePath}`);
-            }
-        } catch (unlinkError) {
-            logger.warn(`[${targetGenerationId}] Warning: Could not delete one or more temporary files: ${unlinkError.message}`);
-        }
-    }
-});
-
-// NEW: Function to delete a TikTok Integration
-exports.deleteTikTokIntegration = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("deleteTikTokIntegration: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    const { integrationId } = request.data;
-    if (!integrationId) {
-        logger.error(`deleteTikTokIntegration: User ${userId} called without integrationId.`);
-        throw new HttpsError('invalid-argument', 'Missing "integrationId" in the request.');
-    }
-
-    try {
-        const integrationDocRef = db.collection('users').doc(userId).collection('integrations').doc(integrationId);
-        const integrationDocSnap = await integrationDocRef.get();
-
-        if (!integrationDocSnap.exists) {
-            logger.warn(`deleteTikTokIntegration: Integration document ${integrationId} not found for user ${userId}. Might have been already deleted.`);
-            // Consider returning success if it's already gone, or a specific code.
-            // For now, treating as a soft success to avoid user-facing errors if already deleted.
-            return { success: true, message: 'Integration not found, presumed already deleted.' };
-        }
-        
-        // Optional: Check if it's a TikTok integration before deleting, though the function name implies it.
-        // if (integrationDocSnap.data().type !== 'tiktok') {
-        //     logger.error(`deleteTikTokIntegration: User ${userId} attempted to delete non-TikTok integration ${integrationId}.`);
-        //     throw new HttpsError('failed-precondition', 'Specified integration is not a TikTok integration.');
-        // }
-
-        await integrationDocRef.delete();
-        logger.info(`Successfully deleted TikTok integration ${integrationId} for user ${userId}.`);
-        return { success: true, message: 'TikTok account disconnected successfully.' };
-
-    } catch (error) {
-        logger.error(`deleteTikTokIntegration: Error for user ${userId}, integration ${integrationId}:`, error.message, error.stack);
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to delete TikTok integration: ${error.message}`);
-    }
-});
-
-// --- TikTok Direct Posting API Functions ---
-// ... existing code ...
 
 // --- NEW: Generate Product Topics Function ---
 exports.generateProductTopics = onCall({ region: 'us-central1', timeoutSeconds: 540 }, async (request) => {
@@ -4585,400 +2737,3 @@ Return ONLY the topics, one per line, nothing else. Each topic must be 1-2 words
         throw new HttpsError('internal', `Failed to generate product topics: ${error.message}`);
     }
 });
-
-// --- TikTok Direct Posting Functions ---
-
-// Function to post video to TikTok (either as draft or public)
-exports.postToTikTok = onCall({ region: 'us-central1', timeoutSeconds: 540 }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("postToTikTok: Authentication required.");
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { 
-        integrationId, 
-        videoUrl, 
-        caption, 
-        isDraft = false,
-        generationId,
-        privacy_level = 'PUBLIC_TO_EVERYONE'  // 'PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'SELF_ONLY'
-    } = request.data;
-
-    if (!integrationId || !videoUrl || !caption) {
-        logger.error(`postToTikTok: Missing required parameters for user ${userId}.`);
-        throw new HttpsError('invalid-argument', 'Missing required parameters: integrationId, videoUrl, caption.');
-    }
-
-    logger.info(`postToTikTok: Posting video to TikTok for user ${userId}, integration ${integrationId}, isDraft: ${isDraft}`);
-
-    try {
-        // 1. Get TikTok integration data
-        const integrationDocRef = db.collection('users').doc(userId).collection('integrations').doc(integrationId);
-        const integrationDoc = await integrationDocRef.get();
-
-        if (!integrationDoc.exists) {
-            throw new HttpsError('not-found', `TikTok integration with ID ${integrationId} not found.`);
-        }
-
-        const integrationData = integrationDoc.data();
-        if (integrationData.type !== 'tiktok') {
-            throw new HttpsError('failed-precondition', `Integration ${integrationId} is not a TikTok integration.`);
-        }
-
-        const { access_token, open_id } = integrationData;
-        if (!access_token || !open_id) {
-            throw new HttpsError('internal', 'TikTok integration data is incomplete. Please reconnect your TikTok account.');
-        }
-
-        // 2. Download video file to temporary location
-        const tempVideoPath = path.join(os.tmpdir(), `tiktok_upload_${userId}_${Date.now()}.mp4`);
-        await downloadFile(videoUrl, tempVideoPath);
-        logger.info(`postToTikTok: Downloaded video to ${tempVideoPath}`);
-
-        // 3. Upload video to TikTok
-        const TIKTOK_UPLOAD_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/video/init/';
-        
-        // Initialize upload
-        const initResponse = await axios.post(TIKTOK_UPLOAD_ENDPOINT, {
-            post_info: {
-                title: caption.substring(0, 150), // TikTok title limit
-                privacy_level: isDraft ? 'SELF_ONLY' : privacy_level,
-                disable_duet: false,
-                disable_comment: false,
-                disable_stitch: false,
-                video_cover_timestamp_ms: 1000
-            },
-            source_info: {
-                source: "FILE_UPLOAD",
-                video_size: (await fs.stat(tempVideoPath)).size,
-                chunk_size: 10000000, // 10MB chunks
-                total_chunk_count: 1
-            }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${access_token}`,
-                'Content-Type': 'application/json; charset=UTF-8'
-            }
-        });
-
-        if (!initResponse.data || initResponse.data.error) {
-            logger.error(`postToTikTok: Upload initialization failed:`, initResponse.data);
-            throw new Error(`TikTok upload initialization failed: ${initResponse.data?.error?.message || 'Unknown error'}`);
-        }
-
-        const { publish_id, upload_url } = initResponse.data.data;
-        logger.info(`postToTikTok: Upload initialized. Publish ID: ${publish_id}`);
-
-        // 4. Upload video file
-        const videoBuffer = await fs.readFile(tempVideoPath);
-        
-        const uploadResponse = await axios.put(upload_url, videoBuffer, {
-            headers: {
-                'Content-Range': `bytes 0-${videoBuffer.length - 1}/${videoBuffer.length}`,
-                'Content-Type': 'video/mp4'
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        });
-
-        if (uploadResponse.status !== 200 && uploadResponse.status !== 201) {
-            throw new Error(`Video upload failed with status: ${uploadResponse.status}`);
-        }
-
-        logger.info(`postToTikTok: Video uploaded successfully`);
-
-        // 5. Confirm upload
-        const TIKTOK_CONFIRM_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
-        
-        const confirmResponse = await axios.post(TIKTOK_CONFIRM_ENDPOINT, {
-            publish_id: publish_id
-        }, {
-            headers: {
-                'Authorization': `Bearer ${access_token}`,
-                'Content-Type': 'application/json; charset=UTF-8'
-            }
-        });
-
-        logger.info(`postToTikTok: Upload confirmed. Status:`, confirmResponse.data);
-
-        // 6. Save post record to Firestore
-        const postData = {
-            userId: userId,
-            integrationId: integrationId,
-            generationId: generationId || null,
-            publishId: publish_id,
-            caption: caption,
-            isDraft: isDraft,
-            privacyLevel: isDraft ? 'SELF_ONLY' : privacy_level,
-            videoUrl: videoUrl,
-            status: 'uploaded',
-            postedAt: admin.firestore.FieldValue.serverTimestamp(),
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        if (confirmResponse.data?.data?.share_url) {
-            postData.tiktokUrl = confirmResponse.data.data.share_url;
-        }
-
-        const postRef = await db.collection('users').doc(userId).collection('tiktok-posts').add(postData);
-        logger.info(`postToTikTok: Post record saved with ID: ${postRef.id}`);
-
-        // 7. Clean up temporary file
-        try {
-            await fs.unlink(tempVideoPath);
-            logger.info(`postToTikTok: Cleaned up temp file: ${tempVideoPath}`);
-        } catch (cleanupError) {
-            logger.warn(`postToTikTok: Failed to clean up temp file:`, cleanupError.message);
-        }
-
-        const successMessage = isDraft 
-            ? 'Video uploaded as draft to TikTok successfully!' 
-            : 'Video posted to TikTok successfully!';
-
-        return {
-            success: true,
-            message: successMessage,
-            publishId: publish_id,
-            postId: postRef.id,
-            tiktokUrl: confirmResponse.data?.data?.share_url || null
-        };
-
-                       } catch (error) {
-        logger.error(`postToTikTok: Error for user ${userId}:`, error.response?.data || error.message, error.stack);
-        
-        if (error.response?.data) {
-            const tiktokError = error.response.data.error || error.response.data;
-            let errorMessage = tiktokError.message || tiktokError.description || 'TikTok API error';
-            if (tiktokError.code) errorMessage = `(Code: ${tiktokError.code}) ${errorMessage}`;
-            throw new HttpsError('internal', `TikTok posting failed: ${errorMessage}`);
-        }
-
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to post to TikTok: ${error.message}`);
-    }
-});
-
-// Function to get TikTok post status
-exports.getTikTokPostStatus = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("getTikTokPostStatus: Authentication required.");
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { integrationId, publishId } = request.data;
-    if (!integrationId || !publishId) {
-        logger.error(`getTikTokPostStatus: Missing required parameters for user ${userId}.`);
-        throw new HttpsError('invalid-argument', 'Missing required parameters: integrationId, publishId.');
-    }
-
-    try {
-        // Get TikTok integration data
-        const integrationDocRef = db.collection('users').doc(userId).collection('integrations').doc(integrationId);
-        const integrationDoc = await integrationDocRef.get();
-
-        if (!integrationDoc.exists) {
-            throw new HttpsError('not-found', `TikTok integration with ID ${integrationId} not found.`);
-        }
-
-        const { access_token } = integrationDoc.data();
-        if (!access_token) {
-            throw new HttpsError('internal', 'TikTok integration data is incomplete.');
-        }
-
-        // Check post status
-        const TIKTOK_STATUS_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
-        
-        const statusResponse = await axios.post(TIKTOK_STATUS_ENDPOINT, {
-            publish_id: publishId
-        }, {
-            headers: {
-                'Authorization': `Bearer ${access_token}`,
-                'Content-Type': 'application/json; charset=UTF-8'
-            }
-        });
-
-        logger.info(`getTikTokPostStatus: Status for ${publishId}:`, statusResponse.data);
-
-        return {
-            success: true,
-            status: statusResponse.data?.data?.status || 'unknown',
-            shareUrl: statusResponse.data?.data?.share_url || null,
-            data: statusResponse.data?.data || null
-        };
-
-    } catch (error) {
-        logger.error(`getTikTokPostStatus: Error for user ${userId}:`, error.response?.data || error.message, error.stack);
-        
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to get TikTok post status: ${error.message}`);
-    }
-});
-
-// --- NEW: General Video Generation using Replicate API (Text-to-Video) ---
-exports.generateGeneralVideo = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { prompt, model = 'default', duration = 5, aspectRatio = '16:9' } = request.data;
-    
-    if (!prompt || prompt.trim() === '') {
-        throw new HttpsError('invalid-argument', 'Video prompt is required.');
-    }
-
-    logger.info(`generateGeneralVideo called by user: ${userId} with prompt: "${prompt}"`);
-
-    // Check user credits
-    const userRef = db.collection('users').doc(userId);
-    try {
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
-            throw new HttpsError('not-found', 'User profile not found.');
-        }
-        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
-        if (currentCredits < 100) { // General video costs 100 credits
-            throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 100).');
-        }
-    } catch (error) {
-        logger.error(`Error fetching user credits for video generation (user ${userId}):`, error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Could not verify user credits for video generation.');
-    }
-
-    try {
-        // Get Replicate token from config
-        const replicateToken = functions.config().replicate.token;
-        if (!replicateToken) {
-            logger.error("generateGeneralVideo: Replicate token not found.");
-            throw new HttpsError('internal', 'Replicate service configuration error.');
-        }
-
-        // Define available models
-        const availableModels = {
-            'default': 'minimax/video-01',
-            'minimax': 'minimax/video-01',
-            'seedance': 'bytedance/seedance-1-pro',
-            'kling': 'kwaivgi/kling-v2.1',
-            'veo': 'google/veo-3'
-        };
-
-        const selectedModel = availableModels[model] || availableModels['default'];
-        
-        // Create Replicate prediction
-        const replicateResponse = await axios.post('https://api.replicate.com/v1/predictions', {
-            version: selectedModel,
-            input: {
-                       prompt: prompt,
-                duration: duration,
-                aspect_ratio: aspectRatio
-            }
-        }, {
-            headers: {
-                'Authorization': `Token ${replicateToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const predictionId = replicateResponse.data.id;
-        logger.info(`Replicate prediction created with ID: ${predictionId}`);
-
-        // Start polling for results
-        let attempts = 0;
-        const maxAttempts = 60; // 5 minutes with 5-second intervals
-        let videoUrl = null;
-
-        while (attempts < maxAttempts && !videoUrl) {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-            
-            try {
-                const statusResponse = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-                    headers: {
-                        'Authorization': `Token ${replicateToken}`
-                    }
-                });
-
-                const status = statusResponse.data.status;
-                logger.info(`Prediction ${predictionId} status: ${status}`);
-
-                if (status === 'succeeded') {
-                    videoUrl = statusResponse.data.output;
-                    if (Array.isArray(videoUrl)) {
-                        videoUrl = videoUrl[0]; // Take first video if array
-                    }
-                    break;
-                } else if (status === 'failed') {
-                    throw new Error(`Replicate prediction failed: ${statusResponse.data.error || 'Unknown error'}`);
-                }
-            } catch (pollError) {
-                logger.error(`Error polling prediction ${predictionId}:`, pollError);
-                attempts++;
-                continue;
-            }
-            
-            attempts++;
-        }
-
-        if (!videoUrl) {
-            throw new Error('Video generation timed out');
-        }
-
-        // Save generation record and decrement credits
-        const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
-        const generationData = {
-            userId: userId,
-            type: 'general_video',
-            prompt: prompt,
-            model: selectedModel,
-            duration: duration,
-            aspectRatio: aspectRatio,
-            videoUrl: videoUrl,
-            predictionId: predictionId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        };
-
-        // Transaction for saving generation and decrementing credits
-        await db.runTransaction(async (transaction) => {
-            const userSnapshot = await transaction.get(userRef);
-            const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
-            if (currentCredits < 100) {
-                throw new HttpsError('resource-exhausted', 'Insufficient general credits for video generation (needs 100).');
-            }
-            transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-100) });
-            transaction.set(generationDocRef, generationData);
-        });
-
-        logger.info(`General video generation completed for user ${userId}. Video URL: ${videoUrl}`);
-        
-        return {
-            success: true,
-            message: "General video generated successfully.",
-            data: {
-                generationId: generationDocRef.id,
-                videoUrl: videoUrl,
-                predictionId: predictionId,
-                creditsUsed: 100
-            }
-        };
- 
-                 } catch (error) {
-        logger.error(`Error in generateGeneralVideo for user ${userId}:`, error);
-        
-        if (error.response && error.response.data) {
-            logger.error('Replicate API Error Details:', error.response.data);
-        }
-        
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        
-        throw new HttpsError('internal', `Failed to generate video: ${error.message}`);
-    }
-});
-

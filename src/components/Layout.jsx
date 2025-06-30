@@ -1206,6 +1206,7 @@ function Layout() {
   const outletContextValue = useMemo(() => ({
     dashboardRefreshKey,
     generatingItem,
+    commandQueue, // <-- ADDED for canvas
     pageTitle,
     pageSubtitle,
     isDarkMode,
@@ -1224,6 +1225,7 @@ function Layout() {
   }), [
     dashboardRefreshKey,
     generatingItem, // If generatingItem is an object, its reference changing will still trigger this
+    commandQueue, // <-- ADDED
     pageTitle,
     pageSubtitle,
     isDarkMode,
@@ -1311,13 +1313,9 @@ function Layout() {
                 </a>
               </div>
               
-              {/* Orta: Dynamic Island */}
+              {/* Orta: Boş alan */}
               <div className="flex-1 flex justify-center">
-                <DynamicIsland 
-                  generatingItem={generatingItem}
-                  commandQueue={commandQueue}
-                  isDarkMode={isDarkMode}
-                />
+                {/* DynamicIsland canvas içinde */}
               </div>
               
               {/* Sağ Taraf: Status + Dark Mode Toggle */}
@@ -1351,10 +1349,20 @@ function Layout() {
                       )}
                     </div>
                     
-                    {/* Canvas Stats */}
-                    <div className="hidden lg:flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-                      <span>{canvasStatus.nodeCount} nodes • {canvasStatus.edgeCount} connections</span>
-                    </div>
+                    {/* Clear Canvas Button */}
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Clear entire canvas? This cannot be undone.')) {
+                          // Clear canvas via outlet context
+                          const outletContext = { clearCanvas: true };
+                          window.dispatchEvent(new CustomEvent('clearCanvas'));
+                        }
+                      }}
+                      className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                    >
+                      <X size={14} />
+                      Clear Canvas
+                    </button>
                   </div>
                 )}
                 
@@ -1387,13 +1395,9 @@ function Layout() {
                 </p>
               </div>
 
-              {/* Center: Dynamic Island */}
+              {/* Center: Empty space for balance */}
               <div className="flex justify-center">
-                <DynamicIsland 
-                  generatingItem={generatingItem}
-                  commandQueue={commandQueue}
-                  isDarkMode={isDarkMode}
-                />
+                {/* DynamicIsland moved to canvas */}
               </div>
 
               {/* Right: Action Buttons */}

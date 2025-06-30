@@ -79,7 +79,7 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   };
   
   const getStatusText = (item) => {
-    if (!item) return <span className={isDarkMode ? "text-slate-950" : "text-slate-50"}>              Welcome, Deniz! No active tasks for now!\n</span>;
+    if (!item) return null;
 
     const textColorClass = isDarkMode ? "text-slate-950" : "text-slate-50";
 
@@ -187,62 +187,59 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   if ((generatingItem || commandQueue.length > 0) && !currentDisplayItem) {
     return (
       <motion.div
-        className={`flex items-center justify-center h-8 px-4 rounded-full shadow-lg transition-colors duration-200 ${isDarkMode ? 'bg-slate-50 text-slate-950' : 'bg-slate-950 text-slate-50'}`}
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        style={{ width: 'fit-content', minWidth: 150 }}
+        className={`flex items-center justify-center px-6 py-4 rounded-lg shadow-2xl transition-colors duration-200 ${isDarkMode ? 'bg-white/5 text-slate-950 border-2 border-white/20' : 'bg-white/5 text-slate-50 border-2 border-white/20'} backdrop-blur-xl`}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.3 }}
+        style={{ width: 'fit-content', minWidth: 180 }}
       >
-        <LungoLogoIcon className="w-4 h-4 text-green-500 mr-2 flex-shrink-0 animate-pulse" />
-        <span className="text-xs font-medium">Loading tasks...</span>
+        <LungoLogoIcon className="w-5 h-5 text-green-500 mr-3 flex-shrink-0 animate-pulse" />
+        <span className="text-sm font-medium">Loading tasks...</span>
       </motion.div>
     );
   }
 
-  if (!currentDisplayItem) {
-    return (
-      <motion.div
-        className="relative flex justify-center items-start"
-        style={{ height: 32, zIndex: 20 }}
-      >
-        <motion.div
-          className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-slate-50 text-slate-950' : 'bg-slate-950 text-slate-50'} rounded-full px-3 opacity-60`}
-          style={{ width: 'fit-content', height: 32, minHeight: 32 }}
-        >
-          <motion.div 
-            className="flex items-center h-8 w-full flex-shrink-0"
-          >
-            <LungoLogoIcon className="w-4 h-4 text-green-500 mr-2 flex-shrink-0 animate-pulse" />
-            <div className="flex-grow flex items-center gap-2 overflow-hidden slate-50space-nowrap">
-              <span className={`text-xs text-ellipsis overflow-hidden ${isDarkMode ? "text-slate-950" : "text-slate-50"} font-medium`}>
-              No active tasks!
-              </span>
-            </div>
-          </motion.div>
-        </motion.div>
-      </motion.div>
-    );
-  }
+  // Her zaman göster, ama state'e göre opacity değişsin
+  const hasActiveTask = !!currentDisplayItem;
+  const isLoading = (generatingItem || commandQueue.length > 0) && !currentDisplayItem;
 
   return (
     <motion.div
       className="relative flex justify-center items-start"
-      style={{ height: 32, zIndex: 20 }}
+      style={{ height: 40, zIndex: 20 }}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ 
+        opacity: hasActiveTask ? 1 : 0.4, 
+        scale: hasActiveTask ? 1 : 0.9 
+      }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
     >
       <motion.div
-        className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-slate-50 text-slate-950' : 'bg-slate-950 text-slate-50'} rounded-full px-3`}
-        style={{ width: 'fit-content', height: 32, minHeight: 32, minWidth: 150 }}
+        className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-white/5 text-slate-950 border-2 border-white/20' : 'bg-white/5 text-slate-50 border-2 border-white/20'} rounded-lg px-6 py-4 backdrop-blur-xl shadow-2xl`}
+        style={{ width: 'fit-content', minWidth: hasActiveTask ? 200 : 140 }}
+        whileHover={{ scale: hasActiveTask ? 1.02 : 0.95 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
       >
         <motion.div 
-          className="flex items-center h-8 w-full flex-shrink-0"
+          className="flex items-center w-full"
         >
-          {(currentDisplayItem && (currentDisplayItem.isMain || commandQueue.length > 0)) && 
-            <LungoLogoIcon className="w-4 h-4 text-green-500 mr-2 flex-shrink-0 animate-pulse" />
-          }
-          <div className="flex-grow flex items-center gap-2 overflow-hidden slate-50space-nowrap">
-            {getIcon(currentDisplayItem)} 
-            <span className="text-xs text-ellipsis overflow-hidden">
-              {getStatusText(currentDisplayItem)}
+          <LungoLogoIcon className={`w-4 h-4 text-green-500 mr-2 flex-shrink-0 ${hasActiveTask ? 'animate-pulse' : ''}`} />
+          <div className="flex-grow flex items-center gap-2 overflow-hidden">
+            {hasActiveTask && getIcon(currentDisplayItem)}
+            <span className={`text-sm font-medium text-ellipsis overflow-hidden ${hasActiveTask ? '' : 'text-xs'}`}>
+              {hasActiveTask ? getStatusText(currentDisplayItem) : (
+                isLoading ? (
+                  <span className={isDarkMode ? "text-slate-600" : "text-slate-400"}>
+                    Loading tasks...
+                  </span>
+                ) : (
+                  <span className={isDarkMode ? "text-slate-600" : "text-slate-400"}>
+                    Waiting for tasks
+                  </span>
+                )
+              )}
             </span>
           </div>
         </motion.div>

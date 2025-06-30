@@ -193,105 +193,65 @@ const enhancePromptWithBackgroundRules = (basePrompt) => {
 export const generateImage = async ({ 
   style, 
   quality = 'high', 
+  prompt, // New simple prompt parameter
+  subtype, // New subtype parameter (ugc_character, background, general)
+  selectedFrame = null, // Selected frame for style rules
+  connectedImages = [], // Array of connected image URLs
+  // Legacy parameters for backward compatibility
   image_subject, 
   subject_description, 
   clothing_description, 
   setting_description, 
-  scene_description,
-  selectedFrame = null, // Selected frame for UGC Character
-  connectedImages = [] // Array of connected image URLs
+  scene_description
 }) => {
   try {
+    console.log('REQUESTING image generation with params:', { prompt, subtype, selectedFrame, quality });
+
+    // Use the direct synchronous image generation function
+    const generateImageFn = httpsCallable(functions, 'generateImage');
+
+    // Determine commandCode for logging/legacy purposes, though the new flow
+    // primarily relies on subtype.
     let commandCode;
-    let basePrompt;
-    
-    // Determine command code and prepare data based on available parameters
-    if (subject_description) {
-      // UGC Character generation (commandCode 202)
-      commandCode = 202;
-      basePrompt = `A person with description: ${subject_description}, wearing: ${clothing_description}, in a setting of: ${setting_description}`;
-    } else if (scene_description) {
-      // Background generation (commandCode 201)
-      commandCode = 201;
-      basePrompt = scene_description;
-    } else if (image_subject) {
-      // General image generation (commandCode 203)
-      commandCode = 203;
-      basePrompt = image_subject;
-    } else {
-      throw new Error('Missing required parameters for image generation');
-    }
+    if (subtype === 'ugc_character') commandCode = 202;
+    else if (subtype === 'background') commandCode = 201;
+    else if (subtype === 'general') commandCode = 203;
+    else if (subject_description) commandCode = 202; // Legacy fallback
+    else if (scene_description) commandCode = 201;   // Legacy fallback
+    else if (image_subject) commandCode = 203;     // Legacy fallback
 
-    // Enhance the prompt using the appropriate rules
-    let finalPrompt;
-    if (commandCode === 201) {
-      // Use background image rules for background generation
-      if (selectedFrame === 'background') {
-        finalPrompt = enhancePromptWithBackgroundRules(basePrompt);
-      } else {
-        // Use specific background frame if selected
-        finalPrompt = enhancePromptWithRules(basePrompt, {
-          useGeneralRules: true,
-          useImageSetRules: false, // Don't use random image set for background
-        });
-      }
-    } else {
-      // Use general and image set rules for other types
-      finalPrompt = enhancePromptWithRules(basePrompt, {
-        useGeneralRules: true,
-        useImageSetRules: true,
-        selectedFrame: commandCode === 202 ? selectedFrame : null, // Only use selected frame for UGC
-      });
-    }
-    
-    console.log('Generating image with enhanced prompt:', finalPrompt);
-
-    let requestData = {
+    const requestData = {
       style,
       quality,
       connectedImages,
-      commandCode,
-      enhancedPrompt: finalPrompt // Send the enhanced prompt to backend
+      commandCode, // Pass for potential routing/logging in the backend
+      // --- New, clean parameters for the modern enhancement flow ---
+      originalPrompt: prompt,
+      subtype: subtype,
+      selectedFrame: selectedFrame,
     };
-    
-    // For specific command codes, we might send different data structures
-    if (commandCode === 202) {
-      requestData.subject_description = subject_description;
-      requestData.clothing_description = clothing_description;
-      requestData.setting_description = setting_description;
-      requestData.image_style = style;
-    } else if (commandCode === 201) {
-      requestData.scene_description = scene_description;
-    } else if (commandCode === 203) {
-      requestData.image_subject = image_subject;
-    }
 
-    const generateImageFn = httpsCallable(functions, 'generateImage');
+    console.log('Sending request to `generateImage` with data:', requestData);
     const result = await generateImageFn(requestData);
 
+    // The backend returns the direct result (synchronous)
+    if (!result.data.success) {
+        throw new Error(result.data.message || 'Backend failed to generate image.');
+    }
+
+    console.log('✅ Image generation completed. Result:', result.data);
+
+    // Return the direct result with imageUrl
     return {
       success: true,
-      imageUrl: result.data.imageUrl,
-      credits_used: QUALITY_CREDITS[quality],
-      ...result.data
+      imageUrl: result.data.data?.imageUrl || result.data.imageUrl,
+      data: result.data.data || result.data,
+      message: "Image generation completed."
     };
 
   } catch (error) {
-    console.error('Image generation error:', error);
-    
-    // Extract backend error message if available
-    let errorMessage = 'Image generation failed';
-    if (error.message) {
-      if (error.message.includes('Failed to initialize OpenAI service')) {
-        errorMessage = 'AI service is currently unavailable';
-      } else if (error.message.includes('Insufficient')) {
-        errorMessage = error.message;
-      } else {
-        errorMessage = error.message;
-      }
-    }
-    
-    throw new Error(errorMessage);
+    console.error('Error requesting image generation:', error);
+    throw new Error(error.message || 'Failed to start image generation task.');
   }
 };
 

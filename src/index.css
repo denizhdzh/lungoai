@@ -60,6 +60,20 @@
   border-radius: 16px !important;
 }
 
+/* Remove all arrows from edges */
+.react-flow__edge .react-flow__edge-path {
+  marker-end: none !important;
+  marker-start: none !important;
+}
+
+.react-flow__arrowhead {
+  display: none !important;
+}
+
+.react-flow__edge-marker {
+  display: none !important;
+}
+
 /* Custom Cursors for React Flow - Soft & Natural */
 .react-flow__pane {
   cursor: default !important;

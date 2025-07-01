@@ -141,6 +141,47 @@ const allFrameOptions = [
 		exampleImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face',
 		rules: '90s_vintage_buddy',
 		type: 'ugc_character'
+	},
+	// New frames added
+	{
+		id: 'fish_eye_selfie_urban',
+		name: 'Urban Fisheye Selfie Drama',
+		description: 'Bold fisheye lens selfies with urban backgrounds',
+		exampleImage: 'https://images.unsplash.com/photo-1606836591695-4d58a1b0eba9?w=400&h=300&fit=crop&crop=face',
+		rules: 'fish_eye_selfie_urban',
+		type: 'ugc_character'
+	},
+	{
+		id: 'y2k_flash_pop',
+		name: 'Y2K Flash Pop Street Portrait',
+		description: 'Early 2000s digital camera flash photography',
+		exampleImage: 'https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=400&h=300&fit=crop&crop=face',
+		rules: 'y2k_flash_pop',
+		type: 'ugc_character'
+	},
+	{
+		id: 'elevator_mirror_selfie',
+		name: 'Elevator Mirror Flex',
+		description: 'Mirror selfies in elevators with metallic backgrounds',
+		exampleImage: 'https://images.unsplash.com/photo-1615887023516-86caaa4c5a5a?w=400&h=300&fit=crop&crop=face',
+		rules: 'elevator_mirror_selfie',
+		type: 'ugc_character'
+	},
+	{
+		id: 'yum_moment_diaries',
+		name: 'Yum Moment Diaries',
+		description: 'Capturing joyful eating moments in cozy settings',
+		exampleImage: 'https://images.unsplash.com/photo-1544681280-f2803650ee5d?w=400&h=300&fit=crop&crop=face',
+		rules: 'yum_moment_diaries',
+		type: 'ugc_character'
+	},
+	{
+		id: 'selfcare_bliss_aesthetic',
+		name: 'Selfcare Bliss Aesthetic',
+		description: 'Relaxing self-care moments with skincare and cozy vibes',
+		exampleImage: 'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=400&h=300&fit=crop&crop=face',
+		rules: 'selfcare_bliss_aesthetic',
+		type: 'ugc_character'
 	}
 ];
 
@@ -303,10 +344,10 @@ const EnhancedDropdown = ({ value, options, onChange, isOpen, onToggle, onOpenSt
 					className="absolute top-full left-0 mt-2 bg-neutral-800/95 backdrop-blur-lg border border-neutral-700/50 rounded-2xl z-[9999] w-80 shadow-2xl flex flex-col overflow-hidden"
 					style={{ maxHeight: '450px' }} // Set a max height for the whole dropdown
 					onWheel={(e) => {
-						e.stopPropagation(); // Prevent scroll events from reaching the canvas
-						e.preventDefault(); // Prevent default behavior
+						// Force stop all propagation to parent elements
+						e.stopPropagation();
+						e.preventDefault();
 					}}
-					onScroll={(e) => e.stopPropagation()} // Also handle scroll events
 				>
 					{/* Search Bar (non-scrolling part) */}
 					<div className="p-3 border-b border-neutral-700/50 flex-shrink-0">
@@ -330,13 +371,13 @@ const EnhancedDropdown = ({ value, options, onChange, isOpen, onToggle, onOpenSt
 					<div 
 						className="flex-grow overflow-y-auto enhanced-dropdown-scroll"
 						onWheel={(e) => {
-							// Allow scrolling within this container
-							const element = e.currentTarget;
-							const isScrollable = element.scrollHeight > element.clientHeight;
+							// Force allow native scrolling and stop all event bubbling
+							e.stopPropagation();
 							
-							if (isScrollable) {
-								e.stopPropagation(); // Prevent event from reaching ReactFlow
-							}
+							// Manual scroll handling 
+							const container = e.currentTarget;
+							const delta = e.deltaY;
+							container.scrollTop += delta;
 						}}
 					>
 						<div className="p-2 space-y-1">
@@ -356,22 +397,23 @@ const EnhancedDropdown = ({ value, options, onChange, isOpen, onToggle, onOpenSt
 												onToggle();
 												setSearchTerm('');
 											}}
-											className={`w-full p-3 text-sm text-left rounded-xl transition-all duration-200 group ${
+											className={`w-full p-4 text-sm text-left rounded-xl transition-all duration-200 group ${
 												value === option.value 
-													? 'bg-neutral-700 ring-2 ring-white/50' 
+													? 'bg-neutral-700 ring-2 ring-lime-400/50' 
 													: 'hover:bg-neutral-700/50'
 											}`}
 										>
-											<div className="flex items-center gap-3">
-												<div className="w-10 h-10 rounded-lg bg-neutral-600 flex items-center justify-center">
-													<option.icon size={20} className="text-neutral-300" />
+											<div className="flex items-center gap-4">
+												<div className="w-16 h-16 rounded-xl bg-neutral-600 flex items-center justify-center flex-shrink-0 border border-neutral-600">
+													<option.icon size={28} className="text-neutral-300" />
 												</div>
-												<div className="flex-1">
-													<div className="font-semibold text-white text-sm">{option.label}</div>
+												<div className="flex-1 min-w-0">
+													<div className="font-semibold text-white text-sm truncate">{option.label}</div>
+													<div className="text-xs text-neutral-400 truncate mt-1">Any type of image</div>
 												</div>
 												{value === option.value && (
-													<div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
-														<div className="w-2 h-2 bg-neutral-800 rounded-full"></div>
+													<div className="w-5 h-5 bg-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
+														<div className="w-2 h-2 bg-black rounded-full"></div>
 													</div>
 												)}
 											</div>
@@ -396,26 +438,27 @@ const EnhancedDropdown = ({ value, options, onChange, isOpen, onToggle, onOpenSt
 												onToggle();
 												setSearchTerm('');
 											}}
-											className={`w-full p-3 text-sm text-left rounded-xl transition-all duration-200 group ${
+											className={`w-full p-4 text-sm text-left rounded-xl transition-all duration-200 group ${
 												value === option.value 
-													? 'bg-neutral-700 ring-2 ring-white/50' 
+													? 'bg-neutral-700 ring-2 ring-lime-400/50' 
 													: 'hover:bg-neutral-700/50'
 											}`}
 										>
-											<div className="flex items-center gap-3">
-												<div className="w-10 h-10 rounded-lg overflow-hidden">
+											<div className="flex items-center gap-4">
+												<div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-neutral-600">
 													<img 
 														src={option.backgroundImage} 
 														alt={option.label}
 														className="w-full h-full object-cover"
 													/>
 												</div>
-												<div className="flex-1">
-													<div className="font-semibold text-white text-sm">{option.label}</div>
+												<div className="flex-1 min-w-0">
+													<div className="font-semibold text-white text-sm truncate">{option.label}</div>
+													<div className="text-xs text-neutral-400 truncate mt-1">Background Scene</div>
 												</div>
 												{value === option.value && (
-													<div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
-														<div className="w-2 h-2 bg-neutral-800 rounded-full"></div>
+													<div className="w-5 h-5 bg-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
+														<div className="w-2 h-2 bg-black rounded-full"></div>
 													</div>
 												)}
 											</div>
@@ -440,26 +483,27 @@ const EnhancedDropdown = ({ value, options, onChange, isOpen, onToggle, onOpenSt
 												onToggle();
 												setSearchTerm('');
 											}}
-											className={`w-full p-3 text-sm text-left rounded-xl transition-all duration-200 group ${
+											className={`w-full p-4 text-sm text-left rounded-xl transition-all duration-200 group ${
 												value === option.value 
-													? 'bg-neutral-700 ring-2 ring-white/50' 
+													? 'bg-neutral-700 ring-2 ring-lime-400/50' 
 													: 'hover:bg-neutral-700/50'
 											}`}
 										>
-											<div className="flex items-center gap-3">
-												<div className="w-10 h-10 rounded-lg overflow-hidden">
+											<div className="flex items-center gap-4">
+												<div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-neutral-600">
 													<img 
 														src={option.backgroundImage} 
 														alt={option.label}
 														className="w-full h-full object-cover"
 													/>
 												</div>
-												<div className="flex-1">
-													<div className="font-semibold text-white text-sm">{option.label}</div>
+												<div className="flex-1 min-w-0">
+													<div className="font-semibold text-white text-sm truncate">{option.label}</div>
+													<div className="text-xs text-neutral-400 truncate mt-1">{option.subtitle}</div>
 												</div>
 												{value === option.value && (
-													<div className="w-4 h-4 bg-white rounded-full flex items-center justify-center">
-														<div className="w-2 h-2 bg-neutral-800 rounded-full"></div>
+													<div className="w-5 h-5 bg-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
+														<div className="w-2 h-2 bg-black rounded-full"></div>
 													</div>
 												)}
 											</div>
@@ -511,7 +555,7 @@ const AIFrame = ({
 	const [subtype, setSubtype] = useState(formData.subtype || 'general');
 	const [selectedFrame, setSelectedFrame] = useState(formData.selectedFrame || null);
 	const [duration, setDuration] = useState(formData.duration || 3);
-	const [model, setModel] = useState(formData.model || '');
+	const [model, setModel] = useState(formData.model || 'google/imagen-4');
 	const [isDragOver, setIsDragOver] = useState(false);
 
 	// This effect syncs the component's internal state with props from the parent canvas.
@@ -521,7 +565,7 @@ const AIFrame = ({
 			setSubtype(formData.subtype || (data.type === 'image' ? 'general' : 'text_to_video'));
 			setSelectedFrame(formData.selectedFrame || null);
 			setDuration(formData.duration || 3);
-			setModel(formData.model || '');
+			setModel(formData.model || 'google/imagen-4');
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
 	}, [formData.subtype, formData.selectedFrame, formData.duration, formData.model, data.type]);
@@ -561,6 +605,22 @@ const AIFrame = ({
 		console.log('imageGenerationOptions created:', options);
 		return options;
 	}, []);
+
+	// Available AI models for image generation
+	const imageModelOptions = [
+		{ 
+			id: 'google/imagen-4', 
+			name: 'Google Imagen 4', 
+			icon: <Sparkle size={16} />, 
+			subtitle: 'Photorealistic, high quality' 
+		},
+		{ 
+			id: 'ideogram-ai/ideogram-v3-quality', 
+			name: 'Ideogram v3 Quality', 
+			icon: <PencilSimple size={16} />, 
+			subtitle: 'Great for text in images' 
+		}
+	];
 
 	const handleImageOptionChange = (selectedValue) => {
 		console.log('handleImageOptionChange called with:', selectedValue);
@@ -762,7 +822,12 @@ const AIFrame = ({
 								{ value: 'solo_snap_vibe', label: 'Solo Snap Vibe', backgroundImage: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=300&fit=crop&crop=face' },
 								{ value: 'warm_moments', label: 'Warm Moments', backgroundImage: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&h=300&fit=crop&crop=face' },
 								{ value: 'urban_motion_girl', label: 'Urban Motion Girl', backgroundImage: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=300&fit=crop&crop=face' },
-								{ value: '90s_vintage_buddy', label: '90s Vintage Buddy Vibes', backgroundImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face' }
+								{ value: '90s_vintage_buddy', label: '90s Vintage Buddy Vibes', backgroundImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'fish_eye_selfie_urban', label: 'Urban Fisheye Selfie Drama', backgroundImage: 'https://images.unsplash.com/photo-1606836591695-4d58a1b0eba9?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'y2k_flash_pop', label: 'Y2K Flash Pop Street Portrait', backgroundImage: 'https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'elevator_mirror_selfie', label: 'Elevator Mirror Flex', backgroundImage: 'https://images.unsplash.com/photo-1615887023516-86caaa4c5a5a?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'yum_moment_diaries', label: 'Yum Moment Diaries', backgroundImage: 'https://images.unsplash.com/photo-1544681280-f2803650ee5d?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'selfcare_bliss_aesthetic', label: 'Selfcare Bliss Aesthetic', backgroundImage: 'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=400&h=300&fit=crop&crop=face' }
 							]}
 							onChange={(selectedValue) => {
 								console.log('Frame selected:', selectedValue);
@@ -784,6 +849,27 @@ const AIFrame = ({
 								setOpenDropdown(openDropdown === 'subtype' ? null : 'subtype');
 							}}
 							onOpenStateChange={onDropdownStateChange}
+						/>
+					</div>
+				)}
+
+				{/* AI Model Selector - only for images */}
+				{data.type === 'image' && (
+					<div className="bg-neutral-800/50 p-1.5 rounded-lg">
+						<CustomDropdown
+							selectedValue={model}
+							options={imageModelOptions}
+							onSelect={(selectedOption) => {
+								const modelValue = typeof selectedOption === 'object' ? selectedOption.id : selectedOption;
+								setModel(modelValue);
+								onUpdateNode(id, { 
+									formData: { ...formData, model: modelValue }
+								});
+							}}
+							placeholder="Select AI Model"
+							onOpenStateChange={onDropdownStateChange}
+							className="w-full"
+							dropdownWidthClass="w-full"
 						/>
 					</div>
 				)}
@@ -1114,7 +1200,6 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 	const [slideshowType, setSlideshowType] = useState(data.slideshowType || 'top_3_lists');
 	const [selectedProduct, setSelectedProduct] = useState(data.selectedProduct || null);
 	const [imageGenerationMode, setImageGenerationMode] = useState(data.imageGenerationMode || 'ai_per_slide');
-	const [openDropdown, setOpenDropdown] = useState(null);
 
 	// Fetch user's products for dropdown
 	const [userProducts, setUserProducts] = useState([]);
@@ -1146,10 +1231,6 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 		fetchProducts();
 	}, [user?.uid]);
 
-	const handleDropdownToggle = (dropdownId) => {
-		setOpenDropdown(prev => (prev === dropdownId ? null : dropdownId));
-	};
-
 	// Persist changes to the main nodes state - with debouncing to prevent infinite loops
 	useEffect(() => {
 		const timeoutId = setTimeout(() => {
@@ -1175,23 +1256,19 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 				topic: selectedProductData ? `Product: ${selectedProductData.name}` : topic,
 				language: selectedLanguage,
 				slideshowType,
-				imageGenerationMode,
-				selectedProduct: selectedProductData,
-				creditCost
+				background: 'neutral' // Default background
 			};
 			
-
 			const result = await generateSlideshow(generationParams);
 			
 			if (result && result.success) {
 				if (onGenerate) {
-					const slideshowData = result.data || {};
 					onGenerate(id, {
 						type: 'slideshow',
-						slideTexts: slideshowData.slideTexts || [],
-						backgroundUrl: slideshowData.selectedBackgroundUrl,
-						processedImageUrls: slideshowData.processedImageUrls || [],
-						generationId: slideshowData.generationId
+						slideTexts: result.content?.slideTexts || result.slideTexts || [],
+						backgroundUrl: result.content?.selectedBackgroundUrl || result.slideshowUrl,
+						processedImageUrls: result.content?.processedImageUrls || [],
+						generationId: result.content?.generationId || Date.now()
 					});
 				}
 			} else {
@@ -1242,19 +1319,22 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 				{userProducts.length > 0 && (
 					<div className="bg-neutral-800/50 p-1.5 rounded-lg">
 						<CustomDropdown
-							value={selectedProduct || ''}
+							selectedValue={selectedProduct || ''}
 							options={[
-								{ value: '', label: 'Select Product (Optional)' },
+								{ id: '', name: 'Select Product (Optional)' },
 								...userProducts.map(product => ({
-									value: product.id,
-									label: product.name
+									id: product.id,
+									name: product.name
 								}))
 							]}
-							onChange={(value) => setSelectedProduct(value || null)}
-							isOpen={openDropdown === 'product'}
-							onToggle={() => handleDropdownToggle('product')}
+							onSelect={(option) => {
+								const value = typeof option === 'object' ? option.id : option;
+								setSelectedProduct(value || null);
+							}}
 							onOpenStateChange={onDropdownStateChange}
-							minWidth="200px"
+							className="w-full"
+							dropdownWidthClass="w-full"
+							placeholder="Select Product (Optional)"
 						/>
 					</div>
 				)}
@@ -1263,35 +1343,39 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 				<div className="flex gap-2">
 					<div className="flex-1 bg-neutral-800/50 rounded-lg">
 						<CustomDropdown
-							value={selectedLanguage}
+							selectedValue={selectedLanguage}
 							options={[
-								{ value: 'en', label: '🇺🇸 EN' },
-								{ value: 'tr', label: '🇹🇷 TR' },
-								{ value: 'de', label: '🇩🇪 DE' },
-								{ value: 'fr', label: '🇫🇷 FR' },
-								{ value: 'es', label: '🇪🇸 ES' }
+								{ id: 'en', name: '🇺🇸 EN' },
+								{ id: 'tr', name: '🇹🇷 TR' },
+								{ id: 'de', name: '🇩🇪 DE' },
+								{ id: 'fr', name: '🇫🇷 FR' },
+								{ id: 'es', name: '🇪🇸 ES' }
 							]}
-							onChange={(value) => setSelectedLanguage(value)}
-							isOpen={openDropdown === 'language'}
-							onToggle={() => handleDropdownToggle('language')}
+							onSelect={(option) => {
+								const value = typeof option === 'object' ? option.id : option;
+								setSelectedLanguage(value);
+							}}
 							onOpenStateChange={onDropdownStateChange}
-							minWidth="80px"
+							className="w-full"
+							dropdownWidthClass="w-full"
 						/>
 					</div>
 					
 					<div className="flex-1 bg-neutral-800/50 rounded-lg">
 						<CustomDropdown
-							value={imageGenerationMode}
+							selectedValue={imageGenerationMode}
 							options={[
-								{ value: 'ai_per_slide', label: 'AI per Slide' },
-								{ value: 'single_ai_shared', label: 'Single AI' },
-								{ value: 'from_assets', label: 'From Assets' }
+								{ id: 'ai_per_slide', name: 'AI per Slide' },
+								{ id: 'single_ai_shared', name: 'Single AI' },
+								{ id: 'from_assets', name: 'From Assets' }
 							]}
-							onChange={(value) => setImageGenerationMode(value)}
-							isOpen={openDropdown === 'imageMode'}
-							onToggle={() => handleDropdownToggle('imageMode')}
+							onSelect={(option) => {
+								const value = typeof option === 'object' ? option.id : option;
+								setImageGenerationMode(value);
+							}}
 							onOpenStateChange={onDropdownStateChange}
-							minWidth="120px"
+							className="w-full"
+							dropdownWidthClass="w-full"
 						/>
 					</div>
 				</div>
@@ -1424,8 +1508,29 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 	const [currentSlide, setCurrentSlide] = useState(0);
 
 	const slideTexts = data.slideTexts || [];
-	const images = data.processedImageUrls && data.processedImageUrls.length > 0 ? data.processedImageUrls : [data.backgroundUrl].filter(Boolean);
-	const totalSlides = slideTexts.length;
+	
+	// Try multiple possible image sources - check all possible fields
+	let images = [];
+	
+	if (data.processedImageUrls && data.processedImageUrls.length > 0) {
+		images = data.processedImageUrls;
+	} else if (data.backgroundUrl) {
+		images = [data.backgroundUrl];
+	} else if (data.selectedBackgroundUrl) {
+		images = [data.selectedBackgroundUrl];
+	} else if (data.imageUrl) {
+		images = [data.imageUrl];
+	} else if (data.url) {
+		images = [data.url];
+	} else {
+		// Fallback placeholder
+		images = ["https://placehold.co/1080x1920/171717/262626?text=Slideshow"];
+	}
+	
+	const totalSlides = Math.max(slideTexts.length, 1); // En az 1 slide göster
+	
+	// If no slide texts, create a fallback
+	const displaySlides = slideTexts.length > 0 ? slideTexts : [data.label || 'Generated Slideshow'];
 	
 	const nextSlide = () => {
 		setCurrentSlide(prev => (prev === totalSlides - 1 ? 0 : prev + 1));
@@ -1437,100 +1542,98 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 
 	return (
 		<div 
-			className="w-[280px] text-white font-sans relative group"
+			className="w-[180px] text-white font-sans relative group"
 		>
-			<Handle type="target" position={Position.Left} className="!w-6 !h-6 !bg-neutral-600 border-2 border-white" />
-			<Handle type="source" position={Position.Right} className="!w-6 !h-6 !bg-neutral-600 border-2 border-white" />
+			<Handle type="target" position={Position.Left} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
+			<Handle type="source" position={Position.Right} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
 			
-			{/* Title above the frame */}
-			<div className="mb-3 flex items-center gap-3 px-2">
-				<div className="p-2 bg-neutral-700/50 border border-neutral-600/50 rounded-lg">
-					<Slideshow size={16} className="text-neutral-300" />
-				</div>
-				<div>
-					<div className="font-bold text-sm text-neutral-100">{data.label || 'Generated Slideshow'}</div>
-					<div className="text-xs text-neutral-400">
-						Generated at {new Date(data.generatedAt).toLocaleTimeString()}
-					</div>
-				</div>
-			</div>
-
-			{/* Frame container */}
-			<div className="bg-gradient-to-br from-neutral-800 to-neutral-900 border-2 border-neutral-600/60 rounded-3xl shadow-2xl overflow-hidden relative">
-				{/* Frame inner shadow */}
-				<div className="absolute inset-0 rounded-3xl shadow-inner pointer-events-none" style={{
-					boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
-				}}></div>
-				
-				{/* Frame glow effect */}
-				<div className="absolute -inset-1 bg-gradient-to-br from-neutral-600/20 to-neutral-500/20 rounded-3xl blur-sm -z-10"></div>
-
-				{totalSlides > 0 ? (
-					<div className="relative w-full aspect-[9/16] rounded-3xl overflow-hidden">
-						{/* Slides Container - fills entire frame */}
-						<div className="w-full h-full overflow-hidden">
-							{slideTexts.map((text, index) => (
+			{/* Main slideshow container */}
+			<div className="bg-neutral-900/90 border border-neutral-700/50 rounded-2xl overflow-hidden shadow-xl" style={{ width: '180px', height: '320px' }}>
+				{totalSlides > 0 && images.length > 0 ? (
+					<div className="relative w-full h-full bg-neutral-800">
+						{/* Current slide */}
+						<div className="relative w-full h-full overflow-hidden">
+							{displaySlides.map((text, index) => (
 								<div
 									key={index}
-									className="absolute w-full h-full transition-opacity duration-500 ease-in-out"
-									style={{ opacity: index === currentSlide ? 1 : 0 }}
+									className="absolute w-full h-full transition-all duration-500 ease-in-out"
+									style={{ 
+										opacity: index === currentSlide ? 1 : 0,
+										transform: index === currentSlide ? 'translateX(0%)' : 'translateX(100%)'
+									}}
 								>
+									{/* Background image */}
 									<img
 										src={images[index] || images[0] || "https://placehold.co/1080x1920/171717/262626?text=No+Image"}
 										alt={`Slide ${index + 1}`}
 										className="w-full h-full object-cover"
 									/>
-									<div className="absolute inset-0 bg-black/40"></div>
-									<div className="absolute inset-0 p-6 flex items-center justify-center">
-										<p className="text-white text-lg font-bold text-center shadow-lg leading-snug drop-shadow-2xl">
-											{text}
-										</p>
+									
+									{/* Gradient overlay for better text readability */}
+									<div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/30"></div>
+									
+									{/* Text content with better positioning */}
+									<div className="absolute inset-0 p-3 flex flex-col justify-center items-center">
+										<div className="text-center max-w-[95%]">
+											<p className="text-white text-xs font-bold leading-tight drop-shadow-xl">
+												{text || `Slide ${index + 1}`}
+											</p>
+										</div>
 									</div>
 								</div>
 							))}
 						</div>
 
-						{/* Navigation Arrows */}
+						{/* Navigation controls */}
 						{totalSlides > 1 && (
 							<>
+								{/* Previous button */}
 								<button 
 									onClick={prevSlide} 
-									className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-lime-400/50 z-10"
+									className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/20 backdrop-blur-md text-white p-1 rounded-full hover:bg-white/30 transition-all focus:outline-none z-20 border border-white/20"
 								>
-									<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
 									</svg>
 								</button>
+								
+								{/* Next button */}
 								<button 
 									onClick={nextSlide} 
-									className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-lime-400/50 z-10"
+									className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/20 backdrop-blur-md text-white p-1 rounded-full hover:bg-white/30 transition-all focus:outline-none z-20 border border-white/20"
 								>
-									<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
 									</svg>
 								</button>
 							</>
 						)}
 
-						{/* Slide Indicators */}
-						<div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-10">
+						{/* Slide indicators */}
+						<div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-1 z-20">
 							{Array.from({ length: totalSlides }).map((_, index) => (
 								<button
 									key={index}
 									onClick={() => setCurrentSlide(index)}
-									className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+									className={`w-1.5 h-1.5 rounded-full transition-all duration-300 border border-white/30 ${
 										index === currentSlide 
-											? 'bg-white scale-125 shadow-lg shadow-white/50' 
+											? 'bg-lime-400 scale-125 shadow-lg' 
 											: 'bg-white/60 hover:bg-white/80'
 									}`}
 								></button>
 							))}
 						</div>
+
+						{/* Slide counter */}
+						<div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md text-white text-[10px] px-1.5 py-0.5 rounded-full border border-white/20">
+							{currentSlide + 1} / {totalSlides}
+						</div>
 					</div>
 				) : (
-					<div className="p-8 text-center text-neutral-400 text-sm">
-						<div className="border-2 border-dashed border-neutral-600 rounded-2xl p-8">
-							No slides were generated.
+					<div className="w-full h-full flex items-center justify-center text-neutral-400 text-sm">
+						<div className="text-center p-4">
+							<Slideshow size={24} className="mx-auto mb-2 text-neutral-500" />
+							<p className="text-xs">No slides available</p>
 						</div>
 					</div>
 				)}
@@ -1598,23 +1701,7 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 	}, [user]);
 
 	const handleDragStart = (e, content) => {
-		console.log('Dragging generated content:', content);
-		
-		// Set proper type based on activeTab and content
-		let contentType = 'generated-image';
-		if (activeTab === 'slideshows') {
-			contentType = 'generated-slideshow';
-		}
-		
-		const dragData = {
-			...content,
-			type: contentType,
-			sourceType: 'generated'
-		};
-		
-		console.log('Drag data being set:', dragData);
-		
-		e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+		e.dataTransfer.setData('text/plain', JSON.stringify(content));
 		e.dataTransfer.effectAllowed = 'copy';
 		
 		if (onDragStart) {
@@ -1754,24 +1841,33 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 												{/* Content Display */}
 												{activeTab === 'images' ? (
 													<img
+														draggable="false"
 														src={content.url || content.imageUrl}
 														alt={content.prompt || content.name || 'Generated Image'}
 														className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
 													/>
 												) : (
-													<div className="w-full h-full bg-gradient-to-br from-neutral-700 to-neutral-800 flex items-center justify-center">
-														{content.processedImageUrls && content.processedImageUrls.length > 0 ? (
-															<img
-																src={content.processedImageUrls[0]}
-																alt={content.topic || 'Generated Slideshow'}
-																className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-															/>
-														) : content.thumbnailUrl ? (
-															<img
-																src={content.thumbnailUrl}
-																alt={content.topic || 'Generated Slideshow'}
-																className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-															/>
+													<div className="w-full h-full bg-gradient-to-br from-neutral-700 to-neutral-800 flex items-center justify-center relative overflow-hidden">
+														{/* Try different possible image sources for slideshows */}
+														{(content.backgroundUrl || content.selectedBackgroundUrl || (content.processedImageUrls && content.processedImageUrls.length > 0)) ? (
+															<>
+																<img
+																	draggable="false"
+																	src={content.backgroundUrl || content.selectedBackgroundUrl || content.processedImageUrls?.[0]}
+																	alt={content.topic || 'Generated Slideshow'}
+																	className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+																/>
+																<div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+																	<div className="bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg">
+																		<p className="text-white text-[9px] font-medium text-center leading-tight max-w-[60px]">
+																			{content.slideTexts && content.slideTexts.length > 0 
+																				? content.slideTexts[0].slice(0, 30) + (content.slideTexts[0].length > 30 ? '...' : '')
+																				: content.topic || 'Slideshow'
+																			}
+																		</p>
+																	</div>
+																</div>
+															</>
 														) : (
 															<div className="text-center p-2">
 																<Slideshow size={20} className="text-neutral-400 mx-auto mb-1" />
@@ -2236,7 +2332,7 @@ const CanvasWorkspace = () => {
 					id: newNodeId,
 					type: 'slideshowResult',
 					position: {
-						x: sourceNode.position.x + (sourceNode.width || 340) + 150,
+						x: sourceNode.position.x + (sourceNode.width || 380) + 150,
 						y: sourceNode.position.y,
 					},
 					data: {
@@ -2253,8 +2349,8 @@ const CanvasWorkspace = () => {
 					id: newNodeId,
 					type: 'generatedFrame',
 					position: {
-						x: sourceNode.position.x,
-						y: sourceNode.position.y + (sourceNode.height || 400) + 150,
+						x: sourceNode.position.x + (sourceNode.width || 380) + 150,
+						y: sourceNode.position.y,
 					},
 					data: {
 						imageUrl: null,
@@ -2510,6 +2606,7 @@ const CanvasWorkspace = () => {
 		imageUpload: (props) => <ImageUpload {...props} onUpdateNode={updateNodeData} />,
 		videoUpload: (props) => <VideoUpload {...props} />,
 		generatedFrame: (props) => <GeneratedFrame {...props} />,
+		slideshowResult: (props) => <SlideshowResultNode {...props} />,
 		slideshow: (props) => (
 			<SlideshowNode 
 				{...props} 
@@ -2592,24 +2689,26 @@ const CanvasWorkspace = () => {
 		setDeleteMenu(null);
 	}, [deleteMenu]);
 
-	// Add drag and drop handlers for generated content
+	// Add drag and drop handlers for content (both generated and new nodes)
 	const handleContentDrop = useCallback((event) => {
 		event.preventDefault();
-		
-		console.log('Generated content dropped!', event);
+		event.stopPropagation();
 		
 		try {
-			const contentData = JSON.parse(event.dataTransfer.getData('application/json'));
-			console.log('Content data:', contentData);
+			const textData = event.dataTransfer.getData('text/plain');
+			
+			if (!textData) {
+				return;
+			}
+			
+			const contentData = JSON.parse(textData);
 			
 			if (!contentData || !reactFlowInstance) {
-				console.log('Missing content data or reactFlowInstance');
 				return;
 			}
 
 			const rect = reactFlowWrapper.current?.getBoundingClientRect();
 			if (!rect) {
-				console.log('No rect found');
 				return;
 			}
 
@@ -2617,54 +2716,46 @@ const CanvasWorkspace = () => {
 				x: event.clientX - rect.left,
 				y: event.clientY - rect.top,
 			});
-			console.log('Drop position:', position);
 
 			let newNode;
-			const nodeId = `generated-${Date.now()}`;
+			const nodeId = `node-${Date.now()}`;
 
-			if (contentData.type === 'generated-image') {
-				console.log('Creating generated image node');
+			// Handle generated content (existing content being reused)
+			if (contentData.type === 'image') {
 				newNode = {
 					id: nodeId,
 					type: 'generatedFrame',
 					position,
 					data: {
-						imageUrl: contentData.url || contentData.imageUrl,
-						prompt: contentData.prompt || contentData.name || 'Generated Image',
+						imageUrl: contentData.imageUrl,
+						prompt: contentData.prompt || contentData.originalPrompt || 'Generated Image',
 						type: 'image',
 						isGenerating: false,
-						generatedAt: contentData.createdAt?.getTime() || Date.now()
+						generatedAt: Date.now()
 					}
 				};
-			} else if (contentData.type === 'generated-slideshow') {
-				console.log('Creating generated slideshow node');
+			} else if (contentData.type === 'slideshow') {
 				newNode = {
 					id: nodeId,
-					type: 'generatedFrame',
+					type: 'slideshowResult',
 					position,
 					data: {
-						imageUrl: contentData.processedImageUrls?.[0] || contentData.thumbnailUrl,
-						prompt: contentData.topic || contentData.name || 'Generated Slideshow',
-						type: 'slideshow',
-						isGenerating: false,
+						label: contentData.topic || contentData.name || 'Generated Slideshow',
 						slideTexts: contentData.slideTexts || [],
+						backgroundUrl: contentData.backgroundUrl || contentData.selectedBackgroundUrl || contentData.processedImageUrls?.[0] || contentData.thumbnailUrl || contentData.url,
 						processedImageUrls: contentData.processedImageUrls || [],
 						generationId: contentData.id,
-						generatedAt: contentData.createdAt?.getTime() || Date.now()
+						generatedAt: Date.now(),
+						isGenerating: false
 					}
 				};
 			}
-
-			console.log('New node created:', newNode);
 			
 			if (newNode) {
 				setNodes((nds) => nds.concat(newNode));
-				console.log('Node added to canvas');
-			} else {
-				console.log('No node was created');
 			}
 		} catch (error) {
-			console.error('Error handling content drop:', error);
+			// Ignore non-JSON drops
 		}
 	}, [reactFlowInstance]);
 
@@ -2672,6 +2763,8 @@ const CanvasWorkspace = () => {
 		event.preventDefault();
 		event.dataTransfer.dropEffect = 'copy';
 	}, []);
+
+
 
 	return (
 		<div className="w-full h-screen relative overflow-hidden" ref={reactFlowWrapper}>
@@ -2684,38 +2777,38 @@ const CanvasWorkspace = () => {
 			/>
 
 			<ReactFlow
-					nodes={nodes}
-					edges={edges}
-					onNodesChange={onNodesChange}
-					onEdgesChange={onEdgesChange}
-					onConnect={onConnect}
-					onInit={setReactFlowInstance}
-					onNodeDragStart={onNodeDragStart}
-					onNodeDrag={onNodeDrag}
-					onNodeDragStop={onNodeDragStop}
-					onSelectionChange={onSelectionChange}
-					nodeTypes={nodeTypes}
-					onPaneClick={onPaneClick}
-					onPaneContextMenu={onPaneContextMenu}
-					onNodeContextMenu={onNodeContextMenu}
-					onDrop={handleContentDrop}
-					onDragOver={handleContentDragOver}
-					className="bg-neutral-950"
-					style={{ width: '100%', height: '100vh' }}
-					zoomOnScroll={!isAnyDropdownOpen}
-					zoomOnPinch={!isAnyDropdownOpen}
-					panOnScroll={false}
-					selectionOnDrag={!isAnyDropdownOpen}
-					panOnDrag={!isAnyDropdownOpen}
-					selectionKeyCode={'Shift'}
-					minZoom={0.1}
-					defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-					snapToGrid={true}
-					snapGrid={[24, 24]}
-					proOptions={{ hideAttribution: true }}
-				>
-					<Background variant="dots" gap={24} size={1.5} color="#606060" />
-				</ReactFlow>
+				nodes={nodes}
+				edges={edges}
+				onNodesChange={onNodesChange}
+				onEdgesChange={onEdgesChange}
+				onConnect={onConnect}
+				onInit={setReactFlowInstance}
+				onNodeDragStart={onNodeDragStart}
+				onNodeDrag={onNodeDrag}
+				onNodeDragStop={onNodeDragStop}
+				onSelectionChange={onSelectionChange}
+				nodeTypes={nodeTypes}
+				onPaneClick={onPaneClick}
+				onPaneContextMenu={onPaneContextMenu}
+				onNodeContextMenu={onNodeContextMenu}
+				onDrop={handleContentDrop}
+				onDragOver={handleContentDragOver}
+				className="bg-neutral-950"
+				style={{ width: '100%', height: '100vh' }}
+				zoomOnScroll={!isAnyDropdownOpen}
+				zoomOnPinch={!isAnyDropdownOpen}
+				panOnScroll={false}
+				selectionOnDrag={!isAnyDropdownOpen}
+				panOnDrag={!isAnyDropdownOpen}
+				selectionKeyCode={'Shift'}
+				minZoom={0.1}
+				defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+				snapToGrid={true}
+				snapGrid={[24, 24]}
+				proOptions={{ hideAttribution: true }}
+			>
+				<Background variant="dots" gap={24} size={1.5} color="#606060" />
+			</ReactFlow>
 
 				{/* Right-click/Double-click menu for creating nodes */}
 				{menu && (

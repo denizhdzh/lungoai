@@ -212,6 +212,7 @@ function Layout() {
   // --- NEW: State for Create+ Dropdown and Creation Mode ---
   const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
   const [creationMode, setCreationMode] = useState(null); // 'video', 'image', 'slideshow', 'schedule'
+
   const dropdownHoverTimeoutRef = useRef(null); // For delayed close on trigger leave
   const menuHoverTimeoutRef = useRef(null); // For delayed close on menu leave
 
@@ -1306,6 +1307,7 @@ function Layout() {
             <div className="flex items-center justify-between h-16 px-6 max-w-screen-2xl mx-auto">
             {/* Left: Logo and Navigation */}
             <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
               <button 
                 onClick={() => navigate('/')}
                 className="flex items-center group"
@@ -1316,25 +1318,29 @@ function Layout() {
                 <span className="ml-1 text-xs text-lime-500 font-medium">AI</span>
               </button>
               
+              {/* Creation Mode Button */}
               <button
                 onClick={() => navigate(isCanvasPage ? '/' : '/studio')}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                   isCanvasPage 
-                    ? 'bg-lime-500 text-black hover:bg-lime-400 shadow-md' 
+                    ? 'text-lime-500 hover:text-lime-400' 
                     : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                 }`}
               >
-                <Sparkle size={16} className={isCanvasPage ? 'text-black' : ''} />
+                <Sparkle size={16} className={isCanvasPage ? 'text-lime-500' : ''} />
                 <span className="flex items-center gap-1">
                   Creation Mode
-                  {isCanvasPage && (
-                    <span className="ml-1 text-xs px-1.5 py-0.5 bg-black/20 rounded-md font-semibold">
-                      ON
-                    </span>
-                  )}
+                  <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-md font-semibold ${
+                    isCanvasPage 
+                      ? 'bg-lime-500/20 text-lime-500' 
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400'
+                  }`}>
+                    {isCanvasPage ? 'ON' : 'OFF'}
+                  </span>
                 </span>
               </button>
               </div>
+            </div>
               
             {/* Center: Dynamic Island on Canvas page */}
               <div className="flex-1 flex justify-center">
@@ -1413,6 +1419,9 @@ function Layout() {
                   </div>
                 </>
                 )}
+                
+
+                
               <div className="relative group">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -1428,8 +1437,8 @@ function Layout() {
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   Settings
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
+                </div>
               </div>
-            </div>
               
               <div className="relative group">
                 <motion.button

@@ -5,6 +5,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import
 const { onObjectFinalized } = require("firebase-functions/v2/storage"); // <<< ADDED THIS LINE
 const { logger } = require("firebase-functions");
 const { OpenAI, toFile } = require("openai");
+const Replicate = require("replicate");
 // const { GoogleGenerativeAI } = require("@google/generative-ai"); // Removed - using Vertex AI instead
 // Using direct API calls instead of VertexAI constructor
 const admin = require("firebase-admin");
@@ -590,43 +591,199 @@ function getImageSetRulesByFrameId(frameId) {
                  }
              }
          },
-         'wide_angle_pov': {
-             name: 'Wide-Angle POV Walk',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "Modern smartphone with ultra-wide lens or action camera (e.g. GoPro) with wide field of view",
-                     focal_length_mm: "13mm to 18mm equivalent (ultra-wide angle for distinctive distortion and immersive POV)",
-                     aperture_range: "f/1.8 - f/2.4 (smartphone or action cam default for ultra-wide)",
-                     focus_mode: "Fixed focus or autofocus, focus point usually on subject's face or upper torso; depth of field is extremely large",
-                     framing: "Shoot from slightly above or at head level; arm extended fully with camera facing subject (classic 'walk-and-hold-hands' or selfie-follow POV). The holding hand/arm is prominent in the foreground, stretching toward the camera, subject takes up lower two-thirds of the frame.",
-                     orientation: "Portrait orientation standard (for Instagram Reels/Stories/TikTok), occasional landscape for cinematic effect.",
-                     camera_position: "Handheld, arm fully extended, camera 30–50cm from the subject's face. Downward diagonal or straight above eye-level angle creates dynamic composition."
-                 },
-                 location_and_background: {
-                     setting: "Outdoor urban or park environments: residential streets, busy sidewalks, city parks, green lawns. Ample depth between subject and background enhances wide look.",
-                     background_elements: "Urban buildings, streets, trees, benches, parked cars, city signs—everything kept natural and un-staged. Environmental context is important and always visible.",
-                     background_blur: "None; ultra-wide lens and large depth of field keep all elements in sharp focus.",
-                     depth_of_field: "Extremely deep; subject, hand, arm, and environment all clearly resolved."
-                 },
-                 lighting: {
-                     lighting_type: "Natural daylight, bright sun or open shade. Light direction creates clear rim or facial highlights and natural shadows.",
-                     white_balance: "Auto, typically 5000-6500K (daylight calibrated)",
-                     exposure_compensation: "Auto; face-optimized exposure with some tolerance for blown sky or strong shadow",
-                     ISO_setting: "ISO 30–150 (smartphone daylight base ISO; exceptionally clean)",
-                     shutter_speed: "1/500 to 1/2000s to prevent motion blur from walking or sudden arm movement"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Casual, relaxed, or playful walking stance. Arm extended forward, sometimes holding a drink, keys, or small object; the hand/arm lead toward the camera exaggerates the POV effect.",
-                     facial_expression: "Natural, smiling, focused ahead or making direct soft eye contact with camera; sometimes neutral or contemplative. Expression is unstaged and authentic.",
-                     gaze_direction: "Looking at camera or forward, rarely away; the emphasis is on the feeling of shared activity."
-                 },
-                 fashion_and_style: {
-                     clothing: "Simple or trendy urban/casual: crop tops, headphones, loose pants, cardigans or light coats, sunglasses, tote bags, sneakers.",
-                     accessories: "Prominent headphones, sunglasses, jewelry, tote bags, coffee cups.",
-                     hair: "Loose, natural, flowing with some movement from walking."
-                 }
-             }
-         },
+
+
+      'fish_eye_selfie_urban': {
+  name: 'Urban Fisheye Selfie Drama',
+  rules: {
+    composition_and_perspective: {
+      camera_type: "Professional digital camera or analog body with a genuine circular fisheye lens (8mm–12mm full-frame equivalent) OR action camera (GoPro, etc.) in strict selfie mode. No post-crop or digital emulation – authentic optical barrel distortion only.",
+      focal_length_mm: "Exactly 8–12mm focal length on full-frame sensor, generating extreme barrel distortion; subject’s facial features and limbs must expand and warp aggressively towards lens edges.",
+      aperture_range: "Wide open to moderately stopped (f/2.8–f/4), maximizing depth of field; every foreground and background element absolutely tack sharp across frame.",
+      focus_mode: "Manual or reliable autofocus locked at very close range (subject’s face/hand almost touching the lens). There must be no blur; both central and edge elements rendered in full clarity.",
+      framing: "Ultra-tight bust or chest-up composition, with face overpoweringly dominating center; one arm stretched out to top/side corner, hand enlarged/distorted by proximity. Strongly forced perspective: face and hand exaggeratedly prominent, corners heavily curved.",
+      orientation: "Portrait (vertical) format is mandatory. Camera must be slightly canted/tilted, imparting dynamic, handheld immediacy. Viewer should viscerally sense the arm extension and aggressive spatial engagement.",
+      camera_position: "Camera at maximum arm’s reach, slightly above eye-line, angled down towards subject for confrontational, immersive perspective; lens directly faces subject, but is offset just enough to amplify the distortion."
+    },
+    location_and_background: {
+      setting: "Harsh city exterior: rough concrete, cracked ground, metallic roll-down doors as primary backdrop.",
+      background_elements: "Explosively vivid graffiti in hyper-saturated tones (red, blue, yellow). All metallic and painted textures crisp, with sidewalk grit and cracks visible. Graffiti and urban lines kaleidoscopically warped at frame edges, bending around subject.",
+      background_blur: "None allowed. Optical fisheye guarantees complete edge-to-edge sharpness, with pronounced curvature. No artificial bokeh.",
+      depth_of_field: "Absolute; all planes–hand, face, background–in simultaneous, flawless focus."
+    },
+    lighting: {
+      lighting_type: "Intense, overhead midday sun; extremely hard light, with sculpted, darkest shadows and blown-out highlight zones on skin. Every contour (brow, nose, jaw, lips, hair strands) sharply delineated.",
+      white_balance: "Daylight (5000–6000K). Color profile must maximize separation: skin glows, graffiti hues explode, and the overall palette is cranked to high contrast. Warm bias for skin, but full spectrum in background.",
+      exposure_compensation: "Slightly positive (+0.2EV); highlights permitted to clip just on the face and arm, especially where sunlight hits directly. Shadows remain deep but not underexposed; overall DR is unforgiving.",
+      ISO_setting: "Low (ISO 100–200); ultra-clean, every skin pore or wall imperfection should register crisply.",
+      shutter_speed: "Very fast (1/1000s and above). No motion blur anywhere - subject, accessories, and even dust or ground textures perfectly frozen."
+    },
+    subject_pose_and_expression: {
+      poses: "Subject close enough to lens to exaggerate facial features; head dropped slightly and tilted towards the lens, for a hyper-assertive feel. Arm thrust up into the frame, hand occupying the top-left or top-right corner, fingers splayed/wrist bent to further dramatize proximity distortion.",
+      facial_expression: "Gaze is direct, piercingly intense, lips subtly parted, brow fractionally furrowed. Expression should convey confrontation, self-assurance, even defiance.",
+      gaze_direction: "Subject's eyes must lock laser-like with the lens–audience feels stared down, challenged, drawn in visually and emotionally."
+    },
+    fashion_and_style: {
+      clothing: "Thin, fitted, white tank top (slightly translucent in harsh sun). Jewelry: stacked gold/metal bangles high on forearm, shining in sunlight.",
+      accessories: "Minimal to no makeup, skin shown as is. Hair loose, wild, and voluminous; waves catching and scattering light, some strands casting shadows on face.",
+      hair: "Long, prominent natural curls/waves, sunlit copper/gold highlights vivid against darker roots. Overall look: spontaneous, raw, unfiltered urban energy and authenticity."
+    }
+  }
+},
+
+    'y2k_flash_pop': {
+    name: 'Y2K Flash Pop Street Portrait',
+    rules: {
+        composition_and_perspective: {
+            camera_type: "Authentic early 2000s compact digital (e.g., Canon IXUS/PowerShot, Nikon Coolpix, Sony Cyber-shot) or entry-level DSLR of that era, with visible built-in pop-up flash. Strictly no modern bodies/lens corrections.",
+            focal_length_mm: "38mm to 50mm equivalent (standard to slightly wide; moderate field of view, distinctly NOT ultra-wide); optical zoom at default or 1–2×, never digital.",
+            aperture_range: "f/2.8–f/4.5, as typical for these compact built-in lenses; maintains moderate depth of field and supports sharp flash-lit subject rendering.",
+            focus_mode: "Single shot autofocus, with classic early-2000s margin of error—focus must land on the subject’s eyes or upper face, but slight softness or missed focus on surroundings is acceptable and even preferred for authenticity.",
+            framing: "Waist-up (torso-dominant), tight vertical/portrait orientation, subject centered with crowd partially cropped at edges for that snapshot, slightly rushed feel. Minimal empty space; presence is immediate and immersive.",
+            orientation: "Strictly upright/vertical (portrait), hand-held, possibly with subtle camera shake or tilt indicating candid, fast execution amidst crowd.",
+            camera_position: "Lens at or slightly above subject's eye level, camera angled down just slightly, extremely close to subject (within 1–1.5 meters), as if shot rapidly while navigating a dense street scene."
+        },
+        location_and_background: {
+            setting: "Congested city crosswalk or intersection at dusk—scene is unmistakably urban, flooding with pedestrians and city signage.",
+            background_elements: "Dense, blurred crowd in motion; city signage glowing, traffic lights (e.g. noticeably illuminated green circle), reflective windows, storefront facades. Background figures partially streaked with motion blur and flash-shadow interaction.",
+            background_blur: "Distinctive background blur from subject movement and slow sync flash, not optical bokeh. People in background are ghosted, moving, sometimes smeared, yet identifiable in silhouette.",
+            depth_of_field: "Moderate—sharpest focus on main subject’s face/shoulders, background detail lost to crowd movement and mild digital noise, NOT lens blur."
+        },
+        lighting: {
+            lighting_type: "On-camera, direct built-in pop-up flash. Flash is harsh, revealing every pore and detail of the subject’s illuminated face, with evident overexposed highlights (e.g., on skin or any reflective accessory like cell phone screens). Background remains in moody, natural ambient light with significant contrast between subject and environment.",
+            white_balance: "Auto or default daylight (often with faint blue/green tinge and obvious digital color noise), producing colder highlights and a nostalgic, slightly plastic Y2K skin tone.",
+            exposure_compensation: "Zero (0EV); accept overblown highlights and sharp-edged flash shadows, especially under chin and behind subject. Hotspots on metallic or glass surfaces are explicit and unfiltered.",
+            ISO_setting: "ISO 100–400 typical for compacts; mild visible digital grain or color noise in shaded background areas and on darker clothing. Never waxy-smooth or noise-reduced.",
+            shutter_speed: "1/60s–1/125s with slow-sync flash enabled. Subject is perfectly frozen by flash; crowd movement renders as dynamic blur/ghosts, especially around edges."
+        },
+        subject_pose_and_expression: {
+            poses: "Subject standing upright, almost stationary or just finishing a stride. Shoulders squared, casual posture, hands visible (one often holding a phone reflecting flash). Main figure should punch out from the crowd as a crisp, static focal point.",
+            facial_expression: "Neutral, relaxed, or subtly dreamy; eyes open, gaze soft or just off-camera. Face partially touched by stray hair, with an understated, authentic, slightly glazed expression.",
+            gaze_direction: "Looking softly or blankly just past or into the lens—never forced, always naturalistic and a little aloof. Candid, not theatrical."
+        },
+        fashion_and_style: {
+            clothing: "Strict early-2000s/Y2K: oversized black or dark leather jacket with pronounced shoulder structure; layered with metallic or gray scarf, muted top. All textures (leather, satin/scarf) must be unmistakably crisp under flash.",
+            accessories: "Minimalist but bold: large geometric or metallic earrings (must reflect some flash), visible smartphone with on-screen flash glare, barely-there natural makeup (ivory/frosted highlights allowed).",
+            hair: "Short to shoulder-length, natural texture, parted in the center or off-center. Slightly windblown, a few loose strands crossing face, with both softness and volume highlighted by harsh flash."
+        }
+    }
+},
+
+    'elevator_mirror_selfie': {
+name: 'Elevator Mirror Flex',
+rules: {
+composition_and_perspective: {
+camera_type: "Modern smartphone with high-resolution front or rear camera, used for mirror capture",
+focal_length_mm: "24mm–28mm equivalent (wide smartphone lens, slight barrel distortion at edges possible)",
+aperture_range: "f/1.6–f/2.4 (typical of smartphone main lenses, allows for sharp foreground and some depth)",
+focus_mode: "Auto-focus on mirror image, ensuring subject is in crisp detail with potential for soft background reflections",
+framing: "Three-quarter to full-body portrait, subject centered or slightly off-center, headroom visible, entire body/pose reflected in mirror",
+orientation: "Vertical (portrait orientation), hand-held; shot naturally with arm extended holding phone visible or partly visible",
+camera_position: "Phone held at chest, chin or eye level, angled slightly to avoid flash bounce, self-composed in real-time"
+},
+location_and_background: {
+setting: "Enclosed elevator with metallic or mirrored walls, industrial and minimal vibe",
+background_elements: "Scratched, brushed metal surfaces, visible lines/seams of elevator panels, safety labels/signs, overhead fluorescent or LED lighting",
+background_blur: "Minimal—mirror and metallic background remain sharp, with occasional soft flaring from reflective surfaces",
+depth_of_field: "Wide; everything from subject and mirror to background in focus due to smartphone sensor and environment"
+},
+lighting: {
+lighting_type: "Overhead fluorescent or cool LED lights typical of elevators; creates strong vertical highlights and reflections",
+white_balance: "Cool white (~4000–5000K), neutral to slightly blue/cold tint from metallic surroundings",
+exposure_compensation: "0EV; subject well-lit, possible hotspots on metallic surfaces, shadows under jaw and brows natural",
+ISO_setting: "Automatic, low to moderate ISO for clarity with some digital noise in low-lit elevators",
+shutter_speed: "Fast enough for sharp subject and visible reflections; handheld stability"
+},
+subject_pose_and_expression: {
+poses: "Casual but bold, one leg bent or up on wall/bench, confident posture; one hand holding phone, other adjusting clothing/accessory or posed naturally",
+facial_expression: "Relaxed, focused or cool; often partially obscured by phone, shades or slightly averted gaze",
+gaze_direction: "Looking at phone's screen in the mirror, not always directly at the camera lens"
+},
+fashion_and_style: {
+clothing: "Fashion-forward coordinated set or suit (e.g. matching jacket and pants), elevated streetwear, neutral or monochrome tones",
+accessories: "Chunky shoes or boots, rings, earrings, statement sunglasses, modern phone as functional accessory",
+hair: "Trimmed, sharp, and neatly styled to project confidence and self-awareness"
+}
+}
+},
+
+
+'yum_moment_diaries': {
+    name: 'Yum Moment Diaries',
+    rules: {
+        composition_and_perspective: {
+            camera_type: "Modern top-tier smartphone (iPhone 13 Pro/Pixel 7/Galaxy S series etc.) or high-end compact digital (Sony RX100 etc.), shot *only* with native camera app, utilizing Portrait or Standard Photo mode. Strictly handheld, never tripod.",
+            focal_length_mm: "24mm–28mm equivalent for the majority (standard wide lens; no tele crop, no ultrawide); provides slight natural facial flattering, authentic field-of-view feel for dining context.",
+            aperture_range: "Smartphone-native f/1.8–f/2.4, or compact’s f/1.8–f/2.8, to ensure high subject/background separation when possible: crisp food and face, subtle but *never artificial* computational blur.",
+            focus_mode: "High-speed face/eye/smile/subject-detection autofocus. Both face and food (in-hand or being eaten) must be razor sharp. Any background softness comes only from physical or direct digital bokeh, not focus miss.",
+            framing: "Perfectly centered or just off-center for lively candor, with bust-up to mid-waist portrait framing. Food is always clearly visible, never obscured—typically held within 15cm of mouth, hand or chopsticks present, eating gesture *mid-action* (lifting, slurping, prepping for bite, mouth mid-open). No static, awkward or paused poses.",
+            orientation: "Almost always vertical (portrait) format, echoing Instagram/TikTok Reels; occasional true square is permitted if clearly composed for social snapshot (1:1 aspect ratio visible).",
+            camera_position: "Camera leveled precisely with or just above subject’s eyes; never too high. Shot across table, arm’s length (selfie), or by companion shooting from direct, intimate eating distance. Point of view must communicate shared moment—never distanced, voyeuristic, or posed for perfection."
+        },
+        location_and_background: {
+            setting: "Lively, visually layered real-world dining: neon-lit open-air markets, cozy bistro interiors, warm-lit home tables with visible city view, bustling restaurants, or late-night curbside street food stands. Outdoor shots clearly telegraph night or magic hour ambiance.",
+            background_elements: "Backgrounds must show context: string/fairy lights, plate stacks, glowing street signs, cozy indoor lighting (lamps, candles), visible dusk/city skyline through glass, fellow diners. Visual information is rich, *never staged-empty or generic*.",
+            background_blur: "Soft and organic; shallow DOF from wide aperture, or subtle computational portrait blur typical of premium phone cameras. Depth haze is gentle, never excessive, with face/food always pin-sharp.",
+            depth_of_field: "Moderate—foreground (subject and food) *absolutely sharp*; background softened just enough to ensure intimacy and visual separation while maintaining environmental detail."
+        },
+        lighting: {
+            lighting_type: "100% practical and environmental lighting: table lamps, restaurant pendant bulbs, neon/building signs, string/fairy lights, or bright picture windows. On-camera smartphone flash used *very* subtly for subtle fill *only* at night—never as direct harsh source.",
+            white_balance: "Strict 3000–4000K indoors (soft, golden, natural skin/food tones), 5000–6000K outdoor daylight or high-rise night scenes (neutral, slightly blue city glow). Indoor scenes often exhibit cozy yellow highlight burn.",
+            exposure_compensation: "0EV or +0.3EV. Skin and food may gently clip highlights near practical bulbs or neon but must never look harsh. Natural shadows are preserved, imparting warm, lived-in, appetizing mood.",
+            ISO_setting: "Automatic, typically < ISO 1200 indoors at night or ISO 100–400 daylight/café. Gentle, refined sensor noise/grain in dim settings is embraced for atmosphere, *never strongly denoised or plastic*.",
+            shutter_speed: "1/60s–1/200s, always fast enough to *freeze* eating gestures but permitting extremely slight motion blur on noodles or utensils, reflecting real-life movement."
+        },
+        subject_pose_and_expression: {
+            poses: "Mid-action only: fork twirling, chopsticks to lips, noodles just about to slurp, full bite in progress, taco or sushi poised for taste. Arm and hand position is relaxed, never posed—elbows close to body, shoulders natural.",
+            facial_expression: "Unselfconscious enjoyment or anticipation: closed eyes with savor, lips partly open, cheeks slightly puffed, toothy or closed-mouth smile, or gentle ‘eating in progress’ focus. Always authentic and candid—no forced grins, staged duckfaces, or exaggerated commercial tropes.",
+            gaze_direction: "Often downward toward food in hand, bowl/plate, or gaze softly off-camera at companions, with only the occasional, spontaneous look toward camera for a captured-in-moment, vibrant, unposed energy."
+        },
+        fashion_and_style: {
+            clothing: "Effortless daily elegance: cozy knits, neutral blouses/shirts, subtle prints, oversized blazers or tailored jackets, casual chic tanks or long-sleeve tops. Main color tones muted, earth-inspired, or naturally patterned—absolutely no flashy logos or mismatched brights.",
+            accessories: "Minimal—simple metallic earrings, delicate chains, *very occasional* sunglasses (on head/outdoors only), subtle AirPods or headphones (for a home, ‘winding down’ scene only), and everyday rings. Jewelry is never the focus.",
+            hair: "Naturally styled to match the vibe: loose and tousled, tied back for practicality, sometimes accessorized with a subtle clip or bun. Zero hard gel, helmet-hair, or overdone looks—must *read* as fresh, relaxed, and conducive to eating."
+        }
+    }
+},
+
+'selfcare_bliss_aesthetic': {
+    name: 'Selfcare Bliss Aesthetic',
+    rules: {
+        composition_and_perspective: {
+            camera_type: "Smartphone front camera or mirrorless with flip screen; preference for sensors that capture vivid sunlight and skin texture",
+            focal_length_mm: "22mm to 26mm equivalent (slight distortion for beach openness, ideal for wide but flattering facial focus)",
+            aperture_range: "f/1.8 - f/2.2 (shallow depth of field, sunlight diffusion on subject)",
+            focus_mode: "Face-priority autofocus; ensures facial clarity with gentle highlight transitions on hair and background sand dunes",
+            framing: "Medium crop, subject centered or rule-of-thirds aligned; includes upper body or seated pose, balanced to feature environment and person equally",
+            orientation: "Portrait orientation (vertical), slight upward tilt to capture sky and landscape; natural selfie perspective",
+            camera_position: "Handheld or surface-propped; arm’s length, ~60–80 cm; angled to capture beachscape layers (sand, sky, props) in parallel with facial glow"
+        },
+        location_and_background: {
+            setting: "Beachside in daylight; open skies, sandy textures, minimal clutter; natural slopes or dunes adding organic structure",
+            background_elements: "Bright skies with scattered clouds, sloping sandbanks, occasional surfboard or towel, natural gradients from sand to sky; soft shadows or none at all",
+            background_blur: "Mild computational blur or default lens falloff; environment still readable but not sharp",
+            depth_of_field: "Moderate; clear subject focus, soft gradient background with subtle sunlight haze for dreamy vibe"
+        },
+        lighting: {
+            lighting_type: "Full-spectrum natural sunlight (late morning to mid-afternoon), ideal for casting warm glow on skin and sand",
+            white_balance: "Auto, nudged toward warm (5200–5800K); golden undertones that enhance skin and hair vibrancy",
+            exposure_compensation: "+0.3EV to +1EV; high-key aesthetic with glowy skin, visible but softened highlights on cheeks and forehead",
+            ISO_setting: "Low ISO 50–200 to retain clarity and preserve sand texture and sky gradients",
+            shutter_speed: "1/250s to 1/800s (freeze subtle movements like hair strands or breezy clothing)"
+        },
+        subject_pose_and_expression: {
+            poses: "Casual and sunkissed; seated, one knee up or cross-legged; leaning slightly, hair swept naturally; hand resting on leg or touching hair",
+            facial_expression: "Subtle half-smile or soft grin, relaxed jawline; expression reads warm, breezy, approachable",
+            gaze_direction: "Mostly toward camera or gently angled; eye contact should feel candid, not posed"
+        },
+        fashion_and_style: {
+            clothing: "Relaxed beachwear: oversized graphic tee (e.g., Polo logo visible), natural shorts or bikini bottom barely peeking; neutral tones or navy for contrast",
+            accessories: "Minimal jewelry like a bead necklace or simple bracelet; no heavy makeup—sun-kissed natural skin, visible freckles welcome",
+            hair: "Wind-ruffled, tousled layers; parted loosely or falling forward; no visible styling product—texture should reflect breeze and humidity"
+        }
+    }
+},
+
          'late_night_lofi': {
              name: 'Late Night Lo-Fi Vibes',
              rules: {
@@ -702,42 +859,42 @@ function getImageSetRulesByFrameId(frameId) {
              }
          },
          'solo_snap_vibe': {
-             name: 'Solo Snap Vibe',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "Smartphone front camera or digital compact camera with LCD/preview screen",
-                     focal_length_mm: "22mm to 28mm equivalent (standard smartphone wide front camera or compact)",
-                     aperture_range: "f/2.0 - f/2.4 (smartphone norm, medium depth of field)",
-                     focus_mode: "Autofocus or fixed focus, always on face",
-                     framing: "Loose close-up or medium crop (shoulders-up to waist-up), centered or slightly off-center. Subject dominant in frame, background not too tight.",
-                     orientation: "Portrait orientation (vertical), camera directly in front, slight downward angle if handheld",
-                     camera_position: "Handheld at arm's length or resting on stable surface. Subject distance: 40-70cm from lens."
-                 },
-                 location_and_background: {
-                     setting: "Casual environments: indoors (cafes, restaurants, bedrooms), or outdoor (beach, park, backyard).",
-                     background_elements: "Simple, slightly blurred, but recognizable real-life context: furniture, lights, sand, sky. No staged backdrops. Practical lighting fixtures (ceiling spotlights, ambient sun, etc.).",
-                     background_blur: "Minimal; smartphone default DOF so background is present but not distracting.",
-                     depth_of_field: "Moderate; face clearly in focus, background with gentle falloff if any."
-                 },
-                 lighting: {
-                     lighting_type: "Natural daylight, window light, or ambient indoor light (ceiling fixtures, no flash, no harsh spotlighting)",
-                     white_balance: "Auto, tuned for accurate skin tones (approx. 4300–6000K; neutral to warm indoors, natural daylight outdoors)",
-                     exposure_compensation: "0EV to +1EV (well-lit faces, soft highlights, light shadow details retained)",
-                     ISO_setting: "ISO 100–500 depending on light, minimal visible noise",
-                     shutter_speed: "1/60s to 1/200s (sharp for handheld, no motion blur)"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Relaxed, casual, natural posture; sitting, hand in hair, chin resting on hand, slight lean, cross-legged. Snap captures a spontaneous moment, not a studio pose.",
-                     facial_expression: "Subtle smile, half-smile, neutral or daydreaming; genuine, authentic, not exaggerated.",
-                     gaze_direction: "Direct at the lens or slightly away, as if lost in thought or sharing the moment."
-                 },
-                 fashion_and_style: {
-                     clothing: "Easy casual or loungewear: tees, sweaters, simple dresses, subtle necklaces. No heavy styling, just presentable daily style.",
-                     accessories: "Minimal: dainty jewelry, natural makeup if any.",
-                     hair: "Loose, slightly tousled or naturally styled, split/side parts, not salon polished."
-                 }
-             }
-         },
+    name: 'Solo Snap Vibe',
+    rules: {
+        composition_and_perspective: {
+            camera_type: "Front-facing smartphone camera (flagship tier) or digital compact camera with real-time LCD framing",
+            focal_length_mm: "24mm eq. (smartphone wide lens standard), no digital zoom",
+            aperture_range: "f/2.2 – f/2.4, fixed smartphone lens; enough depth for face detail, subtle rolloff behind",
+            focus_mode: "Continuous autofocus with face priority; must maintain micro-sharpness on eyes under natural motion",
+            framing: "Medium-loose close-up; subject fills 60–70% of vertical frame. Head near top third, arms visible, posture relaxed but central",
+            orientation: "Portrait mode only; camera slightly above eyeline, angled down 5–10 degrees to preserve natural chin-to-eye ratio",
+            camera_position: "Arm's-length handheld, resting elbow on thigh or ground if seated; subject-lens distance between 50–65cm precisely"
+        },
+        location_and_background: {
+            setting: "Outdoor natural light setting—beach, dunes, light-toned sand with blue sky overhead. No crowds, open space",
+            background_elements: "Recognizable real-world textures: soft dune gradients, beach towel, distant sky horizon, maybe an object like a kayak but blurred",
+            background_blur: "No artificial portrait blur; use native optical or computational depth (faux-bokeh not allowed)",
+            depth_of_field: "Slight, smartphone-emulated DoF—subject in full focus, background readable but soft-edged"
+        },
+        lighting: {
+            lighting_type: "Diffuse daylight with soft shadows—no direct midday sun. Natural light from sun at high angle, no backlighting or harsh glare",
+            white_balance: "Auto or daylight preset (~5500K), tuned for vivid blues, sand tone accuracy, and neutral skin",
+            exposure_compensation: "+0.3EV to +0.7EV: intentional overexposure on skin to retain warmth and clarity in midtones",
+            ISO_setting: "ISO 35–100 in daylight, must retain shadow detail on face and arms without visible noise",
+            shutter_speed: "1/100s minimum to freeze movement, subject must appear tack-sharp despite any minor hand tremors"
+        },
+        subject_pose_and_expression: {
+            poses: "Seated on sand, one leg bent; natural lean toward camera. Shoulders relaxed, back not rigid. Arm casually touching leg or resting on towel",
+            facial_expression: "Subtle, friendly half-smile; mouth gently closed or slightly parted. No forced grin or model gaze—must feel like a candid moment",
+            gaze_direction: "Directly into camera lens or slightly off to the side as if distracted by something nearby; no fixed stare"
+        },
+        fashion_and_style: {
+            clothing: "Dark navy graphic tee (e.g., Ralph Lauren logo), soft cotton texture. No stylized outfit—basic, everyday wear",
+            accessories: "Simple bead necklace and pearl stud earrings; minimal makeup, skin glow from lighting not cosmetics",
+            hair: "Natural blonde tones, parted center or off-center; wind-touched texture with flyaways visible, no heavy smoothing or product"
+        }
+    }
+},
          'warm_moments': {
              name: 'Warm Moments',
              rules: {
@@ -865,9 +1022,9 @@ function getGeneralRulesForUGC() {
         white_balance: "Neutral or slightly warm. No unnatural color casts.",
         contrast: "Moderate to low. Details must be visible in both shadows and highlights. No harsh lights or exaggerated contrast.",
         lighting: "Soft, ambient, diffuse. Use daylight, window light, or indirect interior lighting. No heavy flash or dramatic shadows. Natural daylight, gentle household bulbs, sometimes neon, but never theatrical lighting.",
-        camera: "Casual digital (compact camera or smartphone look). No high-end DSLR or cinematic sharpness. Slight grain in low light is acceptable. Mild background blur if subject is close, but majority of frame generally in focus. Never extreme bokeh.",
+        camera: "Casual digital (compact camera or smartphone look). No high-end DSLR or cinematic sharpness. Slight grain in low light is acceptable. Everything in frame must be sharp and in focus - no background blur allowed. Never extreme bokeh or any depth of field effects.",
         composition: "Subject is often centered or slightly off. Allow natural cropping (edges cut, not fully within frame). Frame fills with subject, avoid excessive negative space. Eye-level or slightly above. Mix of close-up and full-body shots. Occasional dynamic tilt, but should always feel candid.",
-        background: "Authentic urban streets, cafes, rooms, elevators, cars, natural locations. Visual information is present but never cluttered. Subtle blur allowed, especially if subject is in foreground. Never overly artificial or digital blur.",
+        background: "Authentic urban streets, cafes, rooms, elevators, cars, natural locations. Visual information is present but never cluttered. Background must be completely sharp and in focus - no blur allowed whatsoever. Everything in the scene should be crisp and clear.",
         style_and_pose: "Candid, relaxed, never overly staged. Subjects may look directly at camera or away. Authentic and natural, not 'model-like'. Sitting, leaning, casual movements preferred. Genuine, cool, relaxed moods. Expressions can be pensive, neutral, slightly playful—never exaggerated smiling or forced.",
         clothing: "Modern, trendy, urban streetwear, relaxed chic. Layers, oversized fits, minimal or subtle logos. Accessories include sunglasses, rings, hair clips. No retro, formal or costume styles.",
         post_processing: "Light, natural edits only. No heavy filters. Natural grain allowed. No obvious retouch, skin smoothing, or artificial effects. No studio look, glamour retouch, over-brightened skin, high dynamic range, cartoonish colors or contrasts.",
@@ -885,7 +1042,6 @@ async function generateEnhancedUGCPrompt(originalPrompt, frameRules, generalRule
 You will enhance the user's basic prompt with detailed visual specifications while keeping the original subject.
 
 Original prompt: "${originalPrompt}"
-Style: ${frameRules.name}
 
 INSTRUCTIONS:
 1. Keep the original subject/person exactly as described
@@ -922,8 +1078,18 @@ Fashion & Style:
 - Accessories: ${rules.fashion_and_style?.accessories}
 - Hair: ${rules.fashion_and_style?.hair}
 
-General UGC Aesthetic:
+General UGC Aesthetic Rules:
 - Color palette: ${generalRules.color_palette}
+- Skin tones: ${generalRules.skin_tones}
+- White balance: ${generalRules.white_balance}
+- Contrast: ${generalRules.contrast}
+- Lighting style: ${generalRules.lighting}
+- Camera style: ${generalRules.camera}
+- Composition: ${generalRules.composition}
+- Background: ${generalRules.background}
+- Style and pose: ${generalRules.style_and_pose}
+- Clothing: ${generalRules.clothing}
+- Post processing: ${generalRules.post_processing}
 - Overall aesthetic: ${generalRules.overall_aesthetic}
 
 Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original subject`;
@@ -1204,7 +1370,7 @@ async function downloadFile(url, destPath) {
     });
 }
 
-// --- generateImage Function (Updated for Vertex AI Imagen 4) ---
+// --- generateImage Function (Updated for Replicate API) ---
 exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
     logger.info("[generateImage ENTRY] Received request. Auth:", JSON.stringify(request.auth), "Data:", JSON.stringify(request.data));
     const userId = request.auth?.uid;
@@ -1265,6 +1431,21 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
     } catch (error) {
         logger.error(`[generateImage User: ${userId}] Failed to initialize OpenAI service:`, error);
         throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
+    }
+
+    // Initialize Replicate
+    let replicate;
+    try {
+        const replicateToken = process.env.REPLICATE_API_TOKEN;
+        if (!replicateToken) {
+            logger.error("[generateImage] Replicate API Token not found. Set REPLICATE_API_TOKEN environment variable.");
+            throw new HttpsError('internal', 'Replicate service configuration error.');
+        }
+        replicate = new Replicate({ auth: replicateToken });
+        logger.info(`[generateImage User: ${userId}] Replicate client initialized.`);
+    } catch (error) {
+        logger.error(`[generateImage User: ${userId}] Failed to initialize Replicate service:`, error);
+        throw new HttpsError('internal', 'Failed to initialize Replicate service.');
     }
 
     try {
@@ -1339,76 +1520,65 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             }
         }
         
-        logger.info(`[generateImage User: ${userId}] Preparing to call Vertex AI Imagen directly. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
+        logger.info(`[generateImage User: ${userId}] Preparing to call Replicate API. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
 
-        // Determine aspect ratio for Imagen
-        let aspectRatio = "9:16"; // Default
-        if (data.aspectRatio === "1:1") {
-            aspectRatio = "1:1";
-        } else if (data.aspectRatio === "16:9") {
-            aspectRatio = "16:9";
+        // Determine model and prepare input
+        const selectedModel = data.model || 'google/imagen-4'; // Default to Imagen 4
+        let modelInput;
+        let modelName;
+
+        if (selectedModel === 'ideogram-ai/ideogram-v3-quality') {
+            modelName = 'ideogram-ai/ideogram-v3-quality';
+            modelInput = {
+                prompt: finalPromptToUse,
+                aspect_ratio: data.aspectRatio === "1:1" ? "1:1" : data.aspectRatio === "16:9" ? "16:9" : "9:16",
+                model: "V_3_QUALITY",
+                magic_prompt_option: "AUTO"
+            };
+        } else {
+            // Default to Imagen 4
+            modelName = 'google/imagen-4';
+            modelInput = {
+                prompt: finalPromptToUse,
+                aspect_ratio: data.aspectRatio === "1:1" ? "1:1" : data.aspectRatio === "16:9" ? "16:9" : "9:16",
+                output_format: "png",
+                safety_tolerance: 2
+            };
         }
 
-        // Get access token for Vertex AI API
-        const { GoogleAuth } = require('google-auth-library');
-        const auth = new GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/cloud-platform']
-        });
-        const accessToken = await auth.getAccessToken();
+        logger.info(`[generateImage User: ${userId}] ====== SENDING TO REPLICATE ${modelName.toUpperCase()} ======`);
+        logger.info(`[generateImage User: ${userId}] Model: ${modelName}`);
+        logger.info(`[generateImage User: ${userId}] Aspect Ratio: ${modelInput.aspect_ratio}`);
+        logger.info(`[generateImage User: ${userId}] FINAL PROMPT TO REPLICATE (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
+        logger.info(`[generateImage User: ${userId}] Input:`, JSON.stringify(modelInput, null, 2));
 
-        // Use the correct Imagen 3 model
-        const requestBody = {
-            instances: [{
-                prompt: finalPromptToUse
-            }],
-            parameters: {
-                aspectRatio: aspectRatio,
-                safetyFilterLevel: 'BLOCK_FEW',
-                personGeneration: 'ALLOW_ADULT'
-            }
-        };
+        // Run Replicate prediction
+        const output = await replicate.run(modelName, { input: modelInput });
 
-        // Updated model name for Imagen 3
-        const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
-        const apiUrl = `https://${VERTEX_AI_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_AI_PROJECT}/locations/${VERTEX_AI_LOCATION}/publishers/google/models/${IMAGEN_MODEL}:predict`;
+        logger.info(`[generateImage User: ${userId}] ====== REPLICATE RESPONSE RECEIVED ======`);
+        logger.info(`[generateImage User: ${userId}] Output:`, JSON.stringify(output, null, 2));
 
-        logger.info(`[generateImage User: ${userId}] ====== SENDING TO VERTEX AI IMAGEN 3 ======`);
-        logger.info(`[generateImage User: ${userId}] Model: ${IMAGEN_MODEL}`);
-        logger.info(`[generateImage User: ${userId}] Aspect Ratio: ${aspectRatio}`);
-        logger.info(`[generateImage User: ${userId}] FINAL PROMPT TO IMAGEN (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
-        logger.info(`[generateImage User: ${userId}] Request Body:`, JSON.stringify(requestBody, null, 2));
+        let imageUrl;
         
-        const imageGenResponse = await axios.post(apiUrl, requestBody, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        logger.info(`[generateImage User: ${userId}] ====== VERTEX AI IMAGEN 3 RESPONSE RECEIVED ======`);
-        logger.info(`[generateImage User: ${userId}] Full response:`, JSON.stringify(imageGenResponse.data, null, 2));
-
-        // Extract the image data from the response
-        const predictions = imageGenResponse.data.predictions;
-        logger.info(`[generateImage User: ${userId}] Predictions:`, predictions);
-        
-        if (!predictions || predictions.length === 0) {
-            logger.error(`[generateImage User: ${userId}] No predictions in response. Full response:`, imageGenResponse.data);
-            throw new HttpsError('internal', "AI did not return predictions.");
+        // Handle different response formats from different models
+        if (Array.isArray(output) && output.length > 0) {
+            // SDXL format: ["url"]
+            imageUrl = output[0];
+        } else if (typeof output === 'string' && output.startsWith('http')) {
+            // Imagen 4 / Ideogram v3 format: "url"
+            imageUrl = output;
+        } else {
+            logger.error(`[generateImage User: ${userId}] No valid output from Replicate. Output:`, output);
+            throw new HttpsError('internal', "Replicate did not return any images.");
         }
-        
-        if (!predictions[0].bytesBase64Encoded) {
-            logger.error(`[generateImage User: ${userId}] No bytesBase64Encoded in first prediction. Prediction:`, predictions[0]);
-            throw new HttpsError('internal', "AI did not return image data.");
-        }
+        logger.info(`[generateImage User: ${userId}] Image URL from Replicate: ${imageUrl}`);
 
-        const base64ImageData = predictions[0].bytesBase64Encoded;
-        logger.info(`[generateImage User: ${userId}] Image data extracted. Length: ${base64ImageData.length}`);
+        // Download image and upload to Firebase Storage
+        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        const imageBuffer = Buffer.from(imageResponse.data);
+        logger.info(`[generateImage User: ${userId}] Image downloaded. Buffer length: ${imageBuffer.length}`);
 
-        const imageBuffer = Buffer.from(base64ImageData, 'base64');
-        logger.info(`[generateImage User: ${userId}] Image buffer created. Length: ${imageBuffer.length}`);
-
-        const fileName = `direct_generations/${userId}/${Date.now()}_${commandCode}.png`; 
+        const fileName = `replicate_generations/${userId}/${Date.now()}_${commandCode}.png`; 
         const file = bucket.file(fileName);
         logger.info(`[generateImage User: ${userId}] Firebase Storage file object created for: ${fileName}`);
 
@@ -1438,8 +1608,8 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
                 originalParameters: data,
                 commandCode: commandCode,
                 quality: data.quality || "high",
-                source: 'direct_generateImage_call_vertex_imagen3',
-                model: 'imagen-3.0-generate-001',
+                source: `direct_generateImage_call_replicate_${selectedModel.replace('/', '_').replace('-', '_')}`,
+                model: modelName,
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 gender: commandCode === 202 ? detectedGender : null
             };
@@ -1461,35 +1631,35 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             
             return {
                 success: true,
-                message: "Image generated and uploaded successfully using Vertex AI Imagen 3.",
+                message: `Image generated and uploaded successfully using ${modelName}.`,
                 imageUrl: publicUrl,
                 firestoreDocId: generationDocRef.id,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                model: 'imagen-3.0-generate-001'
+                model: modelName
             };
 
         } catch (firestoreError) {
             logger.error(`[generateImage User: ${userId}] Failed to write to generations collection or run transaction:`, firestoreError);
             return { 
                 success: true, 
-                message: "Image generated using Vertex AI Imagen 3, but failed to save metadata to Firestore.",
+                message: `Image generated using ${modelName}, but failed to save metadata to Firestore.`,
                 imageUrl: publicUrl,
                 firestoreDocId: null,
                 finalPrompt: finalPromptToUse,
                 originalParameters: data,
-                model: 'imagen-3.0-generate-001',
+                model: modelName,
                 errorSavingMetadata: true
             };
         }
 
     } catch (error) {
         logger.error(`[generateImage User: ${userId}] Error in main try block of generateImage:`, error);
-        if (error.message && error.message.includes('Vertex AI')) {
-            logger.error(`[generateImage User: ${userId}] Vertex AI Error:`, error);
-            throw new HttpsError('internal', `Vertex AI Error: ${error.message}`);
+        if (error.message && error.message.includes('Replicate')) {
+            logger.error(`[generateImage User: ${userId}] Replicate Error:`, error);
+            throw new HttpsError('internal', `Replicate Error: ${error.message}`);
         }
-        throw new HttpsError('internal', `Failed to generate image with Vertex AI Imagen 3: ${error.message}`);
+        throw new HttpsError('internal', `Failed to generate image with ${modelName || 'Replicate'}: ${error.message}`);
     }
 });
 

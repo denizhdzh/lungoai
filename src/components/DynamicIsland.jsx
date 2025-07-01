@@ -15,7 +15,7 @@ const LungoLogoIcon = ({ className }) => (
 );
 
 const DotLoader = ({ isDarkMode }) => (
-  <span className={`inline-flex ml-1 ${isDarkMode ? 'text-slate-950' : 'text-slate-50'}`}>
+  <span className={`inline-flex ml-1 ${isDarkMode ? 'text-neutral-700' : 'text-neutral-200'}`}>
     <style>
       {`
         @keyframes blink {
@@ -65,7 +65,7 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   }, [generatingItem, commandQueue]);
 
   const getIcon = (item) => {
-    const iconColor = isDarkMode ? "text-slate-950" : "text-slate-50";
+    const iconColor = isDarkMode ? "text-neutral-700" : "text-neutral-200";
 
     if (!item) return <Info size={16} className={iconColor} />;
     const iconProps = { size: 16, className: `flex-shrink-0 ${iconColor}` }; 
@@ -81,7 +81,7 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   const getStatusText = (item) => {
     if (!item) return null;
 
-    const textColorClass = isDarkMode ? "text-slate-950" : "text-slate-50";
+    const textColorClass = isDarkMode ? "text-neutral-800" : "text-neutral-100";
 
     let typeText = '';
     let descriptiveText = '';
@@ -187,14 +187,14 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   if ((generatingItem || commandQueue.length > 0) && !currentDisplayItem) {
     return (
       <motion.div
-        className={`flex items-center justify-center px-6 py-4 rounded-lg shadow-2xl transition-colors duration-200 ${isDarkMode ? 'bg-white/5 text-slate-950 border-2 border-white/20' : 'bg-white/5 text-slate-50 border-2 border-white/20'} backdrop-blur-xl`}
+        className={`flex items-center justify-center px-6 py-4 rounded-lg shadow-2xl transition-colors duration-200 ${isDarkMode ? 'bg-neutral-900/80 text-neutral-100 border border-neutral-700/50' : 'bg-white/90 text-neutral-800 border border-white/50'} backdrop-blur-xl`}
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.8 }}
         transition={{ duration: 0.3 }}
         style={{ width: 'fit-content', minWidth: 180 }}
       >
-        <LungoLogoIcon className="w-5 h-5 text-green-500 mr-3 flex-shrink-0 animate-pulse" />
+        <LungoLogoIcon className="w-5 h-5 text-lime-500 mr-3 flex-shrink-0 animate-pulse" />
         <span className="text-sm font-medium">Loading tasks...</span>
       </motion.div>
     );
@@ -217,7 +217,7 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
       transition={{ duration: 0.3 }}
     >
       <motion.div
-        className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-white/5 text-slate-950 border-2 border-white/20' : 'bg-white/5 text-slate-50 border-2 border-white/20'} rounded-lg px-6 py-4 backdrop-blur-xl shadow-2xl`}
+        className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-neutral-900/80 text-neutral-100 border border-neutral-700/50' : 'bg-white/90 text-neutral-800 border border-white/50'} rounded-lg px-6 py-4 backdrop-blur-xl shadow-2xl`}
         style={{ width: 'fit-content', minWidth: hasActiveTask ? 200 : 140 }}
         whileHover={{ scale: hasActiveTask ? 1.02 : 0.95 }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -225,17 +225,17 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
         <motion.div 
           className="flex items-center w-full"
         >
-          <LungoLogoIcon className={`w-4 h-4 text-green-500 mr-2 flex-shrink-0 ${hasActiveTask ? 'animate-pulse' : ''}`} />
+          <LungoLogoIcon className={`w-4 h-4 text-lime-500 mr-2 flex-shrink-0 ${hasActiveTask ? 'animate-pulse' : ''}`} />
           <div className="flex-grow flex items-center gap-2 overflow-hidden">
             {hasActiveTask && getIcon(currentDisplayItem)}
             <span className={`text-sm font-medium text-ellipsis overflow-hidden ${hasActiveTask ? '' : 'text-xs'}`}>
               {hasActiveTask ? getStatusText(currentDisplayItem) : (
                 isLoading ? (
-                  <span className={isDarkMode ? "text-slate-600" : "text-slate-400"}>
+                  <span className={isDarkMode ? "text-neutral-50" : "text-neutral-800"}>
                     Loading tasks...
                   </span>
                 ) : (
-                  <span className={isDarkMode ? "text-slate-600" : "text-slate-400"}>
+                  <span className={isDarkMode ? "text-neutral-50" : "text-neutral-800"}>
                     Waiting for tasks
                   </span>
                 )

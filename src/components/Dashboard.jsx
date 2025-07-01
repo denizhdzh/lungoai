@@ -838,7 +838,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                               selectedTextColor === 'black' ? 'text-black' :
                               selectedTextColor === 'red' ? 'text-red-500' :
                               selectedTextColor === 'blue' ? 'text-blue-500' :
-                              selectedTextColor === 'green' ? 'text-green-500' :
+                              selectedTextColor === 'lime' ? 'text-lime-500' :
                               selectedTextColor === 'yellow' ? 'text-yellow-400' :
                               selectedTextColor === 'purple' ? 'text-purple-500' :
                               selectedTextColor === 'pink' ? 'text-pink-500' :
@@ -1060,7 +1060,7 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                                     { value: 'black', label: 'Black', bgClass: 'bg-black', borderClass: '' },
                                     { value: 'red', label: 'Red', bgClass: 'bg-red-500', borderClass: '' },
                                     { value: 'blue', label: 'Blue', bgClass: 'bg-blue-500', borderClass: '' },
-                                    { value: 'green', label: 'Green', bgClass: 'bg-green-500', borderClass: '' },
+                                    { value: 'lime', label: 'lime', bgClass: 'bg-lime-500', borderClass: '' },
                                     { value: 'yellow', label: 'Yellow', bgClass: 'bg-yellow-400', borderClass: '' },
                                     { value: 'purple', label: 'Purple', bgClass: 'bg-purple-500', borderClass: '' },
                                     { value: 'pink', label: 'Pink', bgClass: 'bg-pink-500', borderClass: '' }
@@ -1322,15 +1322,15 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                         <motion.div 
                           initial={{ scale: 0.99 }}
                           animate={{ scale: 1 }}
-                          className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md flex items-center justify-between"
+                          className="p-2 bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800 rounded-md flex items-center justify-between"
                         >
                           <div className="flex items-center gap-1.5">
-                            <Check size={12} className="text-green-600 dark:text-green-400" />
-                            <span className="text-xs text-green-700 dark:text-green-300">
+                            <Check size={12} className="text-lime-600 dark:text-lime-400" />
+                            <span className="text-xs text-lime-700 dark:text-lime-300">
                               Saved as "{existingCreator?.name}"
                             </span>
                           </div>
-                          <User size={12} className="text-green-600 dark:text-green-400" />
+                          <User size={12} className="text-lime-600 dark:text-lime-400" />
                         </motion.div>
                       ) : showSaveCreatorInput ? (
                         <motion.div 
@@ -1397,15 +1397,15 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                         <motion.div 
                           initial={{ scale: 0.99 }}
                           animate={{ scale: 1 }}
-                          className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md flex items-center justify-between"
+                          className="p-2 bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800 rounded-md flex items-center justify-between"
                         >
                           <div className="flex items-center gap-1.5">
-                            <Check size={12} className="text-green-600 dark:text-green-400" />
-                            <span className="text-xs text-green-700 dark:text-green-300">
+                            <Check size={12} className="text-lime-600 dark:text-lime-400" />
+                            <span className="text-xs text-lime-700 dark:text-lime-300">
                               Saved as "{existingBackground?.name}"
                             </span>
                           </div>
-                          <ImageSquare size={12} className="text-green-600 dark:text-green-400" />
+                          <ImageSquare size={12} className="text-lime-600 dark:text-lime-400" />
                         </motion.div>
                       ) : showSaveBackgroundInput ? (
                         <motion.div 
@@ -1913,8 +1913,8 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
         ease: "easeOut",
         scale: { type: "spring", stiffness: 400, damping: 25 }
       }}
-      className="relative rounded-lg overflow-hidden border border-stone-100 dark:border-stone-800 group shadow-sm hover:shadow-md transition-all duration-300 bg-neutral-50 dark:bg-neutral-800 cursor-pointer"
-      style={{ paddingTop: '177.77%' }} // 9:16 aspect ratio
+      className="relative rounded-lg overflow-hidden group cursor-pointer"
+      style={{ paddingTop: '177.77%' }} // 9:16 ratio
       onClick={onClick}
     >
       {/* Background Image Area */} 
@@ -1922,85 +1922,10 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
         {getPreviewContent()}
                   </div>
                   
-      {/* Hover overlay */}
-      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center z-20">
-        <div className="bg-neutral-800/70 px-3 py-1.5 rounded-full">
-          <span className="text-sm font-medium text-white">
-            View & Edit
-          </span>
-        </div>
-      </div>
+
+
       
-      {/* Creator/Background save buttons - top right */}
-      {generation.imageUrl && (
-        <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30">
-          {generation.commandCode === 202 && (
-            existingCreator ? (
-              <div className="px-2 py-1 bg-black text-white text-[10px] rounded-full backdrop-blur-sm font-medium">
-                {existingCreator.name}
-              </div>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick(); 
-                }}
-                className="w-7 h-7 bg-neutral-900/80 hover:bg-neutral-800 dark:bg-neutral-100/80 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
-                title="Save as Creator"
-              >
-                <UserPlus size={12} className="text-stone-100 dark:text-stone-900" />
-              </button>
-            )
-          )}
-          {generation.commandCode === 201 && (
-            existingBackground ? (
-              <div className="px-2 py-1 bg-black text-white text-[10px] rounded-full backdrop-blur-sm font-medium">
-                {existingBackground.name}
-              </div>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick(); 
-                }}
-                className="w-7 h-7 bg-neutral-900/80 hover:bg-neutral-800 dark:bg-neutral-100/80 dark:hover:bg-neutral-200 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
-                title="Save as Background"
-              >
-                <PlusSquare size={12} className="text-stone-100 dark:text-stone-900" />
-              </button>
-            )
-          )}
-          {/* NEW: Post to TikTok button for slideshows */} 
-          {generation.type === 'slideshow' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                // TODO: Implement actual TikTok posting logic
-                console.log('Post to TikTok clicked for slideshow:', generation.id);
-                window.alert('Post to TikTok functionality coming soon!');
-              }}
-              className="w-7 h-7 bg-blue-500/90 hover:bg-blue-600 dark:bg-blue-500/90 dark:hover:bg-blue-600 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shadow-md"
-              title="Post to TikTok"
-            >
-              <ArrowSquareOut size={12} className="text-white" />
-            </button>
-          )}
-        </div>
-      )}
-      
-      {/* Info overlay */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-stone-300">
-            {generation.timestamp && generation.timestamp instanceof Date 
-              ? generation.timestamp.toLocaleDateString() 
-              : 'Unknown date'}
-                </span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-sm">
-            {getFriendlyGenerationType(generation.commandCode) || generation.type || 'unknown'}
-                </span>
-              </div>
-            </div>
+
     </motion.div>
   );
 }
@@ -2289,76 +2214,60 @@ function Dashboard() {
     <div className="max-w-6xl mx-auto">
       {/* Recent generations section */}
       <section className="mb-8">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-center mb-8">
               
               {/* Filters */}
-              <div className="inline-flex items-center p-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg border border-stone-200 dark:border-stone-700">
+              <div className="inline-flex items-center gap-8">
                 <button
                   onClick={() => setActiveFilter('all')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
                     activeFilter === 'all'
-                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
+                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
+                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   All
-                  <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
-                    activeFilter === 'all'
-                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
-                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
-                  }`}>
-                    {generations.length} 
-             </span>
+                  <span className="text-xs">
+                    ({generations.length})
+                  </span>
                 </button>
                 <button
                   onClick={() => setActiveFilter('video')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
                     activeFilter === 'video'
-                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
+                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
+                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   Videos
-                  <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
-                    activeFilter === 'video'
-                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
-                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
-                  }`}>
-                    {generationCounts.videos}
-              </span>
+                  <span className="text-xs">
+                    ({generationCounts.videos})
+                  </span>
                 </button>
                 <button
                   onClick={() => setActiveFilter('image')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
                     activeFilter === 'image'
-                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
+                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
+                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   Images
-                  <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
-                    activeFilter === 'image'
-                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
-                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
-                  }`}>
-                    {generationCounts.images}
-                      </span>
+                  <span className="text-xs">
+                    ({generationCounts.images})
+                  </span>
                 </button>
-            <button 
+                <button 
                   onClick={() => setActiveFilter('slideshow')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
                     activeFilter === 'slideshow'
-                      ? 'bg-white dark:bg-neutral-700 text-black dark:text-white shadow-sm'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-black dark:hover:text-white'
+                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
+                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   Slideshows
-                  <span className={`flex items-center justify-center w-4 h-4 text-[10px] rounded-full transition-colors ${
-                    activeFilter === 'slideshow'
-                      ? 'bg-neutral-100 dark:bg-neutral-600 text-stone-700 dark:text-stone-300'
-                      : 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-500'
-                  }`}>
-                    {generationCounts.slideshows}
+                  <span className="text-xs">
+                    ({generationCounts.slideshows})
                   </span>
             </button>
         </div>
@@ -2381,7 +2290,7 @@ function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                   {displayedGenerations.map((gen) => (
                     <GenerationCard 
                       key={gen.id} 
@@ -2450,8 +2359,8 @@ function Dashboard() {
             <div 
               className={`rounded-md shadow-lg p-3 flex items-start space-x-3 ${isDarkMode ? 'bg-neutral-800 text-white border border-stone-700' : 'bg-white text-stone-900 border border-stone-200'}`}
             >
-              <div className={`flex-shrink-0 p-1.5 rounded-full ${isDarkMode ? 'bg-green-600/30' : 'bg-green-100'}`}>
-                  <svg className={`w-4 h-4 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`} fill="currentColor" viewBox="0 0 20 20">
+              <div className={`flex-shrink-0 p-1.5 rounded-full ${isDarkMode ? 'bg-lime-600/30' : 'bg-lime-100'}`}>
+                  <svg className={`w-4 h-4 ${isDarkMode ? 'text-lime-400' : 'text-lime-600'}`} fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
               </div>

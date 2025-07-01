@@ -138,7 +138,7 @@ function CommandInfo() {
                            {getFriendlyType(param.type)}
                         </span>
                         {param.required ? (
-                          <span className="text-xs font-medium text-green-700 dark:text-green-400">(Needed)</span>
+                          <span className="text-xs font-medium text-lime-700 dark:text-lime-400">(Needed)</span>
                         ) : (
                           <span className="text-xs text-gray-500 dark:text-zinc-400">(Optional)</span>
                         )}

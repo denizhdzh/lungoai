@@ -127,7 +127,7 @@ const CanvasTutorial = ({ user, isOpen, onClose, onOpenTutorial }) => {
 		return (
 			<button
 				onClick={openTutorial}
-				className="fixed bottom-20 right-4 z-40 w-10 h-10 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 rounded-full flex items-center justify-center text-neutral-300 hover:text-white transition-all duration-200 shadow-lg"
+				className="fixed bottom-4 right-4 z-40 w-10 h-10 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 hover:text-white transition-all duration-200 shadow-lg"
 				title="Open Canvas Tutorial"
 			>
 				<Info size={16} />

@@ -42,13 +42,15 @@ import {
 	FilmSlate,
 	User,
 	X,
+	ListNumbers,
+	ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { generateImage, generateVideo, generateSlideshow, checkApiKey, GENERATION_TYPES, IMAGE_STYLES, QUALITY_OPTIONS } from '../services/ai';
 import { useOutletContext } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
-import DynamicIsland from '../components/DynamicIsland';
 import CanvasTutorial from '../components/CanvasTutorial';
+import CustomDropdown from '../components/CustomDropdown';
 
 const LogoNaked = ({ className }) => (
 	<svg viewBox="0 0 566 399" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -85,11 +87,11 @@ const allFrameOptions = [
 		type: 'ugc_character'
 	},
 	{
-		id: 'forced_perspective',
-		name: 'Forced Perspective',
+		id: 'forced_perspective_play',
+		name: 'Forced Perspective Play',
 		description: 'Wide-angle street photography with playful scale',
 		exampleImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=300&fit=crop&crop=face',
-		rules: 'forced_perspective',
+		rules: 'forced_perspective_play',
 		type: 'ugc_character'
 	},
 	{
@@ -133,11 +135,11 @@ const allFrameOptions = [
 		type: 'ugc_character'
 	},
 	{
-		id: 'vintage_buddy_vibes',
-		name: '90s Vintage Buddy',
+		id: '90s_vintage_buddy',
+		name: '90s Vintage Buddy Vibes',
 		description: 'Analog film aesthetic with friends',
 		exampleImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face',
-		rules: 'vintage_buddy_vibes',
+		rules: '90s_vintage_buddy',
 		type: 'ugc_character'
 	}
 ];
@@ -720,128 +722,22 @@ const AIFrame = ({
 	}, [subtype, config]);
 
 	// Determine current selected value for the dropdown
-	const currentDropdownValue = selectedFrame || subtype;
+	const currentDropdownValue = selectedFrame || (subtype === 'background' ? 'background' : subtype);
 	
 	// Debug current values
 	console.log('Current values:', { subtype, selectedFrame, currentDropdownValue });
 
 	return (
 		<div 
-			className={`group bg-[#202123]/60 border border-neutral-700/60 rounded-2xl shadow-lg transition-all text-neutral-200 ${selected ? '!ring-0 !border-neutral-700/60' : 'border-neutral-700/60'}`} 
-			style={{ width: 340 }}
+			className="group bg-[#202123]/60 border border-neutral-700/60 rounded-2xl shadow-lg transition-all text-neutral-200" 
+			style={{ width: 380 }}
 		>
-			{/* Dropdowns on hover - Placed above the node */}
-			<div className={`absolute -top-12 left-1/2 -translate-x-1/2 flex flex-wrap gap-1 z-10 w-full transition-opacity ${(selectedFrame || subtype !== 'general' || openDropdown) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} justify-center`}>
-				{/* Image Dropdown - Enhanced Version */}
-				{data.type === 'image' && (
-					<EnhancedDropdown
-						value={currentDropdownValue}
-						options={[
-							{ value: 'general', label: 'General Image', icon: Image },
-							{ value: 'background', label: 'Background Scene', backgroundImage: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=300&fit=crop' },
-							{ value: 'car_selfie_glow', label: 'Car Selfie Glow', backgroundImage: 'https://images.unsplash.com/photo-1494790108755-2616c96bb4de?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'late_night_lofi', label: 'Late Night Lo-Fi', backgroundImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'forced_perspective', label: 'Forced Perspective', backgroundImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'wide_angle_pov', label: 'Wide-Angle POV Walk', backgroundImage: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'city_street_style', label: 'City Street Style', backgroundImage: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'solo_snap_vibe', label: 'Solo Snap Vibe', backgroundImage: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'warm_moments', label: 'Warm Moments', backgroundImage: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'urban_motion_girl', label: 'Urban Motion Girl', backgroundImage: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=300&fit=crop&crop=face' },
-							{ value: 'vintage_buddy_vibes', label: '90s Vintage Buddy', backgroundImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face' }
-						]}
-						onChange={(selectedValue) => {
-							console.log('Frame selected:', selectedValue);
-							if (selectedValue === 'general') {
-								setSubtype('general');
-								setSelectedFrame(null);
-							} else if (selectedValue === 'background') {
-								setSubtype('background');
-								setSelectedFrame('background');
-							} else {
-								// All other options are UGC character frames
-								setSubtype('ugc_character');
-								setSelectedFrame(selectedValue);
-							}
-						}}
-						isOpen={openDropdown === 'subtype'}
-						onToggle={() => {
-							console.log('NEW Dropdown toggle called');
-							setOpenDropdown(openDropdown === 'subtype' ? null : 'subtype');
-						}}
-						onOpenStateChange={onDropdownStateChange}
-					/>
-				)}
-
-				{/* Video Dropdowns */}
-				{data.type === 'video' && (
-					<>
-						<CustomDropdown
-							value={subtype}
-							options={Object.entries(config.subtypes).map(([key, value]) => ({
-								value: key,
-								label: value.label,
-								icon: value.icon
-							}))}
-							onChange={(value) => {
-								setSubtype(value);
-								onUpdateNode(id, { 
-									formData: { ...formData, subtype: value }
-								});
-							}}
-							isOpen={openDropdown === 'subtype'}
-							onToggle={() => handleDropdownToggle('subtype')}
-							onOpenStateChange={onDropdownStateChange}
-							minWidth="120px"
-						/>
-						{config?.subtypes?.[subtype]?.models && (
-							<CustomDropdown
-								value={model}
-								options={Object.entries(config.subtypes[subtype].models).map(([key, value]) => ({
-									value: key,
-									label: value.label,
-									icon: value.icon
-								}))}
-								onChange={(value) => {
-									setModel(value);
-									onUpdateNode(id, { 
-										formData: { ...formData, model: value }
-									});
-								}}
-								isOpen={openDropdown === 'model'}
-								onToggle={() => handleDropdownToggle('model')}
-								onOpenStateChange={onDropdownStateChange}
-								minWidth="100px"
-							/>
-						)}
-					</>
-				)}
-			</div>
 
 			{/* Node content */}
 			<div className="p-4 space-y-3">
-				{/* Header with inline dropdown for video duration */}
+				{/* Header */}
 				<div className="flex justify-between items-center text-xs font-medium text-neutral-400 px-1">
 					<span>{data.type.toUpperCase()}</span>
-					{data.type === 'video' && (
-						<CustomDropdown
-							value={duration}
-							options={config.options?.duration?.map(opt => ({
-								value: opt.value,
-								label: opt.label,
-							})) || []}
-							onChange={(value) => {
-								setDuration(value);
-								onUpdateNode(id, { 
-									formData: { ...formData, duration: value }
-								});
-							}}
-							isOpen={openDropdown === 'duration'}
-							onToggle={() => handleDropdownToggle('duration')}
-							onOpenStateChange={onDropdownStateChange}
-							minWidth="60px"
-							isCompact={true}
-						/>
-					)}
 					<div className="flex items-center px-2 py-1 bg-neutral-700 rounded-lg border border-neutral-600">
 						<LogoNaked className="w-3 h-3 mr-1.5 text-white rotate-90" />
 						<span className="text-xs text-neutral-300 font-medium">
@@ -850,22 +746,114 @@ const AIFrame = ({
 					</div>
 				</div>
 
-				{/* Selected Frame Display */}
-				{data.type === 'image' && selectedFrame && (
-					<div className="bg-neutral-800/50 p-1.5 rounded-lg flex items-center gap-2">
-						{(() => {
-							const frameOption = allFrameOptions.find(f => f.id === selectedFrame);
-							return frameOption ? (
-								<>
-									<img 
-										src={frameOption.exampleImage} 
-										alt={frameOption.name}
-										className="w-8 h-8 object-cover rounded border border-neutral-600"
-									/>
-									<span className="text-white text-sm font-medium truncate">{frameOption.name}</span>
-								</>
-							) : null;
-						})()}
+				{/* Image Type Selector */}
+				{data.type === 'image' && (
+					<div className="bg-neutral-800/50 p-1.5 rounded-lg">
+						<EnhancedDropdown
+							value={currentDropdownValue}
+							options={[
+								{ value: 'general', label: 'General Image', icon: Image },
+								{ value: 'background', label: 'Background Scene', backgroundImage: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=300&fit=crop' },
+								{ value: 'car_selfie_glow', label: 'Car Selfie Glow', backgroundImage: 'https://images.unsplash.com/photo-1494790108755-2616c96bb4de?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'late_night_lofi', label: 'Late Night Lo-Fi', backgroundImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'forced_perspective_play', label: 'Forced Perspective Play', backgroundImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'wide_angle_pov', label: 'Wide-Angle POV Walk', backgroundImage: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'city_street_style', label: 'City Street Style', backgroundImage: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'solo_snap_vibe', label: 'Solo Snap Vibe', backgroundImage: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'warm_moments', label: 'Warm Moments', backgroundImage: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&h=300&fit=crop&crop=face' },
+								{ value: 'urban_motion_girl', label: 'Urban Motion Girl', backgroundImage: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=300&fit=crop&crop=face' },
+								{ value: '90s_vintage_buddy', label: '90s Vintage Buddy Vibes', backgroundImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face' }
+							]}
+							onChange={(selectedValue) => {
+								console.log('Frame selected:', selectedValue);
+								if (selectedValue === 'general') {
+									setSubtype('general');
+									setSelectedFrame(null);
+								} else if (selectedValue === 'background') {
+									setSubtype('background');
+									setSelectedFrame('background'); // Backend'te background frame'i var
+								} else {
+									// All other options are UGC character frames
+									setSubtype('ugc_character');
+									setSelectedFrame(selectedValue);
+								}
+							}}
+							isOpen={openDropdown === 'subtype'}
+							onToggle={() => {
+								console.log('NEW Dropdown toggle called');
+								setOpenDropdown(openDropdown === 'subtype' ? null : 'subtype');
+							}}
+							onOpenStateChange={onDropdownStateChange}
+						/>
+					</div>
+				)}
+
+				{/* Video Settings */}
+				{data.type === 'video' && (
+					<div className="space-y-2">
+						<div className="flex gap-2">
+							<div className="flex-1 bg-neutral-800/50 rounded-lg">
+								<CustomDropdown
+									value={subtype}
+									options={Object.entries(config.subtypes).map(([key, value]) => ({
+										value: key,
+										label: value.label,
+										icon: value.icon
+									}))}
+									onChange={(value) => {
+										setSubtype(value);
+										onUpdateNode(id, { 
+											formData: { ...formData, subtype: value }
+										});
+									}}
+									isOpen={openDropdown === 'subtype'}
+									onToggle={() => handleDropdownToggle('subtype')}
+									onOpenStateChange={onDropdownStateChange}
+									minWidth="120px"
+								/>
+							</div>
+							<div className="flex-1 bg-neutral-800/50 rounded-lg">
+								<CustomDropdown
+									value={duration}
+									options={config.options?.duration?.map(opt => ({
+										value: opt.value,
+										label: opt.label,
+									})) || []}
+									onChange={(value) => {
+										setDuration(value);
+										onUpdateNode(id, { 
+											formData: { ...formData, duration: value }
+										});
+									}}
+									isOpen={openDropdown === 'duration'}
+									onToggle={() => handleDropdownToggle('duration')}
+									onOpenStateChange={onDropdownStateChange}
+									minWidth="60px"
+								/>
+							</div>
+						</div>
+						{config?.subtypes?.[subtype]?.models && (
+							<div className="bg-neutral-800/50 rounded-lg">
+								<CustomDropdown
+									value={model}
+									options={Object.entries(config.subtypes[subtype].models).map(([key, value]) => ({
+										value: key,
+										label: value.label,
+										icon: value.icon
+									}))}
+									onChange={(value) => {
+										setModel(value);
+										onUpdateNode(id, { 
+											formData: { ...formData, model: value }
+										});
+									}}
+									isOpen={openDropdown === 'model'}
+									onToggle={() => handleDropdownToggle('model')}
+									onOpenStateChange={onDropdownStateChange}
+									minWidth="100px"
+								/>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -993,7 +981,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 					<video
 						src={videoUrl}
 						alt={fileName || 'Uploaded video'}
-						className="w-full h-full object-cover rounded-2xl shadow-xl border border-neutral-700/50"
+						className="w-full h-full object-cover rounded-2xl"
 						controls
 						loop
 						muted
@@ -1070,7 +1058,7 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 					<img 
 						src={imageUrl} 
 						alt="Uploaded" 
-					className="w-full h-full object-cover rounded-2xl border border-neutral-600"
+					className="w-full h-full object-cover rounded-2xl"
 					/>
 					<button
 						onClick={() => fileInputRef.current?.click()}
@@ -1116,30 +1104,47 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 	);
 });
 
-// Main Slideshow Node for configuration - Standardized design
-const SlideshowNode = React.memo(({ id, data, selected, onUpdateNode, onGenerate, onDropdownStateChange }) => {
+// Slideshow Node - Unique stacked card design
+const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGenerate, onDropdownStateChange }) => {
 	const { getNodes, getEdges } = useReactFlow();
 
 	// State for the node's controls
 	const [topic, setTopic] = useState(data.topic || '');
+	const [selectedLanguage, setSelectedLanguage] = useState(data.selectedLanguage || 'en');
 	const [slideshowType, setSlideshowType] = useState(data.slideshowType || 'top_3_lists');
-	const [imageSource, setImageSource] = useState(data.imageSource || 'asset');
-	const [language, setLanguage] = useState(data.language || 'en');
-	const [background, setBackground] = useState(data.background || '');
+	const [selectedProduct, setSelectedProduct] = useState(data.selectedProduct || null);
+	const [imageGenerationMode, setImageGenerationMode] = useState(data.imageGenerationMode || 'ai_per_slide');
 	const [openDropdown, setOpenDropdown] = useState(null);
 
-	const handleDragOver = (event) => {
-		event.preventDefault();
-		event.dataTransfer.dropEffect = 'link';
-	};
-
-	const handleDrop = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (onNodeDrop) {
-            onNodeDrop(event, { id, data, type: 'slideshow' });
-        }
-	};
+	// Fetch user's products for dropdown
+	const [userProducts, setUserProducts] = useState([]);
+	useEffect(() => {
+		const fetchProducts = async () => {
+			if (!user?.uid) return;
+			try {
+				const productsQuery = query(
+					collection(db, 'users', user.uid, 'products'),
+					orderBy('createdAt', 'desc')
+				);
+				const productsSnapshot = await getDocs(productsQuery);
+				const products = productsSnapshot.docs.map(doc => ({
+					id: doc.id,
+					name: doc.data().name,
+					logoUrl: doc.data().logoUrl,
+					...doc.data()
+				}));
+				setUserProducts(products);
+				
+				// Set default to latest product if none selected
+				if (!selectedProduct && products.length > 0) {
+					setSelectedProduct(products[0].id);
+				}
+			} catch (error) {
+				console.error('Error fetching products:', error);
+			}
+		};
+		fetchProducts();
+	}, [user?.uid]);
 
 	const handleDropdownToggle = (dropdownId) => {
 		setOpenDropdown(prev => (prev === dropdownId ? null : dropdownId));
@@ -1148,38 +1153,31 @@ const SlideshowNode = React.memo(({ id, data, selected, onUpdateNode, onGenerate
 	// Persist changes to the main nodes state - with debouncing to prevent infinite loops
 	useEffect(() => {
 		const timeoutId = setTimeout(() => {
-			onUpdateNode(id, { topic, slideshowType, language, background, imageSource });
+			onUpdateNode(id, { topic, selectedLanguage, slideshowType, selectedProduct, imageGenerationMode });
 		}, 100);
 		
 		return () => clearTimeout(timeoutId);
-	}, [id, onUpdateNode, topic, slideshowType, language, background, imageSource]);
-
-	// Check connections to show/hide UI elements
-	const { hasProductConnection, hasImageConnection, connectedProductName } = useMemo(() => {
-		const hasProduct = !!data.connectedProduct;
-		const hasImage = !!(data.connectedImages && data.connectedImages.length > 0);
-		const productName = data.connectedProduct?.name || '';
-
-		return { hasProductConnection: hasProduct, hasImageConnection: hasImage, connectedProductName: productName };
-	}, [data.connectedProduct, data.connectedImages]);
+	}, [id, onUpdateNode, topic, selectedLanguage, slideshowType, selectedProduct, imageGenerationMode]);
 	
 	const handleGenerateClick = async () => {
 		if (data.isGenerating) return;
 
-		if (!hasProductConnection && !topic.trim()) {
-			alert("Please connect a product or provide a topic.");
+		if (!selectedProduct && !topic.trim()) {
+			alert("Please select a product or provide a topic.");
 			return;
 		}
 		
 		onUpdateNode(id, { isGenerating: true });
 
 		try {
+			const selectedProductData = selectedProduct ? userProducts.find(p => p.id === selectedProduct) : null;
 			const generationParams = {
-				topic: hasProductConnection ? `Product: ${connectedProductName}` : topic,
+				topic: selectedProductData ? `Product: ${selectedProductData.name}` : topic,
+				language: selectedLanguage,
 				slideshowType,
-				language,
-				background: hasImageConnection ? null : background,
-				connectedImages: data.connectedImages || []
+				imageGenerationMode,
+				selectedProduct: selectedProductData,
+				creditCost
 			};
 			
 
@@ -1207,100 +1205,145 @@ const SlideshowNode = React.memo(({ id, data, selected, onUpdateNode, onGenerate
 		}
 	}
 
-	const creditCost = imageSource === 'ai' ? 100 : 30;
+	// Credit calculation based on image generation mode
+	const creditCost = useMemo(() => {
+		switch (imageGenerationMode) {
+			case 'ai_per_slide':
+				return 150; // AI image per slide
+			case 'single_ai_shared':
+				return 60; // Single AI image for all slides
+			case 'from_assets':
+				return 30; // Use existing assets
+			default:
+				return 30;
+		}
+	}, [imageGenerationMode]);
 
 	return (
 		<div 
-			className={`group relative bg-[#202123]/60 border border-neutral-700/60 rounded-2xl shadow-lg transition-all text-neutral-200`} 
-			style={{ width: 340 }}
+			className="group bg-[#202123]/60 border border-neutral-700/60 rounded-2xl shadow-lg transition-all text-neutral-200" 
+			style={{ width: 380 }}
 		>
-			
-			{/* Dropdowns on hover */}
-			<div className={`absolute -top-12 left-1/2 -translate-x-1/2 flex flex-wrap gap-1 z-10 w-full transition-opacity opacity-0 group-hover:opacity-100 justify-center`}>
-				<CustomDropdown
-					value={slideshowType}
-					onChange={(value) => {
-						setSlideshowType(value);
-						onUpdateNode(id, { slideshowType: value });
-					}}
-					options={data.slideshowTypeOptions || []}
-					isOpen={openDropdown === 'type'}
-					onToggle={() => handleDropdownToggle('type')}
-					onOpenStateChange={onDropdownStateChange}
-					minWidth="120px"
-				/>
-				<CustomDropdown
-					value={language}
-					onChange={(value) => {
-						setLanguage(value);
-						onUpdateNode(id, { language: value });
-					}}
-					options={data.languageOptions || []}
-					isOpen={openDropdown === 'lang'}
-					onToggle={() => handleDropdownToggle('lang')}
-					onOpenStateChange={onDropdownStateChange}
-					minWidth="100px"
-				/>
-			</div>
 
 			{/* Node content */}
 			<div className="p-4 space-y-3">
+				{/* Header */}
 				<div className="flex justify-between items-center text-xs font-medium text-neutral-400 px-1">
-					<span>SLIDESHOW 1</span>
-					<span>AI GEN</span>
-				</div>
-				
-
-
-				{/* Connected content display */}
-				{(hasProductConnection || hasImageConnection) && (
-					<div className="bg-neutral-800/50 p-1.5 rounded-lg flex items-center gap-2">
-						{hasImageConnection && data.connectedImages?.[0] && (
-							<img 
-								src={data.connectedImages[0].url} 
-								alt="Connected asset" 
-								className="w-8 h-8 rounded-md object-cover"
-							/>
-						)}
-						{hasProductConnection && (
-							<Package size={16} className="text-neutral-400" />
-						)}
-						<span className="text-white text-sm font-medium truncate">
-							{hasProductConnection ? connectedProductName : 'Connected Background'}
+					<span>SLIDESHOW</span>
+					<div className="flex items-center px-2 py-1 bg-neutral-700 rounded-lg border border-neutral-600">
+						<LogoNaked className="w-3 h-3 mr-1.5 text-white rotate-90" />
+						<span className="text-xs text-neutral-300 font-medium">
+							{creditCost}
 						</span>
+					</div>
+				</div>
+
+				{/* Product Selection */}
+				{userProducts.length > 0 && (
+					<div className="bg-neutral-800/50 p-1.5 rounded-lg">
+						<CustomDropdown
+							value={selectedProduct || ''}
+							options={[
+								{ value: '', label: 'Select Product (Optional)' },
+								...userProducts.map(product => ({
+									value: product.id,
+									label: product.name
+								}))
+							]}
+							onChange={(value) => setSelectedProduct(value || null)}
+							isOpen={openDropdown === 'product'}
+							onToggle={() => handleDropdownToggle('product')}
+							onOpenStateChange={onDropdownStateChange}
+							minWidth="200px"
+						/>
 					</div>
 				)}
 
-				<div className="space-y-1 text-sm pt-2">
-					<p className="text-neutral-500 px-2 pb-1">Try to...</p>
-					<div className="w-full text-left flex items-center gap-3 p-2 rounded-lg text-neutral-300">
-						<Slideshow size={16} /> Generate slideshow content
+				{/* Settings */}
+				<div className="flex gap-2">
+					<div className="flex-1 bg-neutral-800/50 rounded-lg">
+						<CustomDropdown
+							value={selectedLanguage}
+							options={[
+								{ value: 'en', label: '🇺🇸 EN' },
+								{ value: 'tr', label: '🇹🇷 TR' },
+								{ value: 'de', label: '🇩🇪 DE' },
+								{ value: 'fr', label: '🇫🇷 FR' },
+								{ value: 'es', label: '🇪🇸 ES' }
+							]}
+							onChange={(value) => setSelectedLanguage(value)}
+							isOpen={openDropdown === 'language'}
+							onToggle={() => handleDropdownToggle('language')}
+							onOpenStateChange={onDropdownStateChange}
+							minWidth="80px"
+						/>
+					</div>
+					
+					<div className="flex-1 bg-neutral-800/50 rounded-lg">
+						<CustomDropdown
+							value={imageGenerationMode}
+							options={[
+								{ value: 'ai_per_slide', label: 'AI per Slide' },
+								{ value: 'single_ai_shared', label: 'Single AI' },
+								{ value: 'from_assets', label: 'From Assets' }
+							]}
+							onChange={(value) => setImageGenerationMode(value)}
+							isOpen={openDropdown === 'imageMode'}
+							onToggle={() => handleDropdownToggle('imageMode')}
+							onOpenStateChange={onDropdownStateChange}
+							minWidth="120px"
+						/>
 					</div>
 				</div>
 
-				{/* Topic Input */}
-				<div className="relative bg-neutral-800/50 rounded-lg">
-					{hasProductConnection ? (
-						<p className="text-neutral-400 text-sm p-3 pr-20">Product: {connectedProductName}</p>
-					) : (
-						<textarea
-							value={topic}
-							onChange={(e) => setTopic(e.target.value)}
-							placeholder="e.g., 'Top 5 features of our new app'"
-							rows={2}
-							className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
-						/>
-					)}
+				{/* Type Selector */}
+				<div className="space-y-1">
+					<p className="text-neutral-500 px-2 pb-1 text-xs">Slideshow Type</p>
+					<div className="grid grid-cols-2 gap-2">
+						{[
+							{ id: 'top_3_lists', name: 'Top 3 Lists', icon: ListNumbers },
+							{ id: 'before_after', name: 'Before & After', icon: ArrowsClockwise },
+							{ id: 'step_by_step', name: 'Step-by-Step', icon: PencilSimple },
+							{ id: 'question_reveal', name: 'Question & Reveal', icon: Question },
+							{ id: 'personal_story', name: 'Personal Story', icon: User },
+							{ id: 'problem_solution', name: 'Problem & Solution', icon: Lightning }
+						].map((type) => (
+							<button
+								key={type.id}
+								onClick={() => setSlideshowType(type.id)}
+								className={`w-full text-left flex items-center gap-3 p-2 rounded-lg transition-colors text-sm ${
+									slideshowType === type.id 
+										? 'bg-lime-500/20 text-lime-300 border border-lime-500/30' 
+										: 'hover:bg-neutral-700/50 text-neutral-300'
+								}`}
+							>
+								<type.icon size={16} />
+								<span className="font-medium">{type.name}</span>
+							</button>
+						))}
+					</div>
+				</div>
+
+				{/* Prompt Input */}
+				<div className="relative bg-neutral-800/50 rounded-lg border-2 border-dashed border-transparent hover:border-neutral-600">
+					<textarea
+						value={topic}
+						onChange={(e) => setTopic(e.target.value)}
+						placeholder={selectedProduct ? 
+							`Create slideshow about ${userProducts.find(p => p.id === selectedProduct)?.name || 'this product'}...` :
+							'Describe your slideshow content...'
+						}
+						rows={2}
+						className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
+						onMouseDown={(e) => e.stopPropagation()}
+						onMouseMove={(e) => e.stopPropagation()}
+						onMouseUp={(e) => e.stopPropagation()}
+						onDragStart={(e) => e.preventDefault()}
+					/>
 					<div className="absolute right-2 bottom-2 flex items-center gap-2">
-						<div className="flex items-center px-2 py-1 bg-neutral-700 rounded-lg border border-neutral-600">
-							<LogoNaked className="w-3 h-3 mr-1.5 text-white rotate-90" />
-							<span className="text-xs text-neutral-300 font-medium">
-								{creditCost}
-							</span>
-						</div>
 						<button
 							onClick={handleGenerateClick}
-							disabled={data.isGenerating || (!hasProductConnection && !topic.trim())}
+							disabled={data.isGenerating || (!selectedProduct && !topic.trim())}
 							className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
 						>
 							{data.isGenerating ? (
@@ -1313,17 +1356,17 @@ const SlideshowNode = React.memo(({ id, data, selected, onUpdateNode, onGenerate
 				</div>
 			</div>
 
-			<Handle type="target" position={Position.Left} className="!w-4 !h-4 !bg-neutral-600 !border-2 !border-white opacity-0 group-hover:opacity-100 transition-opacity" />
-			<Handle type="source" position={Position.Right} className="!w-4 !h-4 !bg-neutral-600 !border-2 !border-white opacity-0 group-hover:opacity-100 transition-opacity" />
+			<Handle type="target" position={Position.Left} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+			<Handle type="source" position={Position.Right} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
 		</div>
 	);
 });
 
 const GeneratedFrame = ({ data, id, selected }) => {
-	const { imageUrl, prompt, type } = data;
+	const { imageUrl, prompt, type, isGenerating, error } = data;
 
 	return (
-		<div className="group relative z-10 flex flex-col items-center">
+		<div className="group relative z-10 flex flex-col items-center generated-frame-node">
 			{/* Connection handles - hidden until hover, higher z-index */}
 			<Handle 
 				type="target" 
@@ -1336,21 +1379,31 @@ const GeneratedFrame = ({ data, id, selected }) => {
 				className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-20" 
 			/>
 			
-			{/* Title above the frame - uppercase */}
-			{prompt && (
-				<div className="mb-4 text-center max-w-[180px]">
-					<p className="text-sm font-bold text-neutral-200 uppercase tracking-wider truncate" title={prompt}>
-						{prompt}
-					</p>
-				</div>
-			)}
-			
 			{/* Image frame with 9:16 aspect ratio */}
 			<div 
-				className="relative overflow-hidden rounded-2xl shadow-xl"
+				className={`relative overflow-hidden rounded-2xl generated-image-frame ${selected ? 'selected' : ''} ${isGenerating ? 'generating' : ''}`}
 				style={{ width: '180px', height: '320px' }} // 9:16 ratio
 			>
-				{imageUrl ? (
+				{isGenerating ? (
+					<div className="w-full h-full flex items-center justify-center bg-neutral-900">
+						{/* Simple center pulse effect */}
+						<div className="w-20 h-20 rounded-full bg-lime-400/20 animate-pulse flex items-center justify-center">
+							<div className="w-12 h-12 rounded-full bg-lime-400/30 animate-pulse" style={{ animationDelay: '0.5s' }}>
+								<div className="w-full h-full rounded-full bg-lime-400/40 animate-pulse" style={{ animationDelay: '1s' }}></div>
+							</div>
+						</div>
+					</div>
+				) : error ? (
+					<div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900 text-red-400">
+						<div className="text-red-500 mb-2">
+							<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+							</svg>
+						</div>
+						<span className="text-sm font-medium text-center px-4">Generation Failed</span>
+						<span className="text-xs text-neutral-500 text-center px-4 mt-1">{error}</span>
+					</div>
+				) : imageUrl ? (
 					<img 
 						src={imageUrl} 
 						alt={prompt || 'Generated image'} 
@@ -1442,7 +1495,7 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 							<>
 								<button 
 									onClick={prevSlide} 
-									className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-green-400/50 z-10"
+									className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-lime-400/50 z-10"
 								>
 									<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -1450,7 +1503,7 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 								</button>
 								<button 
 									onClick={nextSlide} 
-									className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-green-400/50 z-10"
+									className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 backdrop-blur-sm text-white p-2.5 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-lime-400/50 z-10"
 								>
 									<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
@@ -1486,272 +1539,293 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 	);
 });
 
-// Asset Panel Component - Minimal like Layout bottom bar
-const AssetPanel = ({ user, onDragStart }) => {
-	const [assets, setAssets] = useState({
-		products: [],
-		creators: [],
-		backgrounds: []
+// Generated Content Panel - Showcase generated content for reuse
+const GeneratedContentPanel = ({ user, onDragStart }) => {
+	const [generatedContent, setGeneratedContent] = useState({
+		images: [],
+		slideshows: []
 	});
-	const [activeCategory, setActiveCategory] = useState(null);
+	const [activeTab, setActiveTab] = useState('images');
 	const [isExpanded, setIsExpanded] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
 
-	// Fetch assets from Firestore
+	// Fetch generated content from Firestore (using Dashboard's approach)
 	useEffect(() => {
 		if (!user?.uid) return;
 
-		const fetchAssets = async () => {
+		const fetchGeneratedContent = async () => {
+			setIsLoading(true);
 			try {
-				// Fetch Products
-				const productsQuery = query(
-					collection(db, 'users', user.uid, 'products'),
-					orderBy('createdAt', 'desc')
+				// Fetch from 'generations' collection (images and slideshows)
+				const generationsQuery = query(
+					collection(db, 'users', user.uid, 'generations'),
+					orderBy('timestamp', 'desc')
 				);
-				const productsSnapshot = await getDocs(productsQuery);
-				const products = productsSnapshot.docs.map(doc => ({
-					id: doc.id,
-					...doc.data(),
-					type: 'product'
-				}));
+				const generationsSnapshot = await getDocs(generationsQuery);
 
-				// Fetch Creators
-				const creatorsQuery = query(
-					collection(db, 'users', user.uid, 'creators'),
-					orderBy('createdAt', 'desc')
+				// Process generations (images and slideshows)
+				const generations = generationsSnapshot.docs.map(doc => {
+					const data = doc.data();
+					const timestamp = data.timestamp?.toDate?.() || data.timestamp || data.createdAt?.toDate?.() || new Date();
+					return {
+						id: doc.id,
+						...data,
+						timestamp,
+						createdAt: timestamp
+					};
+				});
+
+				// Separate content by type
+				const images = generations.filter(item => 
+					item.type === 'image' || (item.commandCode >= 200 && item.commandCode < 300)
 				);
-				const creatorsSnapshot = await getDocs(creatorsQuery);
-				const creators = creatorsSnapshot.docs.map(doc => ({
-					id: doc.id,
-					...doc.data(),
-					type: 'creator'
-				}));
-
-				// Fetch Backgrounds
-				const backgroundsQuery = query(
-					collection(db, 'users', user.uid, 'backgrounds'),
-					orderBy('createdAt', 'desc')
+				const slideshows = generations.filter(item => 
+					item.type === 'slideshow' || (item.commandCode >= 300 && item.commandCode < 400)
 				);
-				const backgroundsSnapshot = await getDocs(backgroundsQuery);
-				const backgrounds = backgroundsSnapshot.docs.map(doc => ({
-					id: doc.id,
-					...doc.data(),
-					type: 'background'
-				}));
 
-				setAssets({
-					products,
-					creators,
-					backgrounds
+				setGeneratedContent({
+					images,
+					slideshows
 				});
 			} catch (error) {
-				console.error('Error fetching assets:', error);
+				console.error('Error fetching generated content:', error);
+			} finally {
+				setIsLoading(false);
 			}
 		};
 
-		fetchAssets();
+		fetchGeneratedContent();
 	}, [user]);
 
-	const handleDragStart = (e, asset) => {
-		console.log('Setting drag data:', asset);
-		e.dataTransfer.setData('application/json', JSON.stringify(asset));
+	const handleDragStart = (e, content) => {
+		console.log('Dragging generated content:', content);
+		
+		// Set proper type based on activeTab and content
+		let contentType = 'generated-image';
+		if (activeTab === 'slideshows') {
+			contentType = 'generated-slideshow';
+		}
+		
+		const dragData = {
+			...content,
+			type: contentType,
+			sourceType: 'generated'
+		};
+		
+		console.log('Drag data being set:', dragData);
+		
+		e.dataTransfer.setData('application/json', JSON.stringify(dragData));
 		e.dataTransfer.effectAllowed = 'copy';
 		
-		// Close the panel during drag to avoid z-index issues
-		setTimeout(() => {
-			setIsExpanded(false);
-			setActiveCategory(null);
-		}, 100);
-		
 		if (onDragStart) {
-			onDragStart(asset);
+			onDragStart(content);
 		}
 	};
 
-	const categories = [
-		{ id: 'products', icon: Package, label: 'Products' },
-		{ id: 'creators', icon: User, label: 'Creators' },
-		{ id: 'backgrounds', icon: ImagesSquare, label: 'Backgrounds' }
+	const tabs = [
+		{ id: 'images', icon: Image, label: 'Images', count: generatedContent.images.length },
+		{ id: 'slideshows', icon: Slideshow, label: 'Slideshows', count: generatedContent.slideshows.length }
 	];
 
-	const currentAssets = assets[activeCategory] || [];
+	const currentContent = generatedContent[activeTab] || [];
 
-	const toggleCategory = (categoryId) => {
-		if (activeCategory === categoryId && isExpanded) {
-			// Close if same category clicked
-			setIsExpanded(false);
-			setActiveCategory(null);
-		} else {
-			// Open new category
-			setActiveCategory(categoryId);
-			setIsExpanded(true);
-		}
+	const formatDate = (date) => {
+		if (!date) return 'Unknown';
+		const now = new Date();
+		const diff = now - date;
+		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+		const hours = Math.floor(diff / (1000 * 60 * 60));
+		const minutes = Math.floor(diff / (1000 * 60));
+
+		if (days > 0) return `${days}d ago`;
+		if (hours > 0) return `${hours}h ago`;
+		if (minutes > 0) return `${minutes}m ago`;
+		return 'Just now';
 	};
 
 	return (
 		<>
-			{/* Unified Asset Panel - Single frame like Layout bottom bar */}
+			{/* Main Panel */}
 			<div className="fixed top-1/2 left-4 -translate-y-1/2 z-50">
-				<div className={`flex items-center bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border border-stone-200/50 dark:border-stone-700/50 rounded-xl shadow-sm transition-all duration-300 ease-out ${
-					isExpanded && activeCategory ? 'pr-0' : 'pr-3'
+				<div className={`bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl transition-all duration-300 ease-out ${
+					isExpanded ? 'w-80' : 'w-16'
 				}`}>
-					{/* Category Buttons */}
-					<div className="flex flex-col items-center p-3">
-						{categories.map((category) => {
-							const IconComponent = category.icon;
-							const isActive = activeCategory === category.id && isExpanded;
-							const count = assets[category.id]?.length || 0;
-							
-							return (
-								<button
-									key={category.id}
-									onClick={() => toggleCategory(category.id)}
-									className={`relative p-3 mb-2 last:mb-0 rounded-xl transition-all duration-200 ${
-										isActive 
-											? 'bg-neutral-100 dark:bg-neutral-800 text-stone-800 dark:text-stone-200' 
-											: 'text-stone-600 dark:text-stone-400 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'
-									}`}
-									title={category.label}
-								>
-									<IconComponent size={18} />
-									{count > 0 && (
-										<span className="absolute -top-1 -right-1 w-4 h-4 text-[10px] font-bold rounded-full bg-stone-800 dark:bg-white text-white dark:text-stone-900 flex items-center justify-center">
-											{count}
+					{/* Collapsed State - Icon Only */}
+					{!isExpanded && (
+						<div className="p-4 flex flex-col items-center">
+							<button
+								onClick={() => setIsExpanded(true)}
+								className="p-3 rounded-xl bg-neutral-800/50 hover:bg-neutral-700/50 text-neutral-300 hover:text-white transition-all duration-200 group"
+								title="Generated Content"
+							>
+								<div className="relative">
+									<Sparkle size={20} className="group-hover:scale-110 transition-transform" />
+									{(generatedContent.images.length + generatedContent.slideshows.length) > 0 && (
+										<span className="absolute -top-2 -right-2 w-4 h-4 text-[10px] font-bold rounded-full bg-lime-500 text-black flex items-center justify-center">
+											{generatedContent.images.length + generatedContent.slideshows.length}
 										</span>
 									)}
-								</button>
-							);
-						})}
-					</div>
+								</div>
+							</button>
+							<span className="text-xs text-neutral-500 mt-2 text-center leading-tight">
+								My<br/>Content
+							</span>
+						</div>
+					)}
 
-					{/* Expanded Content - Same frame */}
-					<div 
-						className={`transition-all duration-300 ease-out overflow-hidden ${
-							isExpanded && activeCategory 
-								? 'w-72 opacity-100' 
-								: 'w-0 opacity-0'
-						}`}
-					>
-						<div className="w-72 border-l border-stone-200/50 dark:border-stone-700/50 max-h-96 overflow-hidden flex flex-col">
+					{/* Expanded State */}
+					{isExpanded && (
+						<div className="flex flex-col h-[500px]">
 							{/* Header */}
-							<div className="flex items-center justify-between p-3 border-b border-stone-200/50 dark:border-stone-700/50">
+							<div className="flex items-center justify-between p-4 border-b border-neutral-700/50">
 								<div className="flex items-center gap-2">
-									{activeCategory && React.createElement(categories.find(c => c.id === activeCategory)?.icon, { size: 16 })}
-									<span className="text-sm font-medium text-stone-900 dark:text-stone-100">
-										{activeCategory && categories.find(c => c.id === activeCategory)?.label}
-									</span>
+									<Sparkle size={18} className="text-lime-500" />
+									<span className="text-sm font-semibold text-white">Generated Content</span>
 								</div>
 								<button
-									onClick={() => {
-										setIsExpanded(false);
-										setActiveCategory(null);
-									}}
-									className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-500 dark:text-stone-400 transition-colors"
+									onClick={() => setIsExpanded(false)}
+									className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
 								>
 									<X size={16} />
 								</button>
 							</div>
 
-							{/* Assets Grid */}
+							{/* Tabs */}
+							<div className="flex border-b border-neutral-700/50">
+								{tabs.map((tab) => {
+									const IconComponent = tab.icon;
+									const isActive = activeTab === tab.id;
+									
+									return (
+										<button
+											key={tab.id}
+											onClick={() => setActiveTab(tab.id)}
+											className={`flex-1 flex items-center justify-center gap-2 p-3 text-sm font-medium transition-all duration-200 ${
+												isActive 
+													? 'text-lime-400 border-b-2 border-lime-400 bg-lime-500/5' 
+													: 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+											}`}
+										>
+											<IconComponent size={16} />
+											<span>{tab.label}</span>
+											{tab.count > 0 && (
+												<span className={`text-xs px-1.5 py-0.5 rounded-full ${
+													isActive ? 'bg-lime-500 text-black' : 'bg-neutral-700 text-neutral-300'
+												}`}>
+													{tab.count}
+												</span>
+											)}
+										</button>
+									);
+								})}
+							</div>
+
+							{/* Content Grid */}
 							<div className="flex-1 overflow-y-auto p-3">
-								{currentAssets.length === 0 ? (
-									<div className="text-center py-6">
-										<div className="text-stone-400 mb-2">
-											{activeCategory && React.createElement(categories.find(c => c.id === activeCategory)?.icon, { size: 24 })}
+								{isLoading ? (
+									<div className="flex items-center justify-center h-full">
+										<div className="animate-spin rounded-full h-8 w-8 border-2 border-lime-500 border-t-transparent"></div>
+									</div>
+								) : currentContent.length === 0 ? (
+									<div className="text-center py-8 px-4">
+										<div className="text-neutral-500 mb-3">
+											{activeTab === 'images' ? <Image size={32} /> : <Slideshow size={32} />}
 										</div>
-										<p className="text-xs text-stone-500 dark:text-stone-400">
-											No {activeCategory} found
+										<p className="text-sm text-neutral-400 mb-1">
+											No {activeTab} generated yet
 										</p>
-										<p className="text-xs text-stone-400 dark:text-stone-500">
-											Add some in Settings
+										<p className="text-xs text-neutral-500">
+											Generate some content to see it here
 										</p>
 									</div>
 								) : (
 									<div className="grid grid-cols-3 gap-2">
-										{currentAssets.map((asset, index) => {
-											// Use correct URL for each asset type
-											let assetUrl = '';
-											if (asset.type === 'product') {
-												assetUrl = asset.mediaType === 'video' ? asset.mediaUrl : asset.logoUrl;
-											} else if (asset.type === 'creator') {
-												assetUrl = asset.imageUrl;
-											} else if (asset.type === 'background') {
-												assetUrl = asset.imageUrl;
-											}
-
-											return (
-												<div
-													key={asset.id}
-													draggable
-													onDragStart={(e) => handleDragStart(e, asset)}
-													className={`group relative aspect-[9/16] bg-neutral-50 dark:bg-neutral-800 rounded-lg overflow-hidden cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-stone-400 transition-all duration-200 ${
-														isExpanded ? 'animate-in slide-in-from-left-1 fade-in' : ''
-													}`}
-													style={{
-														animationDelay: `${index * 50}ms`,
-														animationFillMode: 'both'
-													}}
-												>
-													{/* Asset Content */}
-													{assetUrl && (
-														<>
-															{asset.type === 'product' && asset.mediaType === 'video' ? (
-																<video
-																	src={assetUrl}
-																	className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-																	muted
-																	loop
-																	onMouseEnter={(e) => e.target.play().catch(() => {})}
-																	onMouseLeave={(e) => e.target.pause()}
-																/>
-															) : (
-																<img
-																	src={assetUrl}
-																	alt={asset.name}
-																	className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-																/>
-															)}
-														</>
-													)}
-													
-													{/* Hover Overlay */}
-													<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-														<div className="opacity-0 group-hover:opacity-100 transition-opacity bg-stone-800 text-white text-xs px-2 py-1 rounded">
-															Drag
-														</div>
-													</div>
-													
-													{/* Name */}
-													<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-														<p className="text-xs font-medium text-white truncate">
-															{asset.name}
-														</p>
-														{asset.type === 'product' && asset.mediaType && (
-															<p className="text-[10px] text-white/80">
-																{asset.mediaType}
-															</p>
+										{currentContent.map((content, index) => (
+											<div
+												key={content.id}
+												draggable
+												onDragStart={(e) => handleDragStart(e, content)}
+												className="group relative aspect-[9/16] bg-neutral-800 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-lime-400/50 transition-all duration-200"
+												style={{
+													animationDelay: `${index * 50}ms`,
+													animationFillMode: 'both'
+												}}
+											>
+												{/* Content Display */}
+												{activeTab === 'images' ? (
+													<img
+														src={content.url || content.imageUrl}
+														alt={content.prompt || content.name || 'Generated Image'}
+														className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+													/>
+												) : (
+													<div className="w-full h-full bg-gradient-to-br from-neutral-700 to-neutral-800 flex items-center justify-center">
+														{content.processedImageUrls && content.processedImageUrls.length > 0 ? (
+															<img
+																src={content.processedImageUrls[0]}
+																alt={content.topic || 'Generated Slideshow'}
+																className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+															/>
+														) : content.thumbnailUrl ? (
+															<img
+																src={content.thumbnailUrl}
+																alt={content.topic || 'Generated Slideshow'}
+																className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+															/>
+														) : (
+															<div className="text-center p-2">
+																<Slideshow size={20} className="text-neutral-400 mx-auto mb-1" />
+																<p className="text-[10px] text-neutral-300 font-medium truncate">
+																	{content.topic || content.name || 'Slideshow'}
+																</p>
+															</div>
 														)}
 													</div>
+												)}
+												
+												{/* Hover Overlay */}
+												<div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+													<div className="opacity-0 group-hover:opacity-100 transition-opacity bg-lime-500 text-black text-xs px-2 py-1 rounded-lg font-medium">
+														Drag
+													</div>
 												</div>
-											);
-										})}
+												
+												{/* Info Badge */}
+												<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+													<p className="text-[10px] font-medium text-white truncate mb-0.5">
+														{activeTab === 'images' 
+															? (content.prompt?.slice(0, 20) + (content.prompt?.length > 20 ? '...' : '')) 
+															: (content.topic || content.name || 'Untitled')
+														}
+													</p>
+													<p className="text-[9px] text-neutral-300">
+														{formatDate(content.createdAt)}
+													</p>
+												</div>
+
+												{/* Type Badge */}
+												<div className="absolute top-1.5 right-1.5">
+													<span className="bg-black/60 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded-full font-medium">
+														{activeTab === 'images' ? 'IMG' : 'SLIDE'}
+													</span>
+												</div>
+											</div>
+										))}
 									</div>
 								)}
 							</div>
+
+							{/* Footer Stats */}
+							<div className="border-t border-neutral-700/50 p-3">
+								<div className="flex items-center justify-between text-xs text-neutral-500">
+									<span>Total: {generatedContent.images.length + generatedContent.slideshows.length}</span>
+									<span>Drag to canvas to reuse</span>
+								</div>
+							</div>
 						</div>
-					</div>
+					)}
 				</div>
 			</div>
-
-			{/* Backdrop */}
-			{isExpanded && (
-				<div 
-					className="fixed inset-0 z-30" 
-					onClick={() => {
-						setIsExpanded(false);
-						setActiveCategory(null);
-					}}
-				/>
-			)}
 		</>
 	);
 };
@@ -2012,6 +2086,42 @@ const CanvasWorkspace = () => {
 		}
 	}, [setCanvasStatus]);
 
+	// Helper function to safely serialize nodes and edges
+	const createSerializableState = (nodes, edges) => {
+		// Only keep essential properties from nodes
+		const serializableNodes = nodes.map(node => ({
+			id: node.id,
+			type: node.type,
+			position: node.position,
+			data: node.data,
+			width: node.width,
+			height: node.height,
+			selected: node.selected,
+			dragging: node.dragging,
+			// Exclude any React Flow internal properties that might cause circular references
+		}));
+
+		// Only keep essential properties from edges
+		const serializableEdges = edges.map(edge => ({
+			id: edge.id,
+			source: edge.source,
+			target: edge.target,
+			sourceHandle: edge.sourceHandle,
+			targetHandle: edge.targetHandle,
+			type: edge.type,
+			style: edge.style,
+			animated: edge.animated,
+			label: edge.label,
+			// Exclude any React Flow internal properties
+		}));
+
+		return {
+			nodes: serializableNodes,
+			edges: serializableEdges,
+			timestamp: Date.now()
+		};
+	};
+
 	// Auto-save canvas state
 	useEffect(() => {
 		// Don't save empty canvas or during initial load
@@ -2031,11 +2141,7 @@ const CanvasWorkspace = () => {
 		
 		const saveTimeout = setTimeout(() => {
 			try {
-				const stateToSave = {
-					nodes,
-					edges,
-					timestamp: Date.now()
-				};
+				const stateToSave = createSerializableState(nodes, edges);
 				
 				localStorage.setItem('lungoai-canvas-state', JSON.stringify(stateToSave));
 				const now = new Date();
@@ -2118,11 +2224,79 @@ const CanvasWorkspace = () => {
 		// First, mark the source node as generating
 		updateNodeData(sourceNodeId, { isGenerating: true });
 
+		// Create empty result node immediately
+		setNodes((currentNodes) => {
+			const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
+			if (!sourceNode) return currentNodes;
+
+			let newNode;
+			
+			if (generationData.type === 'slideshow') {
+				newNode = {
+					id: newNodeId,
+					type: 'slideshowResult',
+					position: {
+						x: sourceNode.position.x + (sourceNode.width || 340) + 150,
+						y: sourceNode.position.y,
+					},
+					data: {
+						label: 'Generating Slideshow...',
+						isGenerating: true,
+						slideTexts: [],
+						backgroundUrl: null,
+						processedImageUrls: [],
+						generatedAt: timestamp,
+					},
+				};
+			} else { // For 'image' and 'video' from AIFrame
+				newNode = {
+					id: newNodeId,
+					type: 'generatedFrame',
+					position: {
+						x: sourceNode.position.x,
+						y: sourceNode.position.y + (sourceNode.height || 400) + 150,
+					},
+					data: {
+						imageUrl: null,
+						videoUrl: null,
+						prompt: generationData.prompt,
+						type: generationData.type,
+						isGenerating: true,
+						generatedAt: timestamp,
+					},
+				};
+			}
+
+			return [...currentNodes, newNode];
+		});
+
+		// Create animated connection edge immediately
+		setEdges((currentEdges) => {
+			const newEdge = {
+				id: newEdgeId,
+				source: sourceNodeId,
+				target: newNodeId,
+				style: { 
+					stroke: '#84cc16', 
+					strokeWidth: 4,
+					strokeDasharray: '8,4'
+				},
+				className: 'generation-edge',
+				animated: true,
+			};
+			return addEdge(newEdge, currentEdges);
+		});
+
 		try {
 			let result = null;
 
 			if (generationData.type === 'image') {
 				console.log('🖼️ Calling generateImage...');
+				console.log('🖼️ Generation data:', {
+					prompt: generationData.prompt,
+					subtype: generationData.subtype,
+					selectedFrame: generationData.selectedFrame,
+				});
 				
 				// Simple approach: just send prompt, subtype and selectedFrame
 				// AI service will handle the rest based on rules
@@ -2147,69 +2321,39 @@ const CanvasWorkspace = () => {
 				console.log('🎬 Video generation result:', result);
 			}
 
-			// Clear generating state
+			// Clear generating states
 			updateNodeData(sourceNodeId, { isGenerating: false });
 
 			if (result && result.success) {
-				// Create new result node
-				setNodes((currentNodes) => {
-					const sourceNode = currentNodes.find(n => n.id === sourceNodeId);
-					if (!sourceNode) return currentNodes;
-
-					let newNode;
-					
-					if (generationData.type === 'slideshow') {
-						newNode = {
-							id: newNodeId,
-							type: 'slideshowResult',
-							position: {
-								x: sourceNode.position.x + (sourceNode.width || 340) + 150,
-								y: sourceNode.position.y,
-							},
-							data: {
-								label: 'Generated Slideshow',
-								slideTexts: generationData.slideTexts || [],
-								backgroundUrl: generationData.selectedBackgroundUrl,
-								processedImageUrls: generationData.processedImageUrls || [],
-								generationId: generationData.generationId,
-								generatedAt: timestamp,
-							},
-						};
-					} else { // For 'image' and 'video' from AIFrame
-						newNode = {
-							id: newNodeId,
-							type: 'generatedFrame',
-							position: {
-								x: sourceNode.position.x,
-								y: sourceNode.position.y + (sourceNode.height || 400) + 150,
-							},
-							data: {
-								imageUrl: result.imageUrl || generationData.imageUrl,
-								videoUrl: result.videoUrl || generationData.videoUrl,
-								prompt: generationData.prompt,
-								type: generationData.type,
-								generatedAt: timestamp,
-							},
-						};
-					}
-
-					return [...currentNodes, newNode];
+				// Update the existing result node with actual content
+				updateNodeData(newNodeId, {
+					imageUrl: result.imageUrl || generationData.imageUrl,
+					videoUrl: result.videoUrl || generationData.videoUrl,
+					slideTexts: generationData.slideTexts || [],
+					backgroundUrl: generationData.selectedBackgroundUrl,
+					processedImageUrls: generationData.processedImageUrls || [],
+					generationId: generationData.generationId,
+					isGenerating: false,
+					label: generationData.type === 'slideshow' ? 'Generated Slideshow' : undefined
 				});
 
-				// Create connection edge with green styling for generated content
-				setEdges((currentEdges) => {
-					const newEdge = {
-						id: newEdgeId,
-						source: sourceNodeId,
-						target: newNodeId,
-						style: { 
-							stroke: '#22c55e', 
-							strokeWidth: 3,
-							strokeDasharray: '5,5'
-						},
-					};
-					return addEdge(newEdge, currentEdges);
-				});
+				// Update edge to success styling
+				setEdges((currentEdges) => 
+					currentEdges.map(edge => 
+						edge.id === newEdgeId 
+							? {
+								...edge,
+								style: { 
+									stroke: '#84cc16', 
+									strokeWidth: 3,
+									strokeDasharray: '5,5'
+								},
+								className: 'generated-edge',
+								animated: false,
+							}
+							: edge
+					)
+				);
 
 				console.log('✅ Generation completed successfully');
 			} else {
@@ -2221,6 +2365,29 @@ const CanvasWorkspace = () => {
 				isGenerating: false, 
 				error: error.message 
 			});
+			updateNodeData(newNodeId, { 
+				isGenerating: false, 
+				error: error.message 
+			});
+			
+			// Update edge to error styling
+			setEdges((currentEdges) => 
+				currentEdges.map(edge => 
+					edge.id === newEdgeId 
+						? {
+							...edge,
+							style: { 
+								stroke: '#ef4444', 
+								strokeWidth: 3,
+								strokeDasharray: '2,2'
+							},
+							className: 'error-edge',
+							animated: false,
+						}
+						: edge
+				)
+			);
+			
 			alert(`Generation failed: ${error.message}`);
 		}
 	}, [updateNodeData]);
@@ -2346,12 +2513,12 @@ const CanvasWorkspace = () => {
 		slideshow: (props) => (
 			<SlideshowNode 
 				{...props} 
+				user={user}
 				onUpdateNode={updateNodeData} 
 				onGenerate={handleGenerate}
 				onDropdownStateChange={setIsAnyDropdownOpen}
 			/>
 		),
-		slideshowResult: (props) => <SlideshowResultNode {...props} />,
 	}), [updateNodeData, addNodeToCanvas, handleGenerate]);
 
 	// Event handlers for right-click menus
@@ -2403,18 +2570,9 @@ const CanvasWorkspace = () => {
 		if (type === 'slideshow') {
 			newNode.data = {
 				...newNode.data,
-				slideshowTypeOptions: [
-					{ value: 'top_3_lists', label: 'Top 3 Lists', icon: Slideshow },
-					{ value: 'before_after', label: 'Before & After', icon: Slideshow },
-					{ value: 'step_by_step', label: 'Step by Step', icon: Slideshow }
-				],
-				languageOptions: [
-					{ value: 'en', label: 'English' },
-					{ value: 'tr', label: 'Türkçe' },
-					{ value: 'es', label: 'Español' },
-					{ value: 'fr', label: 'Français' }
-				],
-				backgrounds: [] // Empty array since backgrounds are now managed by AssetPanel
+				slideshowType: 'top_3_lists',
+				imageGenerationMode: 'ai_per_slide',
+				selectedProduct: null
 			};
 		} else if (type === 'image') {
 			newNode.data.type = 'image';
@@ -2434,18 +2592,18 @@ const CanvasWorkspace = () => {
 		setDeleteMenu(null);
 	}, [deleteMenu]);
 
-	// Add drag and drop handlers for assets
-	const handleAssetDrop = useCallback((event) => {
+	// Add drag and drop handlers for generated content
+	const handleContentDrop = useCallback((event) => {
 		event.preventDefault();
 		
-		console.log('Asset dropped!', event);
+		console.log('Generated content dropped!', event);
 		
 		try {
-			const assetData = JSON.parse(event.dataTransfer.getData('application/json'));
-			console.log('Asset data:', assetData);
+			const contentData = JSON.parse(event.dataTransfer.getData('application/json'));
+			console.log('Content data:', contentData);
 			
-			if (!assetData || !reactFlowInstance) {
-				console.log('Missing asset data or reactFlowInstance');
+			if (!contentData || !reactFlowInstance) {
+				console.log('Missing content data or reactFlowInstance');
 				return;
 			}
 
@@ -2462,62 +2620,37 @@ const CanvasWorkspace = () => {
 			console.log('Drop position:', position);
 
 			let newNode;
-			const nodeId = `asset-${Date.now()}`;
+			const nodeId = `generated-${Date.now()}`;
 
-			if (assetData.type === 'product') {
-				console.log('Creating product node');
-				// Create video upload node for product videos, image upload for product logos
-				if (assetData.mediaType === 'video' && assetData.mediaUrl) {
-					newNode = {
-						id: nodeId,
-						type: 'videoUpload',
-						position,
-						data: {
-							videoUrl: assetData.mediaUrl,
-							fileName: assetData.name,
-							assetType: 'products',
-							label: assetData.name
-						}
-					};
-				} else if (assetData.logoUrl) {
-					newNode = {
-						id: nodeId,
-						type: 'imageUpload',
-						position,
-						data: {
-							imageUrl: assetData.logoUrl,
-							fileName: assetData.name,
-							assetType: 'products',
-							label: assetData.name
-						}
-					};
-				}
-			} else if (assetData.type === 'creator') {
-				console.log('Creating creator node');
-				// Create image upload node for creator
+			if (contentData.type === 'generated-image') {
+				console.log('Creating generated image node');
 				newNode = {
 					id: nodeId,
-					type: 'imageUpload',
+					type: 'generatedFrame',
 					position,
 					data: {
-						imageUrl: assetData.imageUrl,
-						fileName: assetData.name,
-						assetType: 'creators',
-						label: assetData.name
+						imageUrl: contentData.url || contentData.imageUrl,
+						prompt: contentData.prompt || contentData.name || 'Generated Image',
+						type: 'image',
+						isGenerating: false,
+						generatedAt: contentData.createdAt?.getTime() || Date.now()
 					}
 				};
-			} else if (assetData.type === 'background') {
-				console.log('Creating background node');
-				// Create image upload node for background
+			} else if (contentData.type === 'generated-slideshow') {
+				console.log('Creating generated slideshow node');
 				newNode = {
 					id: nodeId,
-					type: 'imageUpload',
+					type: 'generatedFrame',
 					position,
 					data: {
-						imageUrl: assetData.imageUrl,
-						fileName: assetData.name,
-						assetType: 'backgrounds',
-						label: assetData.name
+						imageUrl: contentData.processedImageUrls?.[0] || contentData.thumbnailUrl,
+						prompt: contentData.topic || contentData.name || 'Generated Slideshow',
+						type: 'slideshow',
+						isGenerating: false,
+						slideTexts: contentData.slideTexts || [],
+						processedImageUrls: contentData.processedImageUrls || [],
+						generationId: contentData.id,
+						generatedAt: contentData.createdAt?.getTime() || Date.now()
 					}
 				};
 			}
@@ -2531,22 +2664,22 @@ const CanvasWorkspace = () => {
 				console.log('No node was created');
 			}
 		} catch (error) {
-			console.error('Error handling asset drop:', error);
+			console.error('Error handling content drop:', error);
 		}
 	}, [reactFlowInstance]);
 
-	const handleAssetDragOver = useCallback((event) => {
+	const handleContentDragOver = useCallback((event) => {
 		event.preventDefault();
 		event.dataTransfer.dropEffect = 'copy';
 	}, []);
 
 	return (
 		<div className="w-full h-screen relative overflow-hidden" ref={reactFlowWrapper}>
-			{/* Asset Panel */}
-			<AssetPanel 
+			{/* Generated Content Panel */}
+			<GeneratedContentPanel 
 				user={user}
-				onDragStart={(asset) => {
-					console.log('Dragging asset:', asset);
+				onDragStart={(content) => {
+					console.log('Dragging generated content:', content);
 				}}
 			/>
 
@@ -2565,8 +2698,8 @@ const CanvasWorkspace = () => {
 					onPaneClick={onPaneClick}
 					onPaneContextMenu={onPaneContextMenu}
 					onNodeContextMenu={onNodeContextMenu}
-					onDrop={handleAssetDrop}
-					onDragOver={handleAssetDragOver}
+					onDrop={handleContentDrop}
+					onDragOver={handleContentDragOver}
 					className="bg-neutral-950"
 					style={{ width: '100%', height: '100vh' }}
 					zoomOnScroll={!isAnyDropdownOpen}
@@ -2623,15 +2756,6 @@ const CanvasWorkspace = () => {
 						</button>
 					</div>
 				)}
-
-				{/* Dynamic Island - Top Center */}
-				<div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50">
-					<DynamicIsland 
-						generatingItem={generatingItem}
-						commandQueue={commandQueue || []}
-						isDarkMode={isDarkMode || false}
-					/>
-				</div>
 
 				{/* Canvas Tutorial */}
 				<CanvasTutorial 

@@ -53,12 +53,18 @@
 	}
 }
 
-/* React Flow Custom Selection - Simple Green */
+/* React Flow Custom Selection - All Lime */
 .react-flow__node.selected {
   outline: none !important;
-  box-shadow: 0 0 0 2px #10b981 !important;
+  box-shadow: 0 0 0 2px #84cc16 !important;
   border-radius: 16px !important;
 }
+
+
+
+
+
+
 
 /* Remove all arrows from edges */
 .react-flow__edge .react-flow__edge-path {
@@ -72,6 +78,60 @@
 
 .react-flow__edge-marker {
   display: none !important;
+}
+
+/* Generation Edge Animations */
+.react-flow__edge.generation-edge .react-flow__edge-path {
+  stroke: #84cc16 !important;
+  stroke-width: 4px !important;
+  stroke-dasharray: 8 4 !important;
+  animation: generationFlow 0.8s linear infinite;
+}
+
+.react-flow__edge.generated-edge .react-flow__edge-path {
+  stroke: #84cc16 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 5 5 !important;
+  animation: successPulse 3s ease-in-out infinite;
+}
+
+.react-flow__edge.error-edge .react-flow__edge-path {
+  stroke: #ef4444 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 2 2 !important;
+  animation: errorPulse 1s ease-in-out infinite;
+}
+
+@keyframes generationFlow {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -12;
+    opacity: 0.8;
+  }
+}
+
+@keyframes successPulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes errorPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Custom Cursors for React Flow - Soft & Natural */

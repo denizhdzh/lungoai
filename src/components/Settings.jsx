@@ -1508,7 +1508,7 @@ function Settings() {
               className="w-full px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-stone-200 dark:border-stone-700 text-black dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-stone-300 dark:focus:ring-stone-600"
             />
              {/* Character Counter with improved visual feedback */}
-            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 50 ? 'text-green-600 dark:text-green-400' : 'text-stone-500 dark:text-stone-400'}`}>
+            <p className={`text-xs mt-1.5 ${productDescriptionForForm.length >= 50 ? 'text-lime-600 dark:text-lime-400' : 'text-stone-500 dark:text-stone-400'}`}>
                 {productDescriptionForForm.length} / 50 characters {productDescriptionForForm.length < 50 ? `(${50 - productDescriptionForForm.length} more needed)` : '✓'}
             </p>
           </div>
@@ -2143,7 +2143,7 @@ function Settings() {
                           return (
                               <div 
                                   key={url} 
-                                  className={`relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer group border-2 ${isSelected ? 'border-blue-500' : isAlreadyAdded ? 'border-green-500/50' : 'border-transparent hover:border-stone-300 dark:hover:border-stone-600'}`}
+                                  className={`relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer group border-2 ${isSelected ? 'border-blue-500' : isAlreadyAdded ? 'border-lime-500/50' : 'border-transparent hover:border-stone-300 dark:hover:border-stone-600'}`}
                                   onClick={() => toggleLibrarySelection(url)}
                                   title={isAlreadyAdded ? `${name} (Already Added)` : name}
                               >
@@ -2155,7 +2155,7 @@ function Settings() {
                                   />
                                   {/* Selection / Added Indicator */}
                                   {(isSelected || isAlreadyAdded) && (
-                                      <div className={`absolute inset-0 flex items-center justify-center ${isSelected ? 'bg-blue-500/50' : 'bg-green-800/60'}`}>
+                                      <div className={`absolute inset-0 flex items-center justify-center ${isSelected ? 'bg-blue-500/50' : 'bg-lime-800/60'}`}>
                                            <CheckCircle size={24} weight="fill" className="text-stone-100" />
                                       </div>
                                   )}
@@ -2754,7 +2754,7 @@ function Settings() {
           {showToast && toastMessage && (
             <div 
               className={`fixed top-5 right-5 z-[100] px-6 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 ease-in-out transform ${showToast ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'} 
-                          ${toastMessage.type === 'success' ? 'bg-green-500 text-stone-100' : 
+                          ${toastMessage.type === 'success' ? 'bg-lime-500 text-stone-100' : 
                             toastMessage.type === 'error' ? 'bg-red-500 text-stone-100' : 
                             'bg-neutral-800 text-stone-100 dark:bg-neutral-100 dark:text-black'}`}
             >

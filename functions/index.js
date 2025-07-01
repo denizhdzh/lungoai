@@ -480,8 +480,42 @@ async function enhancePromptWithRules(originalPrompt, subtype, selectedFrame, op
 }
 
 function getImageSetRulesByFrameId(frameId) {
+    logger.info(`[getImageSetRulesByFrameId] Looking for frameId: "${frameId}", type: ${typeof frameId}`);
+    
     // Your detailed image rules from imageRules.json
     const frameMapping = {
+        'background': {
+            name: 'Background Scene',
+            rules: {
+                composition_and_perspective: {
+                    camera_type: "Professional DSLR, mirrorless, or high-end camera",
+                    focal_length_mm: "24mm to 85mm equivalent (wide to medium telephoto for versatile backgrounds)",
+                    aperture_range: "f/1.4 - f/8 (variable depth control)",
+                    focus_mode: "Manual or autofocus on key background elements",
+                    framing: "Wide establishing shot or medium environmental shot, showcasing the setting",
+                    orientation: "Horizontal (landscape) or vertical (portrait) based on scene",
+                    camera_position: "Positioned to capture the most compelling view of the environment"
+                },
+                location_and_background: {
+                    setting: "Atmospheric environments: urban streets, nature scenes, architectural spaces, interiors",
+                    background_elements: "Rich environmental details that tell a story or create mood",
+                    background_blur: "Variable - sharp details where needed, subtle blur for depth",
+                    depth_of_field: "Optimized for the scene - deep for landscapes, shallow for focus"
+                },
+                lighting: {
+                    lighting_type: "Natural or ambient lighting that enhances the mood and atmosphere",
+                    white_balance: "Appropriate for the environment and time of day",
+                    exposure_compensation: "Optimized for the scene's dynamic range",
+                    ISO_setting: "Low ISO for maximum quality and detail",
+                    shutter_speed: "Appropriate for the scene - fast for sharp details, slow for motion blur if desired"
+                },
+                mood_and_atmosphere: {
+                    overall_feel: "Cinematic, atmospheric, and visually compelling",
+                    color_palette: "Rich and harmonious colors that enhance the environment",
+                    contrast: "Good contrast to create visual interest and depth"
+                }
+            }
+        },
         'car_selfie_glow': {
             name: 'Car Selfie Glow',
             rules: {
@@ -592,10 +626,236 @@ function getImageSetRulesByFrameId(frameId) {
                      hair: "Loose, natural, flowing with some movement from walking."
                  }
              }
+         },
+         'late_night_lofi': {
+             name: 'Late Night Lo-Fi Vibes',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "35mm film camera with direct flash, or digital compact camera with pop-up/onboard flash",
+                     focal_length_mm: "28mm to 38mm equivalent (slight wide angle, classic point-and-shoot aesthetic)",
+                     aperture_range: "f/2.8 - f/4.0 (fixed or semi-fixed)",
+                     focus_mode: "Autofocus or fixed focus, with a focus point on the subject's face; edge blur or mild softness from flash acceptable",
+                     framing: "Casual waist-up or chest-up, some shots even wider for context (full body or half body). Slightly off-center, spontaneous cropping likely (limbs or objects getting cropped).",
+                     orientation: "Mostly vertical (portrait) or horizontal (landscape), images may include slight tilt or off-axis framing",
+                     camera_position: "Eye-level or slightly above, close range (50-120cm from subject); handheld, point-and-shoot style"
+                 },
+                 location_and_background: {
+                     setting: "Ordinary indoor/nighttime settings—kitchen, laundry, living room, and informal gathering places",
+                     background_elements: "Typical home or shared-space elements (fridge, oven, cabinets, appliances, tables, laundry machines) are clearly visible; natural disorder is left intact",
+                     background_blur: "Minimal; most details in the background captured sharply due to flash and small sensor/fixed aperture",
+                     depth_of_field: "Very wide (everything reasonably sharp—classic compact camera look)"
+                 },
+                 lighting: {
+                     lighting_type: "Direct on-camera flash (harsh, creates sharp-edged shadows and light fall-off); room ambient light is present but dominated by flash",
+                     white_balance: "Auto or flash preset; color temperature 5000-6500K (neutral to slightly cool). Skin tones can appear pale or desaturated under flash.",
+                     exposure_compensation: "0EV; mild occasional overexposure on faces and highlights due to flash is normal",
+                     ISO_setting: "200–400 for film, ISO 100–400 for digital (supports clear details and flash)",
+                     shutter_speed: "1/60 to 1/125s; typical flash sync speeds, prevents motion blur"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Relaxed, casual, sometimes exaggerated or humorous (drinking, eating, showing attitude, playing with food, lounging in odd locations like laundry baskets)",
+                     facial_expression: "Unfiltered, playful, or nonchalant; subjects may be smiling, making faces, pouting, laughing, or displaying irreverent gestures (e.g. flipping the finger)",
+                     gaze_direction: "Facing the camera directly, glancing away, or interacting with someone/something offscreen; engagement with the flash/camera is a key part of the snapshot look"
+                 },
+                 fashion_and_style: {
+                     clothing: "Simple, everyday, casual wear: t-shirts, sweatshirts, pajamas, denim, possibly oversized or relaxed fits",
+                     accessories: "Minimal: earrings, bracelets, or everyday items (food, utensils, soda bottles) used as props",
+                     hair: "Loose, natural, sometimes slightly messy or 'unstyled', in line with the spontaneous, candid vibe"
+                 }
+             }
+         },
+         'forced_perspective_play': {
+             name: 'Forced Perspective Play',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Modern smartphone main camera (wide lens) or digital mirrorless/compact with wide lens",
+                     focal_length_mm: "16mm to 24mm equivalent (ultra-wide to wide angle lens, enables strong forced perspective)",
+                     aperture_range: "f/1.8 - f/2.8 (smartphone wide lens default or compact wide prime)",
+                     focus_mode: "Autofocus, focused on foreground object or hand; background person/subject remains within depth of field due to wide lens",
+                     framing: "Full body or knee-up; subject is placed in background while hand/props/objects (cups, hands, fingers) are held very close to the lens, appearing oversized and prominent. The perspective exaggerates the size difference.",
+                     orientation: "Vertical (portrait) orientation nearly always used for impact on social media feeds; camera faces slightly downward and at angle to create playful sense of scale.",
+                     camera_position: "Handheld at arm's length above/between chest and eye level, or facing downward towards standing or sitting subject. Camera 40–90cm from foreground hand/object, 2–4 meters from subject."
+                 },
+                 location_and_background: {
+                     setting: "Urban or street outdoor (sidewalks, in front of cafes/shops, tiled walls); spacious for depth between hand and subject",
+                     background_elements: "Urban details: tiles, shop windows, signage, bikes, sidewalk cracks, plant pots, etc. Environment largely in focus and unobstructed.",
+                     background_blur: "Minimal; ultra-wide lens and high f-number keeps both hand/object and person sharp. Slight loss of detail in background edges is natural.",
+                     depth_of_field: "Very deep; both foreground and background sharply rendered."
+                 },
+                 lighting: {
+                     lighting_type: "Natural daylight, generally bright and even (open shade or direct sun). Strong, clean daylight required for edge-to-edge sharpness.",
+                     white_balance: "Auto (typically ~5000-6500K), adapted for daylight",
+                     exposure_compensation: "Autoexposure or slight -0.3EV bias to prevent highlights from blowing out on hands/objects",
+                     ISO_setting: "ISO 50–200 (smartphone daylight base); minimal noise",
+                     shutter_speed: "1/200s–1/800s to freeze movement, especially for close-up hands"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Subject stands or sits facing camera, holding objects (cups, drinks) or hands fully extended toward lens; foreground hand(s) or held objects are very large in frame; subject casually posed in background, sometimes interacting with foreground (e.g. looking at drink, reacting to hand gesture, playful expressions)",
+                     facial_expression: "Playful, expressive, or nonchalant—pout, pursed lips, sunglasses, peace signs, or small smiles; not serious or posed",
+                     gaze_direction: "Occasionally looking at the camera, at the hand/object, or away; interactive vibe"
+                 },
+                 fashion_and_style: {
+                     clothing: "Trendy or casual urbanwear: oversized sweaters/jackets, loose jeans/trousers, visible accessories (nails, sunglasses, bags)",
+                     accessories: "Nail art, sunglasses, small jewelry, statement bags/props",
+                     hair: "Loose, styled or naturally flowing; not staged"
+                 }
+             }
+         },
+         'solo_snap_vibe': {
+             name: 'Solo Snap Vibe',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Smartphone front camera or digital compact camera with LCD/preview screen",
+                     focal_length_mm: "22mm to 28mm equivalent (standard smartphone wide front camera or compact)",
+                     aperture_range: "f/2.0 - f/2.4 (smartphone norm, medium depth of field)",
+                     focus_mode: "Autofocus or fixed focus, always on face",
+                     framing: "Loose close-up or medium crop (shoulders-up to waist-up), centered or slightly off-center. Subject dominant in frame, background not too tight.",
+                     orientation: "Portrait orientation (vertical), camera directly in front, slight downward angle if handheld",
+                     camera_position: "Handheld at arm's length or resting on stable surface. Subject distance: 40-70cm from lens."
+                 },
+                 location_and_background: {
+                     setting: "Casual environments: indoors (cafes, restaurants, bedrooms), or outdoor (beach, park, backyard).",
+                     background_elements: "Simple, slightly blurred, but recognizable real-life context: furniture, lights, sand, sky. No staged backdrops. Practical lighting fixtures (ceiling spotlights, ambient sun, etc.).",
+                     background_blur: "Minimal; smartphone default DOF so background is present but not distracting.",
+                     depth_of_field: "Moderate; face clearly in focus, background with gentle falloff if any."
+                 },
+                 lighting: {
+                     lighting_type: "Natural daylight, window light, or ambient indoor light (ceiling fixtures, no flash, no harsh spotlighting)",
+                     white_balance: "Auto, tuned for accurate skin tones (approx. 4300–6000K; neutral to warm indoors, natural daylight outdoors)",
+                     exposure_compensation: "0EV to +1EV (well-lit faces, soft highlights, light shadow details retained)",
+                     ISO_setting: "ISO 100–500 depending on light, minimal visible noise",
+                     shutter_speed: "1/60s to 1/200s (sharp for handheld, no motion blur)"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Relaxed, casual, natural posture; sitting, hand in hair, chin resting on hand, slight lean, cross-legged. Snap captures a spontaneous moment, not a studio pose.",
+                     facial_expression: "Subtle smile, half-smile, neutral or daydreaming; genuine, authentic, not exaggerated.",
+                     gaze_direction: "Direct at the lens or slightly away, as if lost in thought or sharing the moment."
+                 },
+                 fashion_and_style: {
+                     clothing: "Easy casual or loungewear: tees, sweaters, simple dresses, subtle necklaces. No heavy styling, just presentable daily style.",
+                     accessories: "Minimal: dainty jewelry, natural makeup if any.",
+                     hair: "Loose, slightly tousled or naturally styled, split/side parts, not salon polished."
+                 }
+             }
+         },
+         'warm_moments': {
+             name: 'Warm Moments',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "35mm film camera, digital point-and-shoot, or smartphone front/rear camera",
+                     focal_length_mm: "28mm to 38mm equivalent (wide to slightly standard angle)",
+                     aperture_range: "f/2.8 - f/4.5 for casual depth of field",
+                     focus_mode: "Autofocus or manual, focusing on the couple's faces; minor front/rear blur or softness acceptable",
+                     framing: "Mid-shot to tight crop (waist-up or closer), both subjects comfortably within frame, at least partial face visibility for each subject",
+                     orientation: "Vertical (portrait) or slightly off-vertical handheld, unpolished",
+                     camera_position: "Eye-level or slightly above, distance 40-80cm from subjects, often handheld by one of the couple or captured via a mirror"
+                 },
+                 location_and_background: {
+                     setting: "Interior everyday settings: bathroom, car, casual store, or simple domestic room",
+                     background_elements: "Recognizable real-life details (mirrors, towels, shelves, doors, car seats) left undisturbed",
+                     background_blur: "Minimal to moderate, consistent with ~28-38mm at f/2.8-f/4.5 on crop/APS-C/full-frame; clear enough to recognize environment",
+                     depth_of_field: "Moderately wide; both subjects and background visible, not fully isolated"
+                 },
+                 lighting: {
+                     lighting_type: "Soft ambient interior lighting or on-camera flash typical for point-and-shoots/film; no studio light",
+                     white_balance: "Auto white balance, slightly warm — color temp 3500-4200K",
+                     exposure_compensation: "0EV to +1EV; not underexposed, accept mild flash hotspots",
+                     ISO_setting: "400-800 for digital, color-negative or ISO 400-800 film emulation for analog/lo-fi vibe",
+                     shutter_speed: "1/30 to 1/100s — sufficient to prevent major motion blur, but slight shake/blur is authentic"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Casual, natural, unposed; includes hugging, cheek kissing, teeth brushing, or playful expressions; captured in the middle of candid interaction",
+                     facial_expression: "Smiling, laughing, squinting or relaxed; genuine and non-posed",
+                     gaze_direction: "Looking at the camera, at each other, or playfully away"
+                 },
+                 fashion_and_style: {
+                     clothing: "Contemporary casual; sweatshirts, T-shirts, hoodies, striped or solid colors, minimal branding",
+                     accessories: "Large retro sunglasses, everyday objects (toothbrush, point-and-shoot camera), simple jewelry",
+                     hair: "Unstyled or loosely styled; natural-looking without significant product"
+                 }
+             }
+         },
+         'urban_motion_girl': {
+             name: 'Urban Motion Girl',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Mirrorless or DSLR with standard to slight wide lens; high-end smartphones with Pro/RAW mode",
+                     focal_length_mm: "28mm to 35mm equivalent (wide for context, minimal distortion)",
+                     aperture_range: "f/2.2 - f/4 (moderate depth, subject sharp, background defined)",
+                     focus_mode: "Autofocus with face/eye detection on subject, single-shot or continuous for walking scenes",
+                     framing: "Full-body or thigh-up framing; subject centered or slightly off-center with significant urban street in background. Headroom left above subject for air and context",
+                     orientation: "Vertical (portrait preferred), camera held at thigh to chest level",
+                     camera_position: "Standing 3–5 meters away (enough for environmental context and full figure); shot at or just below eye level"
+                 },
+                 location_and_background: {
+                     setting: "City crosswalks, busy streets, urban intersections or lanes; crosswalk stripes, signage, curbs, blurred vehicles, city wall textures",
+                     background_elements: "Active street scenes, moving cars or scooters (blurred with slower shutter), traffic signs, street trees, painted lines; urban details visible and prominent",
+                     background_blur: "Static background is sharp; motion blur deliberately added to moving cars or people for sense of bustle. No portrait-mode bokeh.",
+                     depth_of_field: "Medium-deep; subject clearly distinguished, but not isolated—city life recognizable"
+                 },
+                 lighting: {
+                     lighting_type: "Natural daylight, open shade or overcast preferred; may include hard sunlight but without harsh shadow on face",
+                     white_balance: "Auto or Daylight (5000–6000K); realistic skin tones and cool/true street colors",
+                     exposure_compensation: "0EV to +0.7EV; balanced to retain ambient detail and subject clarity",
+                     ISO_setting: "ISO 100–400 (day/overcast); no visible noise",
+                     shutter_speed: "1/40s to 1/160s—fast for sharp walking/freeze, or slow (1/20s–1/80s) for purposeful motion blur of background vehicles"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Standing confidently or walking with purposeful stride; arms natural (at side, holding bag); straight-on or 3/4 angle to camera",
+                     facial_expression: "Serious, thoughtful or lightly confident; not exaggerated or artificially joyful",
+                     gaze_direction: "Looking forward, slightly past the camera, into the street context"
+                 },
+                 fashion_and_style: {
+                     clothing: "Iconic street fashion: oversized jersey or sweater, pleated mini or school skirt, unique socks, statement sneakers, subtle or playful layering",
+                     accessories: "Headbands, layered necklaces, fashion-forward glasses, casual backpacks/shoulder bags",
+                     hair: "Voluminous, braids, ponytails, or naturally free-flowing—styled to move naturally in wind"
+                 }
+             }
+         },
+         '90s_vintage_buddy': {
+             name: '90s Vintage Buddy Vibes',
+             rules: {
+                 composition_and_perspective: {
+                     camera_type: "Point-and-shoot 35mm film camera, disposable camera, or authentic digital compact with '90s CCD sensor",
+                     focal_length_mm: "32mm to 38mm equivalent (classic compact film focal range, uncompressed perspective)",
+                     aperture_range: "f/2.8 - f/4.5 (fixed on most vintage point-and-shoots)",
+                     focus_mode: "Single autofocus or fixed focus typical of film compacts; minor blur, soft edges from missed focus are authentic and allowed",
+                     framing: "Bust-up to half-body framing, both single and paired/couple compositions. Candid angles, eye-level or slightly above, often with a 'snapshot' imprecise crop (head/arms partly cut off).",
+                     orientation: "Horizontal (landscape) or vertical (portrait), preferably handheld and spontaneous",
+                     camera_position: "Handheld, short distance (50-120cm), possibly selfie arm's length or shot by a third person. No tripod/stabilizer."
+                 },
+                 location_and_background: {
+                     setting: "Indoor rooms (apartments, bedrooms, kitchens, restaurants, casual nightlife, or student dorms), soft tungsten lighting, or simple outdoor with flash",
+                     background_elements: "Unstaged: furniture, curtains, wall art, frames, plates/food, neon or signage, window blinds, objects scattered naturally",
+                     background_blur: "Minimal; most background details readable, except for natural film softness",
+                     depth_of_field: "Wide; most of the frame is in focus due to small sensors and wide lens"
+                 },
+                 lighting: {
+                     lighting_type: "Direct on-camera flash (harsh, distinctive), or overhead tungsten/ambient room light. No professional lighting.",
+                     white_balance: "Tungsten-balanced or auto, with light yellow or green tinge typical of daylight film indoors (~3500–4200K)",
+                     exposure_compensation: "0EV; overexposed highlights and flash hotspots accepted, strong flash reflections on skin common",
+                     ISO_setting: "ISO 200 to 800 (common consumer film speeds); visible grain at ISO 400+ is authentic and desirable",
+                     shutter_speed: "1/40s to 1/100s—enough for handshake or subject motion to blur slightly, especially in low light"
+                 },
+                 subject_pose_and_expression: {
+                     poses: "Natural, candid, relaxed, playful or goofy (e.g. sticking tongue out, exaggerated expressions, playful gestures, arm draped, shared food); close friendships or couple intimacy",
+                     facial_expression: "Genuine, fun, slightly dorky or offbeat (winking, squinting, pulling faces, poking fun); never staged or fashion serious",
+                     gaze_direction: "Looking at camera or at each other; direct and casual"
+                 },
+                 fashion_and_style: {
+                     clothing: "Casual: leather jackets, denim, oversized shirts/sweaters, sport or varsity jackets, simple tees—primary colors, iconic 90s cuts and details",
+                     accessories: "Minimal jewelry, subtle necklaces, hair clips or bands, 90s layering, little visible branding",
+                     hair: "Natural, air-dried, loose, minimal product—center or side parting common"
+                 }
+             }
          }
     };
     
-    return frameMapping[frameId] || null;
+    const result = frameMapping[frameId] || null;
+    logger.info(`[getImageSetRulesByFrameId] Available frames: ${Object.keys(frameMapping).join(', ')}`);
+    logger.info(`[getImageSetRulesByFrameId] Result for "${frameId}": ${result ? 'FOUND' : 'NOT FOUND'}`);
+    
+    return result;
 }
 
 function getGeneralRulesForUGC() {
@@ -632,6 +892,7 @@ INSTRUCTIONS:
 2. Add detailed visual specifications based on the style rules below
 3. Create a comprehensive, single-paragraph prompt that includes camera, lighting, pose, clothing, and setting details
 4. Make it sound natural and specific, not like a technical manual
+5. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
 
 STYLE RULES TO INCORPORATE:
 
@@ -669,7 +930,9 @@ Generate a single, detailed prompt that naturally incorporates these elements wh
 
         const userPrompt = `Please create an enhanced, detailed prompt for "${originalPrompt}" using the ${frameRules.name} style. 
 
-Make it a natural, single paragraph that includes specific camera settings, lighting conditions, pose details, clothing, and environment while keeping the original subject exactly as described.`;
+Make it a natural, single paragraph that includes specific camera settings, lighting conditions, pose details, clothing, and environment while keeping the original subject exactly as described.
+
+CRITICAL: Do not include any cameras, phones, or recording equipment visible in the image.`;
 
         const completion = await openaiInstance.chat.completions.create({
             model: "gpt-4.1-nano-2025-04-14",
@@ -697,8 +960,81 @@ Make it a natural, single paragraph that includes specific camera settings, ligh
 }
 
 async function generateEnhancedBackgroundPrompt(originalPrompt, frameRules, openaiInstance) {
-    // For background images, simpler enhancement
-    return originalPrompt;
+    try {
+        logger.info(`[generateEnhancedBackgroundPrompt] Enhancing background prompt: "${originalPrompt}"`);
+        
+        const rules = frameRules.rules;
+        
+        const systemPrompt = `You are an expert at creating detailed prompts for background/environment images.
+
+You will enhance the user's basic prompt with detailed visual specifications for creating atmospheric, cinematic backgrounds.
+
+Original prompt: "${originalPrompt}"
+Style: ${frameRules.name}
+
+INSTRUCTIONS:
+1. Keep the original scene/environment exactly as described
+2. Add detailed visual specifications based on the style rules below
+3. Create a comprehensive, single-paragraph prompt that includes camera settings, lighting, composition, and atmospheric details
+4. Make it sound natural and cinematic, not like a technical manual
+5. Focus on creating a compelling background/environment scene
+6. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
+
+STYLE RULES TO INCORPORATE:
+
+Camera & Composition:
+- Camera: ${rules.composition_and_perspective?.camera_type}
+- Focal length: ${rules.composition_and_perspective?.focal_length_mm}
+- Framing: ${rules.composition_and_perspective?.framing}
+- Position: ${rules.composition_and_perspective?.camera_position}
+
+Setting & Environment:
+- Location: ${rules.location_and_background?.setting}
+- Background: ${rules.location_and_background?.background_elements}
+- Depth: ${rules.location_and_background?.depth_of_field}
+
+Lighting & Atmosphere:
+- Type: ${rules.lighting?.lighting_type}
+- White balance: ${rules.lighting?.white_balance}
+- Exposure: ${rules.lighting?.exposure_compensation}
+- ISO: ${rules.lighting?.ISO_setting}
+
+Mood & Atmosphere:
+- Overall feel: ${rules.mood_and_atmosphere?.overall_feel}
+- Color palette: ${rules.mood_and_atmosphere?.color_palette}
+- Contrast: ${rules.mood_and_atmosphere?.contrast}
+
+Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original scene`;
+
+        const userPrompt = `Please create an enhanced, detailed prompt for "${originalPrompt}" using the ${frameRules.name} style. 
+
+Make it a natural, single paragraph that includes specific camera settings, lighting conditions, atmospheric details, and environmental elements while keeping the original scene exactly as described.
+
+CRITICAL: Do not include any cameras, phones, or recording equipment visible in the image.`;
+
+        const completion = await openaiInstance.chat.completions.create({
+            model: "gpt-4.1-nano-2025-04-14",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ],
+            max_tokens: 2500,
+            temperature: 0.7
+        });
+
+        const enhancedPrompt = completion.choices[0]?.message?.content?.trim();
+        if (!enhancedPrompt) {
+            logger.error('[generateEnhancedBackgroundPrompt] OpenAI returned empty response');
+            return originalPrompt;
+        }
+
+        logger.info(`[generateEnhancedBackgroundPrompt] Enhanced prompt generated successfully. Length: ${enhancedPrompt.length}`);
+        return enhancedPrompt;
+
+    } catch (error) {
+        logger.error('[generateEnhancedBackgroundPrompt] Error calling OpenAI:', error);
+        return originalPrompt;
+    }
 }
 
 async function generateEnhancedGeneralPrompt(originalPrompt, frameRules, openaiInstance) {
@@ -830,6 +1166,42 @@ async function generateEnvironmentDetailsPrompt(baseSettingDescription, requeste
         logger.error("Error calling GPT-4o-mini for environment details generation (Revised for Quality):", error);
         throw new HttpsError('internal', 'Failed to generate environment details using helper AI (Revised).', error.message);
     }
+}
+
+// Helper function to download files from URLs
+async function downloadFile(url, destPath) {
+    const fs = require('fs'); // Make sure fs is available
+    const writer = fs.createWriteStream(destPath);
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream',
+    });
+
+    return new Promise((resolve, reject) => {
+        response.data.pipe(writer);
+        writer.on('finish', resolve);
+        writer.on('error', (err) => {
+            writer.close(() => { // Ensure writer is closed
+                fs.unlink(destPath, (unlinkErr) => { // Attempt to delete partial file
+                    if (unlinkErr && unlinkErr.code !== 'ENOENT') { // Ignore if file already gone
+                        logger.error(`Error unlinking partial file ${destPath} after download write error:`, unlinkErr);
+                    }
+                });
+                reject(new Error(`Failed to write ${url} to ${destPath}: ${err.message}`));
+            });
+        });
+        response.data.on('error', (err) => { // Handle errors on the response stream itself
+             writer.close(() => {
+                fs.unlink(destPath, (unlinkErr) => {
+                    if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                        logger.error(`Error unlinking partial file ${destPath} after response stream error:`, unlinkErr);
+                    }
+                });
+                reject(new Error(`Stream error during download of ${url}: ${err.message}`));
+            });
+        });
+    });
 }
 
 // --- generateImage Function (Updated for Vertex AI Imagen 4) ---

@@ -383,7 +383,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
               onClick={() => setBillingCycle('yearly')}
             >
               Yearly 
-              <span className="ml-2 text-xs font-medium text-green-600 dark:text-green-500">2 months free</span>
+              <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">2 months free</span>
             </button>
           </div>
         </div>

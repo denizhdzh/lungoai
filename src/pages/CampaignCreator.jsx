@@ -75,7 +75,7 @@ function CampaignCreator() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400';
+              case 'active': return 'bg-lime-100 text-lime-800 dark:bg-lime-900/20 dark:text-lime-400';
       case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
       case 'draft': return 'bg-stone-100 text-stone-800 dark:bg-stone-800/50 dark:text-stone-400';
       default: return 'bg-stone-100 text-stone-800 dark:bg-stone-800/50 dark:text-stone-400';
@@ -361,7 +361,7 @@ function CampaignCreator() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { type: 'videos', label: 'Videos', icon: Play, credits: 175, color: 'blue' },
-          { type: 'slideshows', label: 'Slideshows', icon: ImagesSquare, credits: 50, color: 'green' },
+          { type: 'slideshows', label: 'Slideshows', icon: ImagesSquare, credits: 50, color: 'lime' },
           { type: 'images', label: 'Images', icon: Image, credits: 70, color: 'purple' }
         ].map((contentType) => (
           <div key={contentType.type} className="space-y-4">

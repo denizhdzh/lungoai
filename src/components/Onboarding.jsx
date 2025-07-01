@@ -15,15 +15,15 @@ const libraryImageDescriptions = {
   "Canal Breather.png": "A cozy wooden table on a balcony or terrace surrounded by trees, with a book and coffee cup.",
   "City Pulse.png": "Aerial view of a city bridge packed with cars, surrounded by tall skyscrapers at sunset.",
   "Fog Curve.png": "A wet, winding road cutting through tall pine trees; moody and quiet.",
-  "Green Spine.png": "A narrow dirt trail winding along a lush green ridge, high above the surrounding forest.",
+  "lime Spine.png": "A narrow dirt trail winding along a lush lime ridge, high above the surrounding forest.",
   "Late Hours.png": "A dimly lit room with someone working intensely in front of a glowing computer screen.",
   "Quiet Cosmos.png": "A serene night sky filled with stars, silhouetted by the tips of trees on the horizon.",
   "Quiet Stack.png": "A warmly lit, classic library filled with bookshelves and wooden furniture.",
-  "Sky Office.png": "A clean, modern desk setup by a window overlooking the ocean and green landscape.",
+  "Sky Office.png": "A clean, modern desk setup by a window overlooking the ocean and lime landscape.",
   "Spark.png": "A glowing bonfire with sparks flying upward, set against a black background.",
   "Still Spin.png": "A record player sitting in a sun-drenched corner, casting soft shadows.",
   "Stone Alley.png": "A narrow, cobblestone street in a quiet European town, with warm light and one person walking.",
-  "Tether Drift.png": "A top-down view of a person in a yellow kayak on calm, greenish water.",
+  "Tether Drift.png": "A top-down view of a person in a yellow kayak on calm, limeish water.",
   "Window & Words.png": "A person working on a laptop inside a cafe with large windows looking out onto a city street."
 };
 // --- END NEW ---

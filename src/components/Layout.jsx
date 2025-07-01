@@ -27,7 +27,7 @@ import {
   PenNib, Timer, Package, Gauge, 
   Slideshow as SlideshowIcon, // Aliased
   Check, Calendar,
-  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple
+  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple, Gear
 } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion'; // Import framer-motion
 import { commandDefinitions } from '../command'; 
@@ -1301,127 +1301,160 @@ function Layout() {
       {/* Main content container with relative positioning */}
       <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
         
-        {/* --- Studio Header (Canvas sayfasında görünür) --- */}
-        {isCanvasPage && (
-          <header className="fixed top-0 left-0 right-0 z-40 bg-transparent dark:bg-transparent transition-colors duration-200">
+        {/* --- Top Navigation Bar --- */}
+        <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border-b border-stone-200/50 dark:border-stone-700/50 transition-colors duration-200">
             <div className="flex items-center justify-between h-16 px-6 max-w-screen-2xl mx-auto">
-              {/* Sol Taraf: Logo */}
-              <div className="flex items-center gap-2">
-                <a href="/" className="flex items-baseline text-lg font-bold text-stone-800 dark:text-stone-200">
-                  <span>Lungo</span>
-                  <span className="text-xs font-semibold align-super">AI</span>
-                </a>
+            {/* Left: Logo and Navigation */}
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => navigate('/')}
+                className="flex items-center group"
+              >
+                <span className="text-lg font-bold text-stone-900 dark:text-stone-100 group-hover:text-stone-700 dark:group-hover:text-stone-300 transition-colors duration-200">
+                  Lungo
+                </span>
+                <span className="ml-1 text-xs text-lime-500 font-medium">AI</span>
+              </button>
+              
+              <button
+                onClick={() => navigate(isCanvasPage ? '/' : '/studio')}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  isCanvasPage 
+                    ? 'bg-lime-500 text-black hover:bg-lime-400 shadow-md' 
+                    : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <Sparkle size={16} className={isCanvasPage ? 'text-black' : ''} />
+                <span className="flex items-center gap-1">
+                  Creation Mode
+                  {isCanvasPage && (
+                    <span className="ml-1 text-xs px-1.5 py-0.5 bg-black/20 rounded-md font-semibold">
+                      ON
+                    </span>
+                  )}
+                </span>
+              </button>
               </div>
               
-              {/* Orta: Boş alan */}
+            {/* Center: Dynamic Island on Canvas page */}
               <div className="flex-1 flex justify-center">
-                {/* DynamicIsland canvas içinde */}
+              {isCanvasPage && (
+                <DynamicIsland 
+                  generatingItem={generatingItem}
+                  commandQueue={commandQueue || []}
+                  isDarkMode={isDarkMode || false}
+                />
+              )}
               </div>
               
-              {/* Sağ Taraf: Status + Dark Mode Toggle */}
-              <div className="flex items-center gap-4">
+            {/* Right: Action Icons */}
+            <div className="flex items-center gap-3">
                 {/* Canvas Status - Only show on canvas page */}
                 {isCanvasPage && (
-                  <div className="flex items-center gap-3 text-sm">
+                <>
                     {/* Save Status */}
-                    <div className="flex items-center gap-2 px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+                  <div className="relative group">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs cursor-default">
                       {canvasStatus.isAutoSaving ? (
                         <>
                           <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
+                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
                             Saving...
                           </span>
                         </>
                       ) : canvasStatus.lastSaved ? (
                         <>
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
-                            Saved {canvasStatus.lastSaved.toLocaleTimeString()}
+                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
+                            Saved {canvasStatus.lastSaved.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
                         </>
                       ) : (
                         <>
                           <div className="w-2 h-2 bg-neutral-500 rounded-full"></div>
-                          <span className="text-stone-700 dark:text-stone-300 text-xs font-medium">
+                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
                             Ready
                           </span>
                         </>
                       )}
                     </div>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                      {canvasStatus.isAutoSaving 
+                        ? 'Auto-saving your canvas...' 
+                        : canvasStatus.lastSaved 
+                          ? `Last saved at ${canvasStatus.lastSaved.toLocaleTimeString()}`
+                          : 'Canvas ready for editing'
+                      }
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
+                    </div>
+                    </div>
                     
                     {/* Clear Canvas Button */}
-                    <button
+                  <div className="relative group">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
                       onClick={() => {
                         if (window.confirm('Clear entire canvas? This cannot be undone.')) {
-                          // Clear canvas via outlet context
-                          const outletContext = { clearCanvas: true };
                           window.dispatchEvent(new CustomEvent('clearCanvas'));
                         }
                       }}
-                      className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                      className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                     >
-                      <X size={14} />
+                      <X size={18} />
+                    </motion.button>
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                       Clear Canvas
-                    </button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
                   </div>
+                  </div>
+                </>
                 )}
-                
+              <div className="relative group">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  onClick={() => navigate('/settings')}
+                  className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+                  aria-label="Settings"
+                >
+                  <Gear size={20} />
+                </motion.button>
+                {/* Tooltip */}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  Settings
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
+              </div>
+            </div>
+              
+              <div className="relative group">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   onClick={toggleDarkMode}
-                  className="w-9 h-9 flex items-center justify-center rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+                  className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Toggle dark mode"
                 >
                   {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </motion.button>
+                {/* Tooltip */}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
+                </div>
+              </div>
               </div>
             </div>
           </header>
-        )}
-
-        {/* --- Header Area (Canvas sayfasında gizli) --- */}
-        {!isCanvasPage && (
-          <header className="mt-12 mb-12"> 
-            <div className="max-w-6xl mx-auto flex items-center justify-between px-4 xl:px-0"> 
-              {/* Left: Dynamic Title and Subtitle */}
-              <div className="flex-1">
-                <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-                  {currentTitle}
-                </h1>
-                <p className="text-sm text-stone-600 dark:text-stone-400 mt-0.5">
-                  {currentSubtitle}
-                </p>
-              </div>
-
-              {/* Center: Empty space for balance */}
-              <div className="flex justify-center">
-                {/* DynamicIsland moved to canvas */}
-              </div>
-
-              {/* Right: Action Buttons */}
-              <div className="flex-1 flex justify-end items-center gap-3"> 
-                {/* Dark Mode Toggle Button */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  onClick={toggleDarkMode}
-                  className="p-2 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 text-stone-600 dark:text-stone-400 transition-colors flex items-center gap-1.5"
-                  aria-label="Toggle dark mode"
-                >
-                  {isDarkMode ? <Sun size={18} /> : <Moon size={18} />} 
-                  <span className="text-xs text-stone-700 dark:text-stone-300 opacity-60">(⌘M)</span>
-                </motion.button>
-              </div>
-            </div>
-          </header>
-        )}
-        {/* --- End Header Area --- */}
+        {/* --- End Top Navigation Bar --- */}
 
         {/* Render the child route's component */}
-        <main className={`flex-grow w-full ${isCanvasPage ? '' : 'max-w-6xl mx-auto px-4 xl:px-0'}`}> 
+        <main className={`flex-grow w-full ${isCanvasPage ? 'pt-16' : 'max-w-6xl mx-auto px-4 xl:px-0 pt-20'}`}> 
           <Outlet context={outletContextValue} /> 
         </main>
 
@@ -1439,611 +1472,7 @@ function Layout() {
         */}
       </div>
 
-      {/* --- Bottom Menu --- */}
-      <div className={`fixed bottom-4 left-1/2 transform -translate-x-1/2 z-20 transition-all duration-300 ${isChatInputVisible ? 'w-full max-w-2xl px-4' : 'w-full max-w-lg px-4'}`}>
-        <div className="flex flex-col items-center p-3 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border border-stone-200/50 dark:border-stone-700/50 rounded-xl shadow-sm">
-          
-          {/* New Wrapper Div for Chat Area Content */}
-          <div 
-            className={`w-full flex flex-col items-center transition-all duration-300 ease-in-out ${isChatInputVisible ? 'max-h-[70vh] opacity-100 mb-3 overflow-visible' : 'max-h-0 opacity-0 mb-0 overflow-hidden'}`}
-          >
-            {/* --- Suggestions List --- */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="w-full mb-3 overflow-hidden max-h-60 overflow-y-auto border-b border-stone-200/50 dark:border-stone-700/50 pb-3">
-                <ul className="space-y-1">
-                  {suggestions.map((suggestion) => (
-                    <li key={`${suggestion.type}-${suggestion.id}`}> 
-                      <button 
-                        onClick={() => handleSuggestionClick(suggestion)} 
-                        className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50 transition-colors rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          {getSuggestionIcon(suggestion)}
-                          <span className="text-stone-800 dark:text-stone-200 text-sm truncate">{suggestion.name}</span>
-                        </div>
-                        <span className="text-xs text-stone-500 dark:text-stone-400 ml-3">
-                          {suggestion.type === 'command' ? 'Command' : 
-                          suggestion.type === 'creator' ? 'Creator' : 'Background'}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
-            {/* --- Input Area Wrapper --- */}
-            <div className="relative w-full"> 
-              <div className="w-full flex flex-col gap-3">
-                <div className="w-full flex items-center rounded-lg px-3 py-2 border border-stone-200/50 dark:border-stone-700/50 focus-within:border-red-400 dark:focus-within:border-red-500 transition-colors"> 
-                  {/* --- Actual Input --- */}
-                  <input 
-                    type="text"
-                    placeholder={
-                        !inputValue && !creationMode
-                            ? "Plan, create, or ask..." 
-                            :                             creationMode === 'video' 
-                                ? (creationSource === 'library' ? "Select video from library below" : "Describe action, expression (e.g., '@Product showcase, character surprised') (Optional)")
-                            : creationMode === 'image'
-                                ? selectedImageType === 'ugc_model' 
-                                    ? "e.g., 'blonde woman in a cafe, smiling' (Optional)"
-                                    : selectedImageType === 'background'
-                                        ? "e.g., 'serene beach at sunset, photorealistic' (Optional)"
-                                        : "Describe your image (Optional)" // Default for image if no specific type selected or type removed
-                            : creationMode === 'slideshow'
-                                ? "Describe slideshow topic (e.g., 'benefits of @Product for busy moms') (Optional)"
-                            : creationMode === 'campaign'
-                                ? "Describe your campaign theme (e.g., 'fitness motivation content for summer') (Optional)"
-                            : `Describe your ${creationMode} (Optional)` // Fallback for other modes if any
-                    } 
-                    className={`flex-grow bg-transparent focus:outline-none text-sm text-stone-900 dark:text-stone-100 placeholder-stone-500 dark:placeholder-stone-400 ${
-                      creationMode === 'video' && creationStep === 1 ? 'opacity-50 cursor-not-allowed' : ''
-                    }`} 
-                    value={inputValue} 
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDownInput}
-                    ref={chatInputRef}
-                    disabled={creationMode === 'video' && creationStep === 1}
-                  />
-                  <button 
-                    onClick={handleCommandSubmit}
-                    disabled={!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset) || areSubOptionsRequiredAndMissing()}
-                    className={`p-1.5 rounded-md transition-all duration-200 ease-in-out 
-                                ${((!!generatingItem || (!inputValue.trim() && !creationMode && !pendingConfirmation && !selectedAsset)) || areSubOptionsRequiredAndMissing()) 
-                                  ? 'bg-neutral-200 dark:bg-neutral-700 text-stone-400 dark:text-stone-500 cursor-not-allowed opacity-50' 
-                                  : 'bg-green-500 dark:bg-green-500 hover:bg-green-600 dark:hover:bg-green-600 text-white dark:text-white'}`}
-                  >
-                    <ArrowUpRight size={14} />
-                  </button>
-                </div>
-
-                {/* --- NEW: Conditional Sub-options based on creationMode --- */}
-                {isChatInputVisible && creationMode && (
-                  <div className="w-full pt-5 border-t border-stone-200/50 dark:border-stone-700/50">
-                    {creationMode === 'video' && (
-                      <div className="space-y-5">
-                        <div className="flex items-center text-xs font-medium text-stone-600 dark:text-stone-400 mb-4">
-                          <VideoIcon size={15} className="mr-2.5 text-red-500" />
-                          Video Configuration
-                        </div>
-                        
-                        {creationStep === 1 && (
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                              <button
-                                onClick={() => { 
-                                  if (firestoreUserData && firestoreUserData.general_credits >= 250) {
-                                    setCreationSource('custom'); 
-                                    setCreationStep(2); 
-                                  }
-                                }}
-                                disabled={!firestoreUserData || firestoreUserData.general_credits < 250}
-                                className={`p-4 border border-stone-200 dark:border-stone-700 rounded-lg transition-colors text-left ${
-                                  !firestoreUserData || firestoreUserData.general_credits < 250 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : 'hover:border-stone-300 dark:hover:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-medium text-stone-900 dark:text-stone-100">AI Generated</span>
-                                  <div className="flex items-center px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                                    <img 
-                                      src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
-                                      alt="Credits" 
-                                      className="h-2 w-auto mr-1" 
-                                      style={{ transform: 'rotate(90deg)' }} 
-                                    />
-                                    <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">250</span>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-stone-600 dark:text-stone-400">Select UGC creator and generate new video with custom outfit & environment</p>
-                              </button>
-                              
-                              <button
-                                onClick={() => { 
-                                  if (firestoreUserData && firestoreUserData.general_credits >= 100) {
-                                    setCreationSource('library'); 
-                                    setCreationStep(2); 
-                                  }
-                                }}
-                                disabled={!firestoreUserData || firestoreUserData.general_credits < 100}
-                                className={`p-4 border border-stone-200 dark:border-stone-700 rounded-lg transition-colors text-left ${
-                                  !firestoreUserData || firestoreUserData.general_credits < 100 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : 'hover:border-stone-300 dark:hover:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-medium text-stone-900 dark:text-stone-100">UGC Library</span>
-                                  <div className="flex items-center px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                                    <img 
-                                      src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
-                                      alt="Credits" 
-                                      className="h-2 w-auto mr-1" 
-                                      style={{ transform: 'rotate(90deg)' }} 
-                                    />
-                                    <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">100</span>
-                                  </div>
-                                </div>
-                                <p className="text-xs text-stone-600 dark:text-stone-400">Choose from existing UGC videos in your library</p>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {creationStep === 2 && creationSource === 'custom' && (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between mb-4">
-                              <span className="text-sm text-stone-700 dark:text-stone-300">
-                                AI Generated Video Configuration
-                              </span>
-                              <button
-                                onClick={() => { setCreationStep(1); setCreationSource(''); }}
-                                className="text-xs text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 transition-colors"
-                              >
-                                ← Back
-                              </button>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4">
-                              <CustomDropdown
-                                options={videoProductOptions}
-                                selectedValue={selectedVideoProduct}
-                                onSelect={(option) => setSelectedVideoProduct(option.id)}
-                                placeholder="Product"
-                                                                 icon={<Package size={14} />}
-                                itemRenderFn={itemRenderer}
-                                className="w-full"
-                                dropdownWidthClass="w-full"
-                              />
-                              <CustomDropdown
-                                options={videoCreatorOptions}
-                                selectedValue={selectedVideoType}
-                                onSelect={(option) => setSelectedVideoType(option.id)}
-                                placeholder="UGC Model"
-                                                                 icon={<User size={14} />}
-                                itemRenderFn={gridItemRenderer}
-                                displayMode="grid"
-                                className="w-full"
-                                dropdownWidthClass="w-full"
-                              />
-                              <CustomDropdown
-                                options={languageOptions}
-                                selectedValue={selectedVideoLanguage}
-                                onSelect={(option) => setSelectedVideoLanguage(option.id)}
-                                placeholder="Language"
-                                itemRenderFn={languageItemRenderer}
-                                className="w-full"
-                                dropdownWidthClass="w-full"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {creationStep === 2 && creationSource === 'library' && (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between mb-4">
-                              <span className="text-sm text-stone-700 dark:text-stone-300">
-                                Select UGC Video from Library
-                              </span>
-                              <button
-                                onClick={() => { setCreationStep(1); setCreationSource(''); }}
-                                className="text-xs text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 transition-colors"
-                              >
-                                ← Back
-                              </button>
-                            </div>
-                            <div className="p-4 border border-stone-200 dark:border-stone-700 rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
-                              <p className="text-sm text-stone-600 dark:text-stone-400 text-center">
-                                Video library integration coming soon...
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {creationMode === 'image' && (
-                      <div className="space-y-5">
-                                                 <div className="mb-4">
-                           <span className="text-sm font-medium text-stone-900 dark:text-stone-100">Image Configuration</span>
-                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <CustomDropdown
-                            options={imageTypeOptions}
-                            selectedValue={selectedImageType}
-                            onSelect={(option) => {
-                              setSelectedImageType(option.id);
-                              setSelectedImageProduct('');
-                            }}
-                            placeholder="Image Type"
-                            icon={<ImageSquare size={14} />}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                          <CustomDropdown
-                            options={imageQualityOptions}
-                            selectedValue={selectedImageQuality}
-                            onSelect={(option) => setSelectedImageQuality(option.id)}
-                            placeholder="Quality"
-                            icon={<Gauge size={14} />}
-                            itemRenderFn={(option, isSelected) => (
-                              <div className="flex items-center gap-3 flex-grow">
-                                <div className="flex items-center p-1 border border-stone-200 dark:border-stone-800 rounded-md bg-neutral-200 dark:bg-neutral-950 bg-opacity-50 dark:bg-opacity-50">
-                                  <img 
-                                    src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
-                                    alt="Lungo AI Logo" 
-                                    className="h-2 w-auto mr-1" 
-                                    style={{ transform: 'rotate(90deg)' }} 
-                                  />
-                                  <span className="text-xs text-stone-600 dark:text-stone-300">
-                                    {option.credits}
-                                  </span>
-                                </div>
-                                <div className="flex flex-grow items-center justify-between min-w-0">
-                                  <span className={`truncate pr-2 text-stone-900 dark:text-stone-100 text-xs font-medium ${isSelected ? 'font-semibold' : ''}`}>
-                                    {option.name}
-                                  </span>
-                                  {isSelected && (
-                                    <Check size={13} weight="bold" className="text-red-500 flex-shrink-0" />
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    
-                    {creationMode === 'slideshow' && (
-                      <div className="space-y-5">
-                                                 <div className="mb-4">
-                           <span className="text-sm font-medium text-stone-900 dark:text-stone-100">Slideshow Configuration</span>
-                         </div>
-                                                 <div className="grid grid-cols-2 gap-4">
-                            <CustomDropdown
-                              options={slideshowProductOptions}
-                              selectedValue={selectedSlideshowProduct}
-                              onSelect={(option) => setSelectedSlideshowProduct(option.id)}
-                              placeholder="Product"
-                              icon={<Package size={14} />}
-                              itemRenderFn={itemRenderer}
-                              className="w-full"
-                              dropdownWidthClass="w-full"
-                            />
-                            <CustomDropdown
-                              options={slideshowTypeOptions}
-                              selectedValue={selectedSlideshowType}
-                              onSelect={(option) => setSelectedSlideshowType(option.id)}
-                              placeholder="Type"
-                              icon={<SlideshowIcon size={14} />}
-                              itemRenderFn={itemRenderer}
-                              className="w-full"
-                              dropdownWidthClass="w-full"
-                            />
-                            <CustomDropdown
-                              options={slideshowBackgroundOptions}
-                              selectedValue={selectedSlideshowBackground}
-                              onSelect={(option) => setSelectedSlideshowBackground(option.id)}
-                              placeholder="Background"
-                              icon={<ImageSquare size={14} />}
-                              itemRenderFn={gridItemRenderer}
-                              displayMode="grid"
-                              className="w-full"
-                              dropdownWidthClass="w-full"
-                            />
-                            <CustomDropdown
-                              options={languageOptions}
-                              selectedValue={selectedSlideshowLanguage}
-                              onSelect={(option) => setSelectedSlideshowLanguage(option.id)}
-                              placeholder="Language"
-                              itemRenderFn={languageItemRenderer}
-                              className="w-full"
-                              dropdownWidthClass="w-full"
-                            />
-                         </div>
-                      </div>
-                    )}
-                    
-                    {creationMode === 'schedule' && (
-                      <div className="space-y-5">
-                        <div className="flex items-center text-xs font-medium text-stone-600 dark:text-stone-400 mb-4">
-                          <Calendar size={15} className="mr-2.5 text-red-500" />
-                          Schedule Configuration
-                        </div>
-                        <div className="px-5 py-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl border border-stone-200/50 dark:border-stone-700/50">
-                          <p className="text-xs text-stone-600 dark:text-stone-400">
-                            Describe what you want to schedule or view existing schedule...
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {creationMode === 'campaign' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center text-xs font-semibold text-stone-700 dark:text-stone-300 mb-3">
-                          <Calendar size={16} className="mr-2" />
-                          Campaign Configuration
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          {/* <CustomDropdown
-                            options={tiktokAccountOptions}
-                            selectedValue={selectedCampaignTikTok}
-                            onSelect={(option) => setSelectedCampaignTikTok(option.id)}
-                            placeholder="TikTok Account"
-                            icon={<UserIcon size={16}/>}
-                            itemRenderFn={itemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          /> */}
-                          <CustomDropdown
-                            options={videoProductOptions}
-                            selectedValue={selectedCampaignProduct}
-                            onSelect={(option) => setSelectedCampaignProduct(option.id)}
-                            placeholder="Product"
-                            icon={<Package size={16}/>}
-                            itemRenderFn={itemRenderer}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {/* <CustomDropdown
-                            options={slideshowTypeOptions}
-                            selectedValue={selectedCampaignSlideshowType}
-                            onSelect={(option) => setSelectedCampaignSlideshowType(option.id)} // Single select
-                            placeholder="Slideshow Type"
-                            icon={<SlideshowIcon size={16}/>}
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          /> */}
-                          <CustomDropdown
-                            options={languageOptions}
-                            selectedValue={selectedCampaignLanguage}
-                            onSelect={(option) => setSelectedCampaignLanguage(option.id)} // Single select
-                            placeholder="Language"
-                            icon={<span className="text-sm">🌐</span>}
-                            itemRenderFn={languageItemRenderer} // Uses its own specific renderer
-                            className="w-full"
-                            dropdownWidthClass="w-full"
-                          />
-                        </div>
-                        {/* REVISED: Multi-select CustomDropdown for Backgrounds */}
-                        <div className="col-span-2">
-                          <CustomDropdown
-                            options={slideshowBackgroundOptions} // Use the same options as slideshow backgrounds
-                            selectedValue={selectedCampaignBackgrounds} // Pass the array of selected background objects/IDs
-                            onSelect={(selectedOptions) => setSelectedCampaignBackgrounds(selectedOptions)} // Directly set the array
-                            placeholder="Select Backgrounds (Multiple)"
-                            icon={<BackgroundPlaceholderIcon size={16}/>}
-                            className="w-full"
-                            // Adjusted width to better fit 3 grid items. Approx (item_width * 3) + (gap * 2) + (padding * 2)
-                            // Assuming itemRenderFn renders items that are roughly w-24 (96px) each.
-                            // (96px * 3) + (8px * 2) + (8px * 2) = 288 + 16 + 16 = 320px. Added some buffer.
-                            dropdownWidthClass="w-full sm:w-[330px]" 
-                            isMulti={true}
-                            closeOnSelect={false} // Keep open to select multiple
-                            itemRenderFn={(option, isSelected, isMulti) => { 
-                              // This itemRenderFn is specifically for the campaign background multi-selector
-                              // It will render items suitable for a 3-column grid
-                              return (
-                                <div 
-                                  // Each item in the grid will take 1/3 of the parent width minus gaps.
-                                  // The parent CustomDropdown.jsx div for options now uses `grid grid-cols-3 gap-2`
-                                  // So, this div just needs to style the content of a grid cell.
-                                  className={`p-1.5 rounded-md flex flex-col items-center justify-center gap-1 w-full h-full cursor-pointer ${isSelected ? 'bg-blue-500/10 dark:bg-blue-400/10' : 'hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50'}`}>
-                                  <div className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-md overflow-hidden border-2 ${isSelected ? 'border-blue-500' : 'border-transparent'}`}>
-                                    {option.imageUrl ? (
-                                      <img 
-                                        src={option.imageUrl} 
-                                        alt={option.name} 
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500">
-                                        <BackgroundPlaceholderIcon size={24} className="opacity-50"/>
-                                      </div>
-                                    )}
-                                    {/* Visual checkmark for selected items in multi-select grid */}
-                                    {isSelected && (
-                                      <div className="absolute top-1 right-1 bg-blue-500 rounded-full p-0.5 shadow">
-                                        <Check size={8} weight="bold" className="text-white" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <span className={`w-full truncate text-center text-[11px] sm:text-xs ${isSelected ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-stone-700 dark:text-stone-300'}`}>
-                                    {option.name}
-                                  </span>
-                                </div>
-                              );
-                            }}
-                          />
-                        </div>
-                        <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-stone-200/50 dark:border-stone-700/50">
-                          <p className="text-xs text-stone-600 dark:text-stone-400">
-                            Create a month-long automated posting campaign with daily slideshow posts to your TikTok account.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* --- END NEW: Conditional Sub-options --- */}
-              </div>
-            </div>{/* End Input Area Wrapper */}
-          </div> { /* End of Chat Area Content */}
-
-          {/* Navigation Buttons Row (Removed AI Guide Button) */}
-          <nav className="w-full">
-            <div className="flex justify-between items-center px-2">
-              <div className="flex items-center space-x-3">
-                 <div className="flex items-center space-x-1"> {/* Reduced space for logo area */}
-                   <img
-                     src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"}
-                     alt="Lungo AI Logo"
-                     className="h-5 w-auto mr-2" // Added margin-right
-                   />
-                   <motion.button 
-                     whileHover={{ scale: 1.02 }}
-                     whileTap={{ scale: 0.98 }}
-                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                     className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
-                     onClick={() => navigate('/')}
-                   >
-                     Home
-                   </motion.button>
-                 </div>
-                                   <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/studio' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
-                    onClick={() => navigate('/studio')}
-                  >
-                    Studio
-                  </motion.button>
-
-                 <motion.button 
-                   whileHover={{ scale: 1.02 }}
-                   whileTap={{ scale: 0.98 }}
-                   transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                   className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors w-auto text-center ${location.pathname === '/settings' ? 'text-stone-800 dark:text-stone-200 bg-neutral-100 dark:bg-neutral-800' : 'text-stone-900 dark:text-stone-100 hover:bg-neutral-950/10 dark:hover:bg-neutral-100/10'}`}
-                   onClick={() => navigate('/settings')}
-                 >
-                   Settings
-                 </motion.button>
-              </div>
-
-              <div className="flex items-center gap-3 relative"
-                onMouseEnter={() => {
-                  clearTimeout(dropdownHoverTimeoutRef.current);
-                  clearTimeout(menuHoverTimeoutRef.current);
-                  setIsCreateDropdownOpen(true);
-                }}
-                onMouseLeave={() => {
-                  dropdownHoverTimeoutRef.current = setTimeout(() => {
-                    setIsCreateDropdownOpen(false);
-                  }, 300); // 300ms delay before closing
-                }}
-              > 
-                  {/* UPDATED "Create +" / "Close X" Button */}
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    onClick={isChatInputVisible ? toggleChatInput : undefined}
-                    className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors ${isChatInputVisible
-                        ? 'bg-neutral-950/10 text-stone-900 dark:bg-neutral-100/10 dark:text-stone-100' // Style for "Close X" or when dropdown is open
-                        : isCreateDropdownOpen 
-                            ? 'bg-green-50 text-red-600 dark:bg-green-900/20 dark:text-red-400' // Style for "Create +" when dropdown is open
-                            : 'bg-green-500 text-white dark:bg-green-500 dark:text-white hover:bg-green-600 dark:hover:bg-green-600' // Default red style for "Create +"
-                    }`}
-                  >
-                    {isChatInputVisible ? (
-                      <>
-                        <X size={16} />
-                        Close
-                      </>
-                    ) : (
-                      <>
-                        <Sparkle size={16} />
-                        Create
-                      </>
-                    )}
-                  </motion.button>
-
-                  {/* NEW: Upward Opening Dropdown */}
-                  {isCreateDropdownOpen && !isChatInputVisible && ( // Only show dropdown if chat is not already visible
-                    <div 
-                      onMouseEnter={() => {
-                        clearTimeout(dropdownHoverTimeoutRef.current); // Clear button leave timeout
-                        clearTimeout(menuHoverTimeoutRef.current);
-                      }}
-                      onMouseLeave={() => {
-                        menuHoverTimeoutRef.current = setTimeout(() => {
-                          setIsCreateDropdownOpen(false);
-                        }, 300); // 300ms delay before closing
-                      }}
-                      className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 bg-neutral-50 dark:bg-neutral-950 border border-stone-200 dark:border-stone-700 rounded-2xl shadow-md py-1 origin-bottom transition-all duration-200 ease-out opacity-100 scale-100 z-20"
-                      style={{animation: 'dropdown-open 0.2s ease-out forwards'}}
-                    >
-                      {[
-                        {name: 'Video', icon: VideoIcon, mode: 'video', credits: '100-250'},
-                        {name: 'Image', icon: ImageIcon, mode: 'image', credits: '50-90'},
-                        {name: 'Slideshow', icon: SlideshowIcon, mode: 'slideshow', credits: 50},
-                        {name: 'Bulk Creation', icon: Package, mode: 'bulk', credits: 'Variable', navigateTo: '/campaign'}
-                      ].map((item) => {
-                        const minCreditsNeeded = typeof item.credits === 'string' ? 50 : item.credits; // For "50-90" range, use minimum
-                        const hasEnoughCredits = firestoreUserData && firestoreUserData.general_credits >= minCreditsNeeded;
-                        return (
-                          <button
-                            key={item.name}
-                            onClick={() => {
-                              if (!hasEnoughCredits && item.mode !== 'bulk') return;
-                              if (item.navigateTo) {
-                                navigate(item.navigateTo);
-                                setIsCreateDropdownOpen(false);
-                              } else {
-                                setCreationMode(item.mode);
-                                setIsChatInputVisible(true);
-                                setIsCreateDropdownOpen(false);
-                              }
-                            }}
-                            disabled={!hasEnoughCredits}
-                            className={`flex items-center w-full px-3 py-2.5 text-sm text-left rounded-lg transition-colors duration-150 ease-in-out focus:outline-none 
-                                        ${!hasEnoughCredits 
-                                          ? 'text-stone-400 dark:text-stone-600 cursor-not-allowed' 
-                                          : 'text-stone-700 dark:text-stone-200 hover:bg-green-50 dark:hover:bg-green-900/20 focus:bg-green-50 dark:focus:bg-green-900/20'}
-                                      `}
-                          >
-                            <div className="flex items-center">
-                              {/* Frame for logo and credits */}
-                              <div className="flex items-center p-1 mr-3 border border-stone-200 dark:border-stone-600 rounded-md bg-neutral-200 dark:bg-neutral-700 bg-opacity-50 dark:bg-opacity-50">
-                                <img 
-                                  src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"} 
-                                  alt="Lungo AI Logo" 
-                                  className="h-2 w-auto mr-1" // Maintain aspect ratio, adjust height as needed
-                                  style={{ transform: 'rotate(90deg)' }} 
-                                />
-                                <span className="text-xs text-stone-600 dark:text-stone-300">
-                                  {item.credits}
-                                </span>
-                              </div>
-                              {/* Item name */}
-                              <span>{item.name}</span>
-                            </div>
-                            {/* Removed the separate credits span from here as it's now in the frame */}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-              </div>
-            </div>
-          </nav>
-        </div>
-      </div>
       
       <style>{`
         @keyframes dropdown-open {

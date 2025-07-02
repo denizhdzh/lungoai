@@ -1962,17 +1962,7 @@ function Dashboard() {
     refreshDashboardGenerations: () => {},
   };
 
-  const generationCounts = React.useMemo(() => {
-    let images = 0;
-    let videos = 0;
-    let slideshows = 0;
-    for (const gen of generations) {
-      if (gen.type === 'image') images++;
-      else if (gen.type === 'video') videos++;
-      else if (gen.type === 'slideshow') slideshows++;
-    }
-    return { images, videos, slideshows, total: images + videos + slideshows };
-  }, [generations]);
+
 
   const [lastTimestampForPagination, setLastTimestampForPagination] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -2008,42 +1998,58 @@ function Dashboard() {
       setIsLoadingGenerations(true);
       setHasMore(true);
       setLastTimestampForPagination(null);
-      const fetchLimit = 9;
+      const fetchLimit = 12;
 
       try {
         const generationsColRef = collection(db, 'users', user.uid, 'generations');
-        const generationsQuery = query(generationsColRef, orderBy('timestamp', 'desc'), limit(fetchLimit));
-        const tiktokPostsColRef = collection(db, 'users', user.uid, 'tiktok-posts');
-        const tiktokPostsQuery = query(tiktokPostsColRef, orderBy('timestamp', 'desc'), limit(fetchLimit));
-
-        const [generationsSnapshots, tiktokPostsSnapshots] = await Promise.all([
-          getDocs(generationsQuery),
-          getDocs(tiktokPostsQuery)
-        ]);
-
-        const processedGenerations = generationsSnapshots.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
-          return { id: docSnapshot.id, ...data, timestamp };
-        });
-
-        const processedTiktokPosts = tiktokPostsSnapshots.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
-          return { id: docSnapshot.id, ...data, timestamp, type: 'video', videoUrl: data.finalVideoUrl || null };
-        }).filter(post => post.videoUrl && (post.status === 'completed' || post.status === 'assets_ready_for_review')); // Only show completed videos
-
-        const combinedItems = [...processedGenerations, ...processedTiktokPosts];
-        combinedItems.sort((a, b) => b.timestamp - a.timestamp);
-        const finalItems = combinedItems.slice(0, fetchLimit);
-        setGenerations(finalItems);
-
-        if (finalItems.length > 0) {
-          const lastItem = finalItems[finalItems.length - 1];
-          const originalDoc = [...generationsSnapshots.docs, ...tiktokPostsSnapshots.docs].find(d => d.id === lastItem.id);
-          setLastTimestampForPagination((originalDoc?.data()?.timestamp || lastItem.timestamp));
+        
+        let processedGenerations = [];
+        
+        // Fetch based on filter - server-side filtering for better performance
+        if (activeFilter === 'image') {
+          const imageQuery = query(
+            generationsColRef, 
+            where('type', '==', 'image'), 
+            orderBy('timestamp', 'desc'), 
+            limit(fetchLimit)
+          );
+          const imageSnapshot = await getDocs(imageQuery);
+          processedGenerations = imageSnapshot.docs.map(docSnapshot => {
+            const data = docSnapshot.data();
+            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
+            return { id: docSnapshot.id, ...data, timestamp };
+          });
+        } else if (activeFilter === 'slideshow') {
+          const slideshowQuery = query(
+            generationsColRef, 
+            where('type', '==', 'slideshow'), 
+            orderBy('timestamp', 'desc'), 
+            limit(fetchLimit)
+          );
+          const slideshowSnapshot = await getDocs(slideshowQuery);
+          processedGenerations = slideshowSnapshot.docs.map(docSnapshot => {
+            const data = docSnapshot.data();
+            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
+            return { id: docSnapshot.id, ...data, timestamp };
+          });
+        } else {
+          // For 'all', fetch all generations
+          const allGenerationsQuery = query(generationsColRef, orderBy('timestamp', 'desc'), limit(fetchLimit));
+          const allGenerationsSnapshot = await getDocs(allGenerationsQuery);
+          processedGenerations = allGenerationsSnapshot.docs.map(docSnapshot => {
+            const data = docSnapshot.data();
+            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
+            return { id: docSnapshot.id, ...data, timestamp };
+          });
         }
-        setHasMore(finalItems.length === fetchLimit);
+
+        setGenerations(processedGenerations);
+
+        if (processedGenerations.length > 0) {
+          const lastItem = processedGenerations[processedGenerations.length - 1];
+          setLastTimestampForPagination(lastItem.timestamp);
+        }
+        setHasMore(processedGenerations.length === fetchLimit);
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -2054,7 +2060,7 @@ function Dashboard() {
     };
 
     fetchGenerations();
-  }, [user, dashboardRefreshKey]);
+  }, [user, dashboardRefreshKey, activeFilter]);
 
   useEffect(() => {
     const itemToPoll = generatingItem;
@@ -2102,50 +2108,60 @@ function Dashboard() {
   const fetchMoreGenerations = async () => {
     if (!user || !lastTimestampForPagination || !hasMore) return;
     setIsLoadingMore(true);
-    const fetchLimit = 9;
+    const fetchLimit = 12;
     try {
       const generationsColRef = collection(db, 'users', user.uid, 'generations');
-      const tiktokPostsColRef = collection(db, 'users', user.uid, 'tiktok-posts');
       
-      const qGenerations = query(
-        generationsColRef,
-        orderBy('timestamp', 'desc'),
-        startAfter(lastTimestampForPagination),
-        limit(fetchLimit)
-      );
-      const qTiktokPosts = query(
-        tiktokPostsColRef,
-        orderBy('timestamp', 'desc'),
-        startAfter(lastTimestampForPagination),
-        limit(fetchLimit) 
-      );
-
-      const [generationsSnapshots, tiktokPostsSnapshots] = await Promise.all([
-        getDocs(qGenerations),
-        getDocs(qTiktokPosts)
-      ]);
-
-      const newGenerations = generationsSnapshots.docs.map(docSnapshot => {
-        const data = docSnapshot.data();
-        return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
-      });
-      const newTiktokPosts = tiktokPostsSnapshots.docs.map(docSnapshot => {
-        const data = docSnapshot.data();
-        return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate(), type: 'video', videoUrl: data.finalVideoUrl || null };
-      }).filter(post => post.videoUrl && (post.status === 'completed' || post.status === 'assets_ready_for_review')); // Only show completed videos
-
-      const combinedNewItems = [...newGenerations, ...newTiktokPosts];
-      combinedNewItems.sort((a, b) => b.timestamp - a.timestamp);
-      const finalNewItems = combinedNewItems.slice(0, fetchLimit); 
-
-      setGenerations(prev => [...prev, ...finalNewItems]);
-      if (finalNewItems.length > 0) {
-        const lastItem = finalNewItems[finalNewItems.length - 1];
-        const originalDocFromGen = generationsSnapshots.docs.find(d => d.id === lastItem.id);
-        const originalDocFromTiktok = tiktokPostsSnapshots.docs.find(d => d.id === lastItem.id);
-        setLastTimestampForPagination((originalDocFromGen || originalDocFromTiktok)?.data()?.timestamp || lastItem.timestamp);
+      let newGenerations = [];
+      
+      // Fetch more based on current filter
+      if (activeFilter === 'image') {
+        const imageQuery = query(
+          generationsColRef,
+          where('type', '==', 'image'),
+          orderBy('timestamp', 'desc'),
+          startAfter(lastTimestampForPagination),
+          limit(fetchLimit)
+        );
+        const imageSnapshot = await getDocs(imageQuery);
+        newGenerations = imageSnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
+        });
+      } else if (activeFilter === 'slideshow') {
+        const slideshowQuery = query(
+          generationsColRef,
+          where('type', '==', 'slideshow'),
+          orderBy('timestamp', 'desc'),
+          startAfter(lastTimestampForPagination),
+          limit(fetchLimit)
+        );
+        const slideshowSnapshot = await getDocs(slideshowQuery);
+        newGenerations = slideshowSnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
+        });
+      } else {
+        // For 'all', fetch all generations
+        const allQuery = query(
+          generationsColRef,
+          orderBy('timestamp', 'desc'),
+          startAfter(lastTimestampForPagination),
+          limit(fetchLimit)
+        );
+        const allSnapshot = await getDocs(allQuery);
+        newGenerations = allSnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
+        });
       }
-      setHasMore(finalNewItems.length === fetchLimit);
+
+      setGenerations(prev => [...prev, ...newGenerations]);
+      if (newGenerations.length > 0) {
+        const lastItem = newGenerations[newGenerations.length - 1];
+        setLastTimestampForPagination(lastItem.timestamp);
+      }
+      setHasMore(newGenerations.length === fetchLimit);
     } catch (error) {
       console.error("Error fetching more generations:", error);
       setHasMore(false);
@@ -2202,13 +2218,8 @@ function Dashboard() {
     }
   };
 
-  // Filtered generations based on activeFilter
-  const displayedGenerations = useMemo(() => {
-    if (activeFilter === 'all') {
-      return generations;
-    }
-    return generations.filter(gen => gen.type === activeFilter);
-  }, [generations, activeFilter]);
+  // Since we now filter at fetch level, displayed generations are just the generations
+  const displayedGenerations = generations;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -2220,55 +2231,33 @@ function Dashboard() {
               <div className="inline-flex items-center gap-8">
                 <button
                   onClick={() => setActiveFilter('all')}
-                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
                     activeFilter === 'all'
                       ? 'text-stone-900 dark:text-stone-100 opacity-100'
                       : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   All
-                  <span className="text-xs">
-                    ({generations.length})
-                  </span>
-                </button>
-                <button
-                  onClick={() => setActiveFilter('video')}
-                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
-                    activeFilter === 'video'
-                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
-                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
-                  }`}
-                >
-                  Videos
-                  <span className="text-xs">
-                    ({generationCounts.videos})
-                  </span>
                 </button>
                 <button
                   onClick={() => setActiveFilter('image')}
-                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
                     activeFilter === 'image'
                       ? 'text-stone-900 dark:text-stone-100 opacity-100'
                       : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   Images
-                  <span className="text-xs">
-                    ({generationCounts.images})
-                  </span>
                 </button>
                 <button 
                   onClick={() => setActiveFilter('slideshow')}
-                  className={`px-4 py-2 text-sm font-medium flex items-center gap-2 transition-all duration-200 ${ 
+                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
                     activeFilter === 'slideshow'
                       ? 'text-stone-900 dark:text-stone-100 opacity-100'
                       : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
                   Slideshows
-                  <span className="text-xs">
-                    ({generationCounts.slideshows})
-                  </span>
             </button>
         </div>
       </div>

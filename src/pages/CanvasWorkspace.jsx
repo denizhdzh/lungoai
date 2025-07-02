@@ -12,6 +12,43 @@ import ReactFlow, {
 	useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+
+// Loading Animation Component
+function LoadingAnimation({ className = "", variant = "default" }) {
+  if (variant === "grid") {
+    // Grid loading animation for card-based layouts
+    return (
+      <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 ${className}`}>
+        {[...Array(8)].map((_, index) => (
+          <div key={index} className="animate-pulse">
+            <div className="bg-neutral-200 dark:bg-neutral-700 rounded-lg aspect-[9/16]"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Default wave squares loading animation - Full frame with random opacity changes
+  const randomDelays = React.useMemo(() => {
+    return [...Array(64)].map(() => Math.random() * 6);
+  }, []);
+  
+  return (
+    <div className="w-full h-full">
+      <div className="w-full h-full grid grid-cols-8 grid-rows-8 gap-0.5">
+        {[...Array(64)].map((_, index) => (
+          <div
+            key={index}
+            className="bg-neutral-600 dark:bg-neutral-700 rounded-sm animate-fade-wave"
+            style={{
+              animationDelay: `${randomDelays[index]}s`
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 import {
 	Image, 
 	VideoCamera, 
@@ -602,7 +639,6 @@ const AIFrame = ({
 			})),
 		];
 		
-		console.log('imageGenerationOptions created:', options);
 		return options;
 	}, []);
 
@@ -784,8 +820,7 @@ const AIFrame = ({
 	// Determine current selected value for the dropdown
 	const currentDropdownValue = selectedFrame || (subtype === 'background' ? 'background' : subtype);
 	
-	// Debug current values
-	console.log('Current values:', { subtype, selectedFrame, currentDropdownValue });
+	// Current dropdown value
 
 	return (
 		<div 
@@ -1007,29 +1042,35 @@ const AIFrame = ({
 					onDragLeave={handleDragLeave}
 					onDrop={handleDrop}
 				>
-					<textarea
-						value={prompt}
-						onChange={(e) => setPrompt(e.target.value)}
-						placeholder={data.type === 'image' ? 
-							(isDragOver ? 'Drop image here...' : 'Describe the image you want to create or drag & drop an image...') :
-							`Describe the ${data.type} you want to create...`
-						}
-						rows={2}
-						className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
-					/>
-					<div className="absolute right-2 bottom-2 flex items-center gap-2">
-						<button
-							onClick={handleGenerate}
-							disabled={!prompt.trim() || isGenerating}
-							className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
-						>
-							{isGenerating ? (
-								<div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent"></div>
-							) : (
-								<ArrowUp size={16} weight="bold" />
-							)}
-						</button>
+									{isGenerating ? (
+					<div className="p-3">
+						<div className="h-20 flex items-center justify-center bg-neutral-700/50 border border-neutral-600 rounded-lg">
+							<div className="text-neutral-400 text-sm">Generating...</div>
+						</div>
 					</div>
+				) : (
+						<>
+							<textarea
+								value={prompt}
+								onChange={(e) => setPrompt(e.target.value)}
+								placeholder={data.type === 'image' ? 
+									(isDragOver ? 'Drop image here...' : 'Describe the image you want to create or drag & drop an image...') :
+									`Describe the ${data.type} you want to create...`
+								}
+								rows={2}
+								className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
+							/>
+							<div className="absolute right-2 bottom-2 flex items-center gap-2">
+								<button
+									onClick={handleGenerate}
+									disabled={!prompt.trim() || isGenerating}
+									className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
+								>
+									<ArrowUp size={16} weight="bold" />
+								</button>
+							</div>
+						</>
+					)}
 					{/* Hidden file input */}
 					<input
 						ref={fileInputRef}
@@ -1192,14 +1233,36 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 
 // Slideshow Node - Unique stacked card design
 const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGenerate, onDropdownStateChange }) => {
-	const { getNodes, getEdges } = useReactFlow();
-
+	const nodes = useReactFlow().getNodes();
+	const edges = useReactFlow().getEdges();
+	
 	// State for the node's controls
 	const [topic, setTopic] = useState(data.topic || '');
 	const [selectedLanguage, setSelectedLanguage] = useState(data.selectedLanguage || 'en');
 	const [slideshowType, setSlideshowType] = useState(data.slideshowType || 'top_3_lists');
 	const [selectedProduct, setSelectedProduct] = useState(data.selectedProduct || null);
 	const [imageGenerationMode, setImageGenerationMode] = useState(data.imageGenerationMode || 'ai_per_slide');
+	
+	// Calculate connected images directly from current nodes and edges
+	const connectedImages = useMemo(() => {
+		// Find edges targeting this slideshow node
+		const connectedEdges = edges.filter(edge => edge.target === id);
+		
+		// Get image data from connected nodes
+		const imageData = connectedEdges.map(edge => {
+			const sourceNode = nodes.find(node => node.id === edge.source);
+			if (sourceNode?.data?.imageUrl) {
+				return {
+					id: sourceNode.id,
+					imageUrl: sourceNode.data.imageUrl,
+					prompt: sourceNode.data.prompt || 'Connected Image'
+				};
+			}
+			return null;
+		}).filter(Boolean);
+		
+		return imageData;
+	}, [id, edges, nodes]);
 
 	// Fetch user's products for dropdown
 	const [userProducts, setUserProducts] = useState([]);
@@ -1234,7 +1297,13 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 	// Persist changes to the main nodes state - with debouncing to prevent infinite loops
 	useEffect(() => {
 		const timeoutId = setTimeout(() => {
-			onUpdateNode(id, { topic, selectedLanguage, slideshowType, selectedProduct, imageGenerationMode });
+			onUpdateNode(id, { 
+				topic, 
+				selectedLanguage, 
+				slideshowType, 
+				selectedProduct, 
+				imageGenerationMode 
+			});
 		}, 100);
 		
 		return () => clearTimeout(timeoutId);
@@ -1247,38 +1316,26 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 			alert("Please select a product or provide a topic.");
 			return;
 		}
-		
-		onUpdateNode(id, { isGenerating: true });
 
-		try {
-			const selectedProductData = selectedProduct ? userProducts.find(p => p.id === selectedProduct) : null;
-			const generationParams = {
-				topic: selectedProductData ? `Product: ${selectedProductData.name}` : topic,
+		const selectedProductData = selectedProduct ? userProducts.find(p => p.id === selectedProduct) : null;
+		const finalTopic = selectedProductData ? `Product: ${selectedProductData.name}` : topic;
+		
+		// Call the main onGenerate function like image generation does
+		if (onGenerate) {
+			const generationData = {
+				type: 'slideshow',
+				prompt: finalTopic,
+				topic: finalTopic,
 				language: selectedLanguage,
 				slideshowType,
-				background: 'neutral' // Default background
+				imageGenerationMode,
+				selectedProduct,
+				selectedProductData,
+				connectedImages: connectedImages.length > 0 ? connectedImages : null
 			};
-			
-			const result = await generateSlideshow(generationParams);
-			
-			if (result && result.success) {
-				if (onGenerate) {
-					onGenerate(id, {
-						type: 'slideshow',
-						slideTexts: result.content?.slideTexts || result.slideTexts || [],
-						backgroundUrl: result.content?.selectedBackgroundUrl || result.slideshowUrl,
-						processedImageUrls: result.content?.processedImageUrls || [],
-						generationId: result.content?.generationId || Date.now()
-					});
-				}
-			} else {
-				throw new Error(result?.error || 'Slideshow generation failed');
-			}
-		} catch (error) {
-			console.error('Slideshow generation error:', error);
-			alert(`Generation failed: ${error.message}`);
-		} finally {
-			onUpdateNode(id, { isGenerating: false });
+
+			console.log('🔧 Sending slideshow generation data:', generationData);
+			await onGenerate(id, generationData);
 		}
 	}
 
@@ -1408,35 +1465,62 @@ const SlideshowNode = React.memo(({ id, data, selected, user, onUpdateNode, onGe
 					</div>
 				</div>
 
+				{/* Connected Images Preview */}
+				{connectedImages.length > 0 && (
+					<div className="bg-neutral-800/30 p-2 rounded-lg border border-neutral-700/50">
+						<div className="text-xs text-neutral-400 mb-2 px-1">Connected Background Images:</div>
+						<div className="flex gap-2 overflow-x-auto">
+							{connectedImages.map((img, index) => (
+								<div key={img.id} className="flex-shrink-0 relative">
+									<img 
+										src={img.imageUrl} 
+										alt={img.prompt}
+										className="w-12 h-16 object-cover rounded border border-neutral-600"
+									/>
+									<div className="absolute -top-1 -right-1 w-4 h-4 bg-lime-500 text-black rounded-full flex items-center justify-center text-xs font-bold">
+										{index + 1}
+									</div>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+
 				{/* Prompt Input */}
 				<div className="relative bg-neutral-800/50 rounded-lg border-2 border-dashed border-transparent hover:border-neutral-600">
-					<textarea
-						value={topic}
-						onChange={(e) => setTopic(e.target.value)}
-						placeholder={selectedProduct ? 
-							`Create slideshow about ${userProducts.find(p => p.id === selectedProduct)?.name || 'this product'}...` :
-							'Describe your slideshow content...'
-						}
-						rows={2}
-						className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
-						onMouseDown={(e) => e.stopPropagation()}
-						onMouseMove={(e) => e.stopPropagation()}
-						onMouseUp={(e) => e.stopPropagation()}
-						onDragStart={(e) => e.preventDefault()}
-					/>
-					<div className="absolute right-2 bottom-2 flex items-center gap-2">
-						<button
-							onClick={handleGenerateClick}
-							disabled={data.isGenerating || (!selectedProduct && !topic.trim())}
-							className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
-						>
-							{data.isGenerating ? (
-								<div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent"></div>
-							) : (
-								<ArrowUp size={16} weight="bold" />
-							)}
-						</button>
+									{data.isGenerating ? (
+					<div className="p-3">
+						<div className="h-20 flex items-center justify-center bg-neutral-700/50 border border-neutral-600 rounded-lg">
+							<div className="text-neutral-400 text-sm">Generating...</div>
+						</div>
 					</div>
+				) : (
+						<>
+							<textarea
+								value={topic}
+								onChange={(e) => setTopic(e.target.value)}
+								placeholder={selectedProduct ? 
+									`Create slideshow about ${userProducts.find(p => p.id === selectedProduct)?.name || 'this product'}...` :
+									'Describe your slideshow content...'
+								}
+								rows={2}
+								className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
+								onMouseDown={(e) => e.stopPropagation()}
+								onMouseMove={(e) => e.stopPropagation()}
+								onMouseUp={(e) => e.stopPropagation()}
+								onDragStart={(e) => e.preventDefault()}
+							/>
+							<div className="absolute right-2 bottom-2 flex items-center gap-2">
+								<button
+									onClick={handleGenerateClick}
+									disabled={data.isGenerating || (!selectedProduct && !topic.trim())}
+									className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
+								>
+									<ArrowUp size={16} weight="bold" />
+								</button>
+							</div>
+						</>
+					)}
 				</div>
 			</div>
 
@@ -1469,13 +1553,8 @@ const GeneratedFrame = ({ data, id, selected }) => {
 				style={{ width: '180px', height: '320px' }} // 9:16 ratio
 			>
 				{isGenerating ? (
-					<div className="w-full h-full flex items-center justify-center bg-neutral-900">
-						{/* Simple center pulse effect */}
-						<div className="w-20 h-20 rounded-full bg-lime-400/20 animate-pulse flex items-center justify-center">
-							<div className="w-12 h-12 rounded-full bg-lime-400/30 animate-pulse" style={{ animationDelay: '0.5s' }}>
-								<div className="w-full h-full rounded-full bg-lime-400/40 animate-pulse" style={{ animationDelay: '1s' }}></div>
-							</div>
-						</div>
+					<div className="w-full h-full flex items-center justify-center bg-neutral-900 p-4">
+						<LoadingAnimation className="!h-full !w-full !bg-neutral-800 !border-neutral-700" />
 					</div>
 				) : error ? (
 					<div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900 text-red-400">
@@ -1549,7 +1628,11 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 			
 			{/* Main slideshow container */}
 			<div className="bg-neutral-900/90 border border-neutral-700/50 rounded-2xl overflow-hidden shadow-xl" style={{ width: '180px', height: '320px' }}>
-				{totalSlides > 0 && images.length > 0 ? (
+				{data.isGenerating ? (
+					<div className="w-full h-full flex items-center justify-center p-4">
+						<LoadingAnimation className="!h-full !w-full !bg-neutral-800 !border-neutral-700" />
+					</div>
+				) : totalSlides > 0 && images.length > 0 ? (
 					<div className="relative w-full h-full bg-neutral-800">
 						{/* Current slide */}
 						<div className="relative w-full h-full overflow-hidden">
@@ -2415,6 +2498,17 @@ const CanvasWorkspace = () => {
 					connectedImages: generationData.connectedImages || []
 				});
 				console.log('🎬 Video generation result:', result);
+			} else if (generationData.type === 'slideshow') {
+				console.log('📑 Calling generateSlideshow...');
+				const generationParams = {
+					topic: generationData.topic || generationData.prompt,
+					language: generationData.language || 'en',
+					slideshowType: generationData.slideshowType || 'top_3_lists',
+					background: 'neutral' // Default background
+				};
+				console.log('📑 Slideshow generation params:', generationParams);
+				result = await generateSlideshow(generationParams);
+				console.log('📑 Slideshow generation result:', result);
 			}
 
 			// Clear generating states
@@ -2422,16 +2516,22 @@ const CanvasWorkspace = () => {
 
 			if (result && result.success) {
 				// Update the existing result node with actual content
-				updateNodeData(newNodeId, {
-					imageUrl: result.imageUrl || generationData.imageUrl,
-					videoUrl: result.videoUrl || generationData.videoUrl,
-					slideTexts: generationData.slideTexts || [],
-					backgroundUrl: generationData.selectedBackgroundUrl,
-					processedImageUrls: generationData.processedImageUrls || [],
-					generationId: generationData.generationId,
-					isGenerating: false,
-					label: generationData.type === 'slideshow' ? 'Generated Slideshow' : undefined
-				});
+				if (generationData.type === 'slideshow') {
+					updateNodeData(newNodeId, {
+						slideTexts: result.slideTexts || [],
+						backgroundUrl: result.slideshowUrl || result.content?.selectedBackgroundUrl,
+						processedImageUrls: result.processedImageUrls || [],
+						generationId: result.generationId || Date.now(),
+						isGenerating: false,
+						label: 'Generated Slideshow'
+					});
+				} else {
+					updateNodeData(newNodeId, {
+						imageUrl: result.imageUrl,
+						videoUrl: result.videoUrl,
+						isGenerating: false
+					});
+				}
 
 				// Update edge to success styling
 				setEdges((currentEdges) => 
@@ -2559,16 +2659,40 @@ const CanvasWorkspace = () => {
 			const sourceNode = reactFlowInstance.getNode(connection.source);
 			const targetNode = reactFlowInstance.getNode(connection.target);
 			
-			// Check if source or target is a generated node
+			// Check if target is a generation node (slideshow, image, video)
+			const generationNodeTypes = ['slideshow', 'image', 'video', 'aiFrame'];
+			const isGenerationConnection = generationNodeTypes.includes(targetNode?.type);
+			
+			// Check if source or target is a generated result node
 			const isGeneratedConnection = sourceNode?.type === 'generatedFrame' || targetNode?.type === 'generatedFrame';
+			
+			let edgeStyle;
+			if (isGenerationConnection) {
+				// White solid edges for generation nodes
+				edgeStyle = {
+					stroke: '#ffffff',
+					strokeWidth: 2,
+					strokeDasharray: undefined
+				};
+			} else if (isGeneratedConnection) {
+				// Green dashed edges for generated content
+				edgeStyle = {
+					stroke: '#22c55e',
+					strokeWidth: 3,
+					strokeDasharray: '5,5'
+				};
+			} else {
+				// Default subtle edges
+				edgeStyle = {
+					stroke: 'rgba(255, 255, 255, 0.4)',
+					strokeWidth: 2,
+					strokeDasharray: undefined
+				};
+			}
 			
 			const newEdge = {
 				...connection,
-				style: { 
-					stroke: isGeneratedConnection ? '#22c55e' : 'rgba(255, 255, 255, 0.4)', 
-					strokeWidth: isGeneratedConnection ? 3 : 2,
-					strokeDasharray: isGeneratedConnection ? '5,5' : undefined
-				},
+				style: edgeStyle,
 			};
 			setEdges((eds) => addEdge(newEdge, eds));
 			
@@ -2598,7 +2722,7 @@ const CanvasWorkspace = () => {
 		updateNodeData(nodeId, { formData: newFormData });
 	};
 
-	// Create nodeTypes with stable references to avoid React Flow warnings
+	// Stable nodeTypes without connected images dependency
 	const nodeTypes = useMemo(() => ({
 		aiFrame: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} />,
 		image: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} />,
@@ -2616,7 +2740,7 @@ const CanvasWorkspace = () => {
 				onDropdownStateChange={setIsAnyDropdownOpen}
 			/>
 		),
-	}), [updateNodeData, addNodeToCanvas, handleGenerate]);
+	}), [updateNodeData, addNodeToCanvas, handleGenerate, user]);
 
 	// Event handlers for right-click menus
 	const onPaneClick = useCallback((event) => {

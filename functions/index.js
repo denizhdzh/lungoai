@@ -1209,6 +1209,182 @@ async function generateEnhancedGeneralPrompt(originalPrompt, frameRules, openaiI
 }
 
 // NEW HELPER FUNCTION FOR ENVIRONMENT DETAILS
+// =============================================
+// SLIDESHOW IMAGE GENERATION FUNCTIONS
+// =============================================
+
+async function generateSlideshowBackgroundPrompt(slideText, style, openaiInstance) {
+    // Get background rules from frameMapping
+    const backgroundRules = getImageSetRulesByFrameId('background');
+    
+    const prompt = `
+Create a concise, high-quality image prompt for a slideshow background based on this slide content: "${slideText}"
+
+Background Requirements:
+- Style: ${style || 'cinematic, atmospheric'}
+- Composition: Wide establishing shot showcasing the setting
+- Lighting: Natural or ambient lighting that enhances mood
+- Mood: Cinematic, atmospheric, and visually compelling
+- Colors: Rich and harmonious colors
+- Details: Environmental details that tell a story
+
+Generate a focused prompt (max 50 words) that creates an engaging background for this slide content.
+Focus on mood, atmosphere, and visual elements that complement the text.
+
+Prompt:`;
+
+    try {
+        const completion = await openaiInstance.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{
+                role: "user",
+                content: prompt
+            }],
+            max_tokens: 100,
+            temperature: 0.7,
+        });
+
+        return completion.choices[0].message.content.trim();
+    } catch (error) {
+        logger.error("[generateSlideshowBackgroundPrompt] Error:", error);
+        // Fallback simple prompt
+        return `Cinematic background scene, atmospheric lighting, rich colors, environmental storytelling, ${style || 'professional photography'}`;
+    }
+}
+
+async function generateSlideshowImagesAI(slideTexts, imageGenerationMode, style, openaiInstance) {
+    logger.info(`[generateSlideshowImagesAI] Generating ${imageGenerationMode} for ${slideTexts.length} slides`);
+    
+    try {
+        if (imageGenerationMode === 'single_ai_shared') {
+            // Generate one image for all slides
+            const combinedText = slideTexts.join(', ');
+            const enhancedPrompt = await generateSlideshowBackgroundPrompt(combinedText, style, openaiInstance);
+            
+            logger.info(`[generateSlideshowImagesAI] Single AI prompt: ${enhancedPrompt}`);
+            
+            // Use existing generateImage logic
+            const imageResult = await generateSingleImage(enhancedPrompt, 'background');
+            
+            // Return same image for all slides
+            return slideTexts.map(() => imageResult.imageUrl);
+            
+        } else if (imageGenerationMode === 'ai_per_slide') {
+            // Generate separate image for each slide
+            const imagePromises = slideTexts.map(async (slideText, index) => {
+                const enhancedPrompt = await generateSlideshowBackgroundPrompt(slideText, style, openaiInstance);
+                logger.info(`[generateSlideshowImagesAI] Slide ${index + 1} prompt: ${enhancedPrompt}`);
+                
+                const imageResult = await generateSingleImage(enhancedPrompt, 'background');
+                return imageResult.imageUrl;
+            });
+            
+            // Generate all images in parallel
+            const imageUrls = await Promise.all(imagePromises);
+            logger.info(`[generateSlideshowImagesAI] Generated ${imageUrls.length} images`);
+            
+            return imageUrls;
+        }
+        
+        return [];
+    } catch (error) {
+        logger.error("[generateSlideshowImagesAI] Error generating images:", error);
+        throw error;
+    }
+}
+
+async function generateSingleImage(prompt, subtype) {
+    logger.info(`[generateSingleImage] Generating image for prompt: ${prompt}`);
+    
+    try {
+        // Initialize Replicate directly
+        const replicateToken = process.env.REPLICATE_API_TOKEN;
+        if (!replicateToken) {
+            throw new Error('Replicate API token not found');
+        }
+        
+        const Replicate = require('replicate');
+        const replicate = new Replicate({ auth: replicateToken });
+        
+        // Use Imagen-4 for slideshow images
+        const input = {
+            prompt: prompt,
+            aspect_ratio: "9:16",
+            output_format: "png", 
+            safety_tolerance: 2
+        };
+        
+        logger.info(`[generateSingleImage] Generating with Imagen-4: ${prompt.substring(0, 100)}...`);
+        
+        const output = await replicate.run("google/imagen-4", { input });
+        
+        let imageUrl;
+        if (typeof output === 'string' && output.startsWith('http')) {
+            imageUrl = output;
+        } else if (Array.isArray(output) && output.length > 0) {
+            imageUrl = output[0];
+        } else {
+            throw new Error('Invalid output format from Replicate');
+        }
+        
+        logger.info(`[generateSingleImage] Successfully generated image: ${imageUrl}`);
+        return { imageUrl: imageUrl };
+        
+    } catch (error) {
+        logger.error("[generateSingleImage] Error generating image:", error);
+        throw error;
+    }
+}
+
+async function generateSlideshowImages(params) {
+    const { slideTexts, connectedImages, imageGenerationMode, style } = params;
+    
+    logger.info(`[generateSlideshowImages] Mode: ${imageGenerationMode}, Slides: ${slideTexts.length}, Connected: ${connectedImages?.length || 0}`);
+    
+    // Initialize OpenAI
+    const openaiInstance = new OpenAI({ apiKey: process.env.OPENAI_KEY });
+    
+    try {
+        // Priority 1: Use connected images if available
+        if (connectedImages && connectedImages.length > 0) {
+            logger.info(`[generateSlideshowImages] Using ${connectedImages.length} connected images`);
+            
+            // Use connected images, repeat if needed
+            const imageUrls = slideTexts.map((_, index) => {
+                const imageIndex = index % connectedImages.length;
+                return connectedImages[imageIndex].imageUrl;
+            });
+            
+            return {
+                success: true,
+                imageUrls: imageUrls,
+                mode: 'connected_images',
+                cost: 30 // Connected images cost
+            };
+        }
+        
+        // Priority 2: Generate AI images based on mode
+        if (imageGenerationMode === 'single_ai_shared' || imageGenerationMode === 'ai_per_slide') {
+            // Generate AI images
+            const imageUrls = await generateSlideshowImagesAI(slideTexts, imageGenerationMode, style, openaiInstance);
+            const cost = imageGenerationMode === 'single_ai_shared' ? 60 : 150;
+            
+            return {
+                success: true,
+                imageUrls: imageUrls,
+                mode: imageGenerationMode,
+                cost: cost
+            };
+        }
+        
+        throw new Error(`Unknown image generation mode: ${imageGenerationMode}`);
+        
+    } catch (error) {
+        logger.error("[generateSlideshowImages] Error:", error);
+        throw error;
+    }
+}
+
 async function generateEnvironmentDetailsPrompt(baseSettingDescription, requestedStyle, baseClothingDescription, openaiInstance) {
     const settingExamples = [
         // Realistic, visually appealing environments with influencer-style clarity (Copy from generateDetailedUgcPrompt or refine)
@@ -1793,11 +1969,25 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }
 
-    // Destructure ALL parameters, including the new language parameter and slideshow type
-    const { topic, slide_1_text, slide_2_text, slide_3_text, slide_4_text, background_name, image_style, language, _slideshow_type_context } = request.data;
+    // Destructure ALL parameters, including the new image generation parameters
+    const { 
+        topic, 
+        slide_1_text, 
+        slide_2_text, 
+        slide_3_text, 
+        slide_4_text, 
+        background_name, 
+        image_style, 
+        language, 
+        _slideshow_type_context,
+        connectedImages,           // NEW: Connected images from canvas
+        imageGenerationMode,      // NEW: connected_images, from_assets, single_ai_shared, ai_per_slide  
+        style                     // NEW: Style for AI generation
+    } = request.data;
+    
     const targetLanguage = language || 'en'; // Default to English if not provided
     const slideshowType = _slideshow_type_context || 'learn_grow'; // Default to learn_grow if not provided
-    const generationId = Date.now().toString(); // <--- ADDED THIS LINE
+    const generationId = Date.now().toString();
 
     // --- Define Slideshow Type Instructions ---
     const getSlideshowTypeInstruction = (type) => {
@@ -2132,9 +2322,60 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         }
 
 
-        // --- Render Texts onto Background Images ---
+        // --- NEW: Image Generation Logic ---
+        let finalImageUrls = [];
+        let generationCost = 50; // Base slideshow cost
+        
+        logger.info(`[${generationId}] Image generation mode: ${imageGenerationMode || 'legacy'}`);
+        
+        if (imageGenerationMode && imageGenerationMode !== 'legacy') {
+            // Handle special cases first
+            if (imageGenerationMode === 'from_assets') {
+                // Use existing user background images
+                if (availableBackgrounds.length > 0) {
+                    logger.info(`[${generationId}] Using ${availableBackgrounds.length} available background assets`);
+                    
+                    // Cycle through available backgrounds for each slide
+                    finalImageUrls = slideTexts.map((_, index) => {
+                        const backgroundIndex = index % availableBackgrounds.length;
+                        return availableBackgrounds[backgroundIndex].imageUrl;
+                    });
+                    
+                    generationCost += 30; // from_assets cost
+                    logger.info(`[${generationId}] Used ${finalImageUrls.length} background assets, cost: 30`);
+                } else {
+                    logger.warn(`[${generationId}] No background assets available for from_assets mode`);
+                    throw new Error('No background assets available');
+                }
+            } else {
+                // Use AI generation system for other modes
+                try {
+                    const imageGenResult = await generateSlideshowImages({
+                        slideTexts: slideTexts,
+                        connectedImages: connectedImages,
+                        imageGenerationMode: imageGenerationMode,
+                        style: style
+                    });
+                    
+                    if (imageGenResult.success) {
+                        finalImageUrls = imageGenResult.imageUrls;
+                        generationCost += imageGenResult.cost;
+                        logger.info(`[${generationId}] Generated ${finalImageUrls.length} images with mode: ${imageGenResult.mode}, additional cost: ${imageGenResult.cost}`);
+                    } else {
+                        throw new Error('Image generation failed');
+                    }
+                    
+                } catch (imageGenError) {
+                    logger.error(`[${generationId}] Image generation failed:`, imageGenError);
+                    // Fall back to legacy background system
+                    logger.info(`[${generationId}] Falling back to legacy background system`);
+                }
+            }
+        }
+        
+        // --- Legacy: Render Texts onto Background Images ---
         const processedImageUrls = [];
-        if (selectedBackgroundUrl && slideTexts.every(text => text && text.trim() !== '')) {
+        if (!finalImageUrls.length && selectedBackgroundUrl && slideTexts.every(text => text && text.trim() !== '')) {
             logger.info(`[${generationId}] Starting to render ${slideTexts.length} slides onto background: ${selectedBackgroundUrl}`);
             const tempDir = os.tmpdir();
             const backgroundFileName = `background_${generationId}.png`;
@@ -2230,6 +2471,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         }
         // --- END Render Texts onto Background Images ---
 
+        // --- Final Image URLs Selection ---
+        const finalUsedImageUrls = finalImageUrls.length > 0 ? finalImageUrls : (processedImageUrls.length > 0 ? processedImageUrls : null);
+        
         // Firestore saving logic
         const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
         const generationData = {
@@ -2243,7 +2487,9 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
             aiSelectedBackgroundId: aiSelectedBackgroundId || null, // ID if AI selected it
             imageStyle: image_style || null,
             language: targetLanguage,
-            processedImageUrls: processedImageUrls.length > 0 ? processedImageUrls : null,
+            processedImageUrls: finalUsedImageUrls, // NEW: Use finalUsedImageUrls instead
+            imageGenerationMode: imageGenerationMode || 'legacy', // NEW: Store generation mode
+            generationCost: generationCost, // NEW: Store total cost
             timestamp: FieldValue.serverTimestamp(),
         };
 
@@ -2251,15 +2497,26 @@ exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 
         await db.runTransaction(async (transaction) => {
             const userSnapshot = await transaction.get(userRef);
             const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
-            if (currentCredits < 50) { // CHECK if enough credits for slideshow
-                throw new HttpsError('resource-exhausted', 'Insufficient general credits for slideshow (needs 50).');
+            if (currentCredits < generationCost) { // CHECK if enough credits for slideshow
+                throw new HttpsError('resource-exhausted', `Insufficient general credits for slideshow (needs ${generationCost}).`);
             }
-            transaction.update(userRef, { general_credits: FieldValue.increment(-50) }); // DECREMENT by 50
+            transaction.update(userRef, { general_credits: FieldValue.increment(-generationCost) }); // DECREMENT by dynamic cost
             transaction.set(generationDocRef, generationData);
         });
 
-        logger.info(`Slideshow generation record saved (ID: ${generationDocRef.id}) and general_credits decremented by 50 for user ${userId}.`); // UPDATED LOG
-        return { success: true, message: "Slideshow content and images generated successfully.", data: { generationId: generationDocRef.id, slideTexts, selectedBackgroundUrl, processedImageUrls } };
+        logger.info(`Slideshow generation record saved (ID: ${generationDocRef.id}) and general_credits decremented by ${generationCost} for user ${userId}.`); // UPDATED LOG
+        return { 
+            success: true, 
+            message: "Slideshow content and images generated successfully.", 
+            data: { 
+                generationId: generationDocRef.id, 
+                slideTexts, 
+                selectedBackgroundUrl, 
+                processedImageUrls: finalUsedImageUrls, // NEW: Return final image URLs
+                imageGenerationMode: imageGenerationMode || 'legacy',
+                cost: generationCost
+            } 
+        };
 
     } catch (error) {
         logger.error(`Error in generateImageSlideshow for user ${userId}:`, error);

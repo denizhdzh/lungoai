@@ -14,11 +14,16 @@ export default {
         },
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
+        },
+        'fade-wave': {
+          '0%, 100%': { opacity: '0', transform: 'scale(1)' },
+          '50%': { opacity: '0.5', transform: 'scale(1.05)' },
         }
       },
       animation: {
         'pulse-subtle': 'pulse-subtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         shimmer: 'shimmer 2s infinite',
+        'fade-wave': 'fade-wave 3.5s ease-in-out infinite',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

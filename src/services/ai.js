@@ -291,7 +291,7 @@ export const generateVideo = async ({ prompt, imageUrl, aspectRatio, duration, m
 // NEW: Slideshow Generation Service
 export const generateSlideshow = async ({ topic, slideshowType, language, background }) => {
   try {
-    console.log('Generating slideshow with params:', { topic, slideshowType, language, background });
+    console.log('🎬 AI Service: Generating slideshow with params:', { topic, slideshowType, language, background });
     
     const generateSlideshowFn = httpsCallable(functions, 'generateImageSlideshow');
     const result = await generateSlideshowFn({
@@ -301,16 +301,33 @@ export const generateSlideshow = async ({ topic, slideshowType, language, backgr
       background_name: background
     });
 
+    console.log('🎬 AI Service: Backend response:', result);
+
+    // Check if the result has the expected structure
+    if (!result || !result.data) {
+      throw new Error('Invalid response from backend');
+    }
+
+    // Return standardized response based on actual backend structure
     return {
       success: true,
-      slideshowUrl: result.data.slideshowUrl,
-      content: result.data,
-      ...result.data
+      content: result.data.data, // Backend wraps data in .data.data
+      slideTexts: result.data.data?.slideTexts || [],
+      slideshowUrl: result.data.data?.selectedBackgroundUrl || null,
+      processedImageUrls: result.data.data?.processedImageUrls || [],
+      generationId: result.data.data?.generationId || null,
+      message: result.data.message
     };
 
   } catch (error) {
-    console.error('Slideshow generation error:', error);
-    throw new Error(error.message || 'Slideshow generation failed');
+    console.error('🎬 AI Service: Slideshow generation error:', error);
+    
+    // Return structured error instead of throwing
+    return {
+      success: false,
+      error: error.message || 'Slideshow generation failed',
+      message: error.message || 'Slideshow generation failed'
+    };
   }
 };
 

@@ -274,6 +274,176 @@ const handleGenerationDownload = async (generation) => {
 };
 // --- End Updated Standalone Download Helper ---
 
+// --- NEW: Slideshow Editor Component ---
+function SlideshowEditor({ slideshow, onClose, isDarkMode, backgrounds, onSave }) {
+  const [editedSlideTexts, setEditedSlideTexts] = useState(slideshow?.slideTexts || []);
+  const [selectedBackgroundUrl, setSelectedBackgroundUrl] = useState(slideshow?.selectedBackgroundUrl || '');
+  const [textColor, setTextColor] = useState(slideshow?.textColor || 'white');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleTextChange = (index, newText) => {
+    const updated = [...editedSlideTexts];
+    updated[index] = newText;
+    setEditedSlideTexts(updated);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave({
+        slideTexts: editedSlideTexts,
+        selectedBackgroundUrl,
+        textColor
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error saving slideshow:', error);
+      alert('Error saving slideshow changes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className={`max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl ${
+        isDarkMode ? 'bg-neutral-900 border border-neutral-700' : 'bg-white border border-stone-200'
+      }`}>
+        {/* Header */}
+        <div className={`p-6 border-b ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
+          <div className="flex justify-between items-center">
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
+              Edit Slideshow
+            </h2>
+            <button 
+              onClick={onClose}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-stone-100'
+              }`}
+            >
+              <CloseIcon size={20} className={isDarkMode ? 'text-stone-400' : 'text-stone-600'} />
+            </button>
+          </div>
+        </div>
+
+        {/* Background Selection */}
+        <div className={`p-6 border-b ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
+          <h3 className={`text-lg font-medium mb-4 ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
+            Background
+          </h3>
+          <div className="grid grid-cols-4 gap-3">
+            {backgrounds?.map((bg) => (
+              <button
+                key={bg.id}
+                onClick={() => setSelectedBackgroundUrl(bg.imageUrl)}
+                className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${
+                  selectedBackgroundUrl === bg.imageUrl 
+                    ? 'border-blue-500 ring-2 ring-blue-500/30' 
+                    : 'border-stone-200 dark:border-neutral-700 hover:border-stone-300'
+                }`}
+              >
+                <img 
+                  src={bg.imageUrl} 
+                  alt={bg.name}
+                  className="w-full h-full object-cover"
+                />
+                {selectedBackgroundUrl === bg.imageUrl && (
+                  <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                    <Check size={20} className="text-blue-600" weight="bold" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Node-based Slide Editor */}
+        <div className="p-6">
+          <h3 className={`text-lg font-medium mb-6 ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
+            Slide Content
+          </h3>
+          
+          <div className="relative max-w-md mx-auto">
+            {/* Vertical Connection Line */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-stone-300 dark:bg-neutral-600 transform -translate-x-0.5" />
+            
+            {editedSlideTexts.map((text, index) => (
+              <div key={index} className="relative mb-8 last:mb-0">
+                {/* Connection Point */}
+                <div className="absolute left-1/2 -top-2 w-3 h-3 bg-blue-500 rounded-full transform -translate-x-1/2 border-2 border-white dark:border-neutral-900" />
+                
+                {/* Node */}
+                <div className={`relative ml-8 p-4 rounded-lg border-2 border-dashed transition-all ${
+                  isDarkMode ? 'border-neutral-600 bg-neutral-800' : 'border-stone-300 bg-stone-50'
+                }`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-stone-300' : 'text-stone-600'}`}>
+                      Slide {index + 1}
+                    </span>
+                  </div>
+                  
+                  <textarea
+                    value={text}
+                    onChange={(e) => handleTextChange(index, e.target.value)}
+                    className={`w-full p-3 rounded-lg border resize-none transition-colors ${
+                      isDarkMode 
+                        ? 'bg-neutral-700 border-neutral-600 text-white placeholder-neutral-400 focus:border-blue-500' 
+                        : 'bg-white border-stone-300 text-stone-900 placeholder-stone-500 focus:border-blue-500'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
+                    placeholder={`Enter text for slide ${index + 1}...`}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Bottom Connection Point */}
+                {index < editedSlideTexts.length - 1 && (
+                  <div className="absolute left-1/2 -bottom-2 w-3 h-3 bg-stone-400 dark:bg-neutral-500 rounded-full transform -translate-x-1/2 border-2 border-white dark:border-neutral-900" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer with Actions */}
+        <div className={`p-6 border-t ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className={`px-4 py-2 rounded-lg border transition-colors ${
+                isDarkMode 
+                  ? 'border-neutral-600 text-neutral-300 hover:bg-neutral-800' 
+                  : 'border-stone-300 text-stone-700 hover:bg-stone-50'
+              } disabled:opacity-50`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <CircleNotch size={16} className="animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// --- End Slideshow Editor Component ---
+
 // --- NEW: Comprehensive Edit Popup Component ---
 function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit, onShowSuccessNotification, creators, backgrounds, onAssetSaved, onGenerationUpdated, onGenerationDeleted }) {
   console.log('[GenerationEditPopup] Opened with generation:', JSON.parse(JSON.stringify(generation)));
@@ -1751,7 +1921,7 @@ function VideoPreview({ generation, className = "" }) {
   );
 }
 
-function GenerationCard({ generation, onClick, creators, backgrounds }) { // Added creators and backgrounds props
+function GenerationCard({ generation, onClick, creators, backgrounds, onEditSlideshow }) { // Added onEditSlideshow prop
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   // --- NEW: Check if already saved as Creator or Background and get their names ---
@@ -1920,11 +2090,38 @@ function GenerationCard({ generation, onClick, creators, backgrounds }) { // Add
       {/* Background Image Area */} 
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         {getPreviewContent()}
-                  </div>
-                  
-
-
+      </div>
       
+      {/* Hover Overlay with Action Buttons */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-end justify-center p-3 opacity-0 group-hover:opacity-100">
+        <div className="flex gap-2">
+          {/* Download Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleGenerationDownload(generation);
+            }}
+            className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-2 transition-all duration-200 hover:scale-110"
+            title="Download"
+          >
+            <DownloadSimple size={16} className="text-stone-800" weight="bold" />
+          </button>
+          
+          {/* Edit Button - Only for slideshows */}
+          {generation.type === 'slideshow' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditSlideshow && onEditSlideshow(generation);
+              }}
+              className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-2 transition-all duration-200 hover:scale-110"
+              title="Edit Slideshow"
+            >
+              <Pencil size={16} className="text-stone-800" weight="bold" />
+            </button>
+          )}
+        </div>
+      </div>
 
     </motion.div>
   );
@@ -1937,6 +2134,8 @@ function Dashboard() {
   const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedGeneration, setSelectedGeneration] = useState(null);
+  const [isEditingSlideshow, setIsEditingSlideshow] = useState(false);
+  const [selectedSlideshowForEdit, setSelectedSlideshowForEdit] = useState(null);
 
   const {
     dashboardRefreshKey,
@@ -2218,6 +2417,39 @@ function Dashboard() {
     }
   };
 
+  const handleEditSlideshow = (generation) => {
+    setSelectedSlideshowForEdit(generation);
+    setIsEditingSlideshow(true);
+  };
+
+  const handleCloseSlideshowEditor = () => {
+    setIsEditingSlideshow(false);
+    setSelectedSlideshowForEdit(null);
+  };
+
+  const handleSaveSlideshowChanges = async (changes) => {
+    if (!user || !selectedSlideshowForEdit) return;
+    
+    try {
+      const functions = getFunctions();
+      const regenerateSlideshow = httpsCallable(functions, 'regenerateSlideshow');
+      
+      await regenerateSlideshow({
+        userId: user.uid,
+        slideshowId: selectedSlideshowForEdit.id,
+        slideTexts: changes.slideTexts,
+        selectedBackgroundUrl: changes.selectedBackgroundUrl,
+        textColor: changes.textColor
+      });
+      
+      showSuccessNotification('Slideshow changes saved! Regenerating...');
+      refreshDashboardGenerations();
+    } catch (error) {
+      console.error('Error saving slideshow changes:', error);
+      throw error; // Re-throw to let the SlideshowEditor handle the error display
+    }
+  };
+
   // Since we now filter at fetch level, displayed generations are just the generations
   const displayedGenerations = generations;
 
@@ -2287,6 +2519,7 @@ function Dashboard() {
                       onClick={() => setSelectedGeneration(gen)}
                       creators={creators} // Pass creators
                       backgrounds={backgrounds} // Pass backgrounds
+                      onEditSlideshow={handleEditSlideshow} // Pass edit handler
                     />
                   ))}
                 </div>
@@ -2367,6 +2600,17 @@ function Dashboard() {
               </button>
             </div>
         </div>
+      )}
+
+      {/* Slideshow Editor */}
+      {isEditingSlideshow && selectedSlideshowForEdit && (
+        <SlideshowEditor
+          slideshow={selectedSlideshowForEdit}
+          onClose={handleCloseSlideshowEditor}
+          isDarkMode={isDarkMode}
+          backgrounds={backgrounds}
+          onSave={handleSaveSlideshowChanges}
+        />
       )}
 
       {/* Edit Popup */}

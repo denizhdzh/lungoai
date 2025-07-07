@@ -84,8 +84,9 @@ import {
 } from '@phosphor-icons/react';
 import { generateImage, generateVideo, generateSlideshow, checkApiKey, GENERATION_TYPES, IMAGE_STYLES, QUALITY_OPTIONS } from '../services/ai';
 import { useOutletContext } from 'react-router-dom';
-import { db } from '../firebase';
-import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import { db, functions } from '../firebase';
+import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, limit } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import CanvasTutorial from '../components/CanvasTutorial';
 import CustomDropdown from '../components/CustomDropdown';
 
@@ -1583,8 +1584,10 @@ const GeneratedFrame = ({ data, id, selected }) => {
 };
 
 // Slideshow Result Node - Shows generated slideshow content
-const SlideshowResultNode = React.memo(({ data, id }) => {
+const SlideshowResultNode = React.memo(({ data, id, onEditSlideshow }) => {
 	const [currentSlide, setCurrentSlide] = useState(0);
+	const [isHovered, setIsHovered] = useState(false);
+	const [hideTimeout, setHideTimeout] = useState(null);
 
 	const slideTexts = data.slideTexts || [];
 	
@@ -1619,15 +1622,67 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 		setCurrentSlide(prev => (prev === 0 ? totalSlides - 1 : prev - 1));
 	};
 
+	const handleMouseEnter = () => {
+		if (hideTimeout) {
+			clearTimeout(hideTimeout);
+			setHideTimeout(null);
+		}
+		setIsHovered(true);
+	};
+
+	const handleMouseLeave = () => {
+		const timeout = setTimeout(() => {
+			setIsHovered(false);
+		}, 2500); // 2.5 second delay
+		setHideTimeout(timeout);
+	};
+
+	// Cleanup timeout on unmount
+	useEffect(() => {
+		return () => {
+			if (hideTimeout) {
+				clearTimeout(hideTimeout);
+			}
+		};
+	}, [hideTimeout]);
+
 	return (
 		<div 
 			className="w-[180px] text-white font-sans relative group"
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
 		>
 			<Handle type="target" position={Position.Left} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
 			<Handle type="source" position={Position.Right} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
 			
+			{/* Action Buttons - Top right of the node */}
+			{isHovered && !data.isGenerating && (
+				<div className="absolute -top-2 -right-2 flex gap-1 z-40">
+					<button
+						onClick={() => onEditSlideshow && onEditSlideshow(data, id)}
+						className="bg-neutral-800 hover:bg-neutral-700 p-2 rounded-md transition-all shadow-lg border border-neutral-600"
+					>
+						<PencilSimple size={14} weight="bold" className="text-white" />
+					</button>
+					<button
+						onClick={() => {
+							// Download functionality
+							if (data.backgroundUrl) {
+								const link = document.createElement('a');
+								link.href = data.backgroundUrl;
+								link.download = `slideshow-${Date.now()}.jpg`;
+								link.click();
+							}
+						}}
+						className="bg-neutral-800 hover:bg-neutral-700 p-2 rounded-md transition-all shadow-lg border border-neutral-600"
+					>
+						<ArrowUp size={14} weight="bold" className="text-white" />
+					</button>
+				</div>
+			)}
+			
 			{/* Main slideshow container */}
-			<div className="bg-neutral-900/90 border border-neutral-700/50 rounded-2xl overflow-hidden shadow-xl" style={{ width: '180px', height: '320px' }}>
+			<div className="bg-neutral-900/90 border border-neutral-700/50 rounded-2xl overflow-hidden shadow-xl relative" style={{ width: '180px', height: '320px' }}>
 				{data.isGenerating ? (
 					<div className="w-full h-full flex items-center justify-center p-4">
 						<LoadingAnimation className="!h-full !w-full !bg-neutral-800 !border-neutral-700" />
@@ -1724,6 +1779,265 @@ const SlideshowResultNode = React.memo(({ data, id }) => {
 		</div>
 	);
 });
+
+// Individual Background Selection Node - Choose background for specific slide
+const BackgroundSelectNode = React.memo(({ data, id, onUpdateBackground, onUpdateSlideText }) => {
+	const [selectedBg, setSelectedBg] = useState(data.selectedBackgroundUrl || '');
+	const [slideText, setSlideText] = useState(data.slideText || '');
+	const [activeFilter, setActiveFilter] = useState('backgrounds');
+	const { user } = useOutletContext() || {};
+	const [content, setContent] = useState([]);
+	const [isLoading, setIsLoading] = useState(true);
+
+	// Fetch content based on filter
+	useEffect(() => {
+		const fetchContent = async () => {
+			if (!user) return;
+			
+			setIsLoading(true);
+			try {
+				let collectionName = 'backgrounds';
+				let imageField = 'imageUrl';
+				
+				switch(activeFilter) {
+					case 'images':
+						collectionName = 'generations';
+						imageField = 'imageUrl';
+						break;
+					case 'videos':
+						collectionName = 'generations';
+						imageField = 'videoUrl';
+						break;
+					case 'slideshows':
+						collectionName = 'generations';
+						imageField = 'backgroundUrl';
+						break;
+					default:
+						collectionName = 'backgrounds';
+						imageField = 'imageUrl';
+				}
+
+				const contentQuery = query(
+					collection(db, 'users', user.uid, collectionName),
+					orderBy('createdAt', 'desc'),
+					limit(6)
+				);
+				const contentSnapshot = await getDocs(contentQuery);
+				const fetchedContent = contentSnapshot.docs.map(doc => ({
+					id: doc.id,
+					imageUrl: doc.data()[imageField],
+					type: activeFilter,
+					...doc.data()
+				})).filter(item => item.imageUrl); // Only items with images
+				
+				setContent(fetchedContent);
+			} catch (error) {
+				console.error('Error fetching content:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		fetchContent();
+	}, [user, activeFilter]);
+
+	const handleBackgroundSelect = (backgroundUrl) => {
+		setSelectedBg(backgroundUrl);
+		if (onUpdateBackground) {
+			onUpdateBackground(data.slideIndex, backgroundUrl);
+		}
+	};
+
+	const handleTextChange = (newText) => {
+		setSlideText(newText);
+		if (onUpdateSlideText) {
+			onUpdateSlideText(data.slideIndex, newText);
+		}
+	};
+
+	const filters = [
+		{ id: 'backgrounds', name: 'BG', icon: '🖼️' },
+		{ id: 'images', name: 'IMG', icon: '📸' },
+		{ id: 'videos', name: 'VID', icon: '🎬' },
+		{ id: 'slideshows', name: 'SLD', icon: '📱' }
+	];
+
+	return (
+		<div className="w-[180px] text-white font-sans relative group">
+			<Handle type="target" position={Position.Right} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
+			<Handle type="source" position={Position.Bottom} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
+			
+			<div className="bg-neutral-900/90 border-2 border-dashed border-lime-500/50 rounded-2xl overflow-hidden shadow-xl relative p-3" style={{ width: '180px', height: '320px' }}>
+				{/* Header */}
+				<div className="flex items-center gap-2 mb-3">
+					<div className="w-3 h-3 bg-lime-500 rounded-full shadow-lg"></div>
+					<span className="text-xs font-bold text-lime-400 tracking-wide">
+						SLIDE {data.slideIndex + 1}
+					</span>
+					<div className="flex-1 h-px bg-gradient-to-r from-lime-500/50 to-transparent"></div>
+				</div>
+
+				{/* Filter Tabs */}
+				<div className="flex gap-1 mb-3">
+					{filters.map((filter) => (
+						<button
+							key={filter.id}
+							onClick={() => setActiveFilter(filter.id)}
+							className={`flex-1 py-1.5 px-1 rounded text-xs font-bold transition-all ${
+								activeFilter === filter.id
+									? 'bg-lime-500 text-black'
+									: 'bg-neutral-700 text-lime-400 hover:bg-neutral-600'
+							}`}
+						>
+							{filter.name}
+						</button>
+					))}
+				</div>
+				
+				{/* Content Grid - 3:4 aspect ratio */}
+				<div className="h-[160px] overflow-y-auto mb-3">
+					{isLoading ? (
+						<div className="flex items-center justify-center h-full">
+							<div className="w-4 h-4 border-2 border-lime-500/30 border-t-lime-500 rounded-full animate-spin"></div>
+						</div>
+					) : (
+						<div className="grid grid-cols-2 gap-1.5">
+							{content.map((item) => (
+								<button
+									key={item.id}
+									onClick={() => handleBackgroundSelect(item.imageUrl)}
+									className={`relative aspect-[3/4] rounded-md overflow-hidden border-2 transition-all ${
+										selectedBg === item.imageUrl 
+											? 'border-lime-500 ring-1 ring-lime-500/30' 
+											: 'border-neutral-600 hover:border-neutral-500'
+									}`}
+								>
+									<img 
+										src={item.imageUrl} 
+										alt={item.name || 'Content'}
+										className="w-full h-full object-cover"
+									/>
+									{selectedBg === item.imageUrl && (
+										<div className="absolute inset-0 bg-lime-500/20 flex items-center justify-center">
+											<div className="w-3 h-3 bg-lime-500 rounded-full flex items-center justify-center">
+												<div className="w-1 h-1 bg-black rounded-full"></div>
+											</div>
+										</div>
+									)}
+								</button>
+							))}
+						</div>
+					)}
+				</div>
+
+				{/* Text Editor */}
+				<div className="space-y-2">
+					<div className="flex items-center gap-2">
+						<div className="w-2 h-2 bg-lime-500 rounded-full"></div>
+						<span className="text-xs font-bold text-lime-400">TEXT</span>
+					</div>
+					<textarea
+						value={slideText}
+						onChange={(e) => handleTextChange(e.target.value)}
+						className="w-full h-[80px] p-2 rounded-lg border border-neutral-600 bg-neutral-700/50 text-white placeholder-neutral-400 focus:border-lime-500 focus:outline-none focus:ring-1 focus:ring-lime-500/30 resize-none transition-all text-xs leading-relaxed"
+						placeholder={`Text for slide ${data.slideIndex + 1}...`}
+					/>
+					<div className="text-xs text-neutral-400 text-right">
+						{slideText.length} chars
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+});
+
+// Background Preview Node - Large 9:16 preview (read-only preview)
+const BackgroundPreviewNode = React.memo(({ data, id, onSaveAll, currentBackgroundUrls, currentSlideTexts }) => {
+	const [activeSlide, setActiveSlide] = useState(0);
+	
+	// Get the current background for active slide
+	const currentBg = currentBackgroundUrls?.[activeSlide] || data.backgroundUrls?.[activeSlide] || data.backgroundUrl || '';
+	
+	// Get the current text for active slide
+	const currentText = currentSlideTexts?.[activeSlide] || data.slideTexts?.[activeSlide] || '';
+
+	return (
+		<div className="w-[280px] text-white font-sans relative group">
+			<Handle type="target" position={Position.Left} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
+			<Handle type="source" position={Position.Right} className="!w-4 !h-4 opacity-0 group-hover:opacity-100 transition-opacity !z-50" />
+			
+			<div className="bg-neutral-900/90 border-2 border-dashed border-lime-500/50 rounded-2xl overflow-hidden shadow-xl relative p-4" style={{ width: '280px', height: '540px' }}>
+				{/* Header */}
+				<div className="flex items-center gap-2 mb-4">
+					<div className="w-3 h-3 bg-lime-500 rounded-full shadow-lg"></div>
+					<span className="text-sm font-bold text-lime-400 tracking-wide">
+						SLIDESHOW PREVIEW
+					</span>
+					<div className="flex-1 h-px bg-gradient-to-r from-lime-500/50 to-transparent"></div>
+				</div>
+
+				{/* Slide Navigation */}
+				<div className="flex gap-1 mb-4">
+					{[0, 1, 2, 3].map((index) => (
+						<button
+							key={index}
+							onClick={() => setActiveSlide(index)}
+							className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+								activeSlide === index
+									? 'bg-lime-500 text-black'
+									: 'bg-neutral-700 text-lime-400 hover:bg-neutral-600'
+							}`}
+						>
+							{index + 1}
+						</button>
+					))}
+				</div>
+				
+				{/* 9:16 Background Preview */}
+				<div className="relative w-full aspect-[9/16] rounded-lg overflow-hidden mb-4 bg-neutral-800">
+					{currentBg ? (
+						<img 
+							src={currentBg} 
+							alt={`Background ${activeSlide + 1}`}
+							className="w-full h-full object-cover"
+						/>
+					) : (
+						<div className="w-full h-full flex items-center justify-center text-neutral-500">
+							<span className="text-xs">No background selected</span>
+						</div>
+					)}
+					
+					{/* Text Display Overlay (Read-only) */}
+					{currentText && (
+						<div className="absolute inset-0 p-4 flex flex-col justify-center pointer-events-none">
+							<div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-lime-500/30">
+								<p className="text-white text-sm leading-relaxed text-center">
+									{currentText}
+								</p>
+							</div>
+						</div>
+					)}
+				</div>
+
+				{/* Status Info */}
+				<div className="text-xs text-neutral-400 text-center mb-4">
+					Slide {activeSlide + 1} of 4 {currentText && `• ${currentText.length} chars`}
+				</div>
+
+				{/* Save Button */}
+				<button
+					onClick={() => onSaveAll && onSaveAll()}
+					className="w-full bg-lime-500 hover:bg-lime-400 text-black py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-bold transition-all shadow-lg"
+				>
+					<Lightning size={16} weight="bold" />
+					Save All Changes
+				</button>
+			</div>
+		</div>
+	);
+});
+
+
 
 // Generated Content Panel - Showcase generated content for reuse
 const GeneratedContentPanel = ({ user, onDragStart }) => {
@@ -2027,6 +2341,10 @@ const CanvasWorkspace = () => {
 	const [activeAssetPanel, setActiveAssetPanel] = useState(null);
 	const [showTutorial, setShowTutorial] = useState(false);
 	const [isAnyDropdownOpen, setIsAnyDropdownOpen] = useState(false);
+	
+	// Slideshow editing states  
+	const [selectedSlideshowForEdit, setSelectedSlideshowForEdit] = useState(null);
+	const [backgrounds, setBackgrounds] = useState([]);
 
 	// Prevent body scroll when component mounts
 	useEffect(() => {
@@ -2052,6 +2370,31 @@ const CanvasWorkspace = () => {
 	const reactFlowWrapper = useRef(null);
 	const connectingNodeId = useRef(null);
 
+	// Fetch backgrounds for slideshow editing
+	useEffect(() => {
+		const fetchBackgrounds = async () => {
+			if (!user) return;
+			
+			try {
+				const backgroundsQuery = query(
+					collection(db, 'users', user.uid, 'backgrounds'),
+					orderBy('createdAt', 'desc'),
+					limit(20)
+				);
+				const backgroundsSnapshot = await getDocs(backgroundsQuery);
+				const fetchedBackgrounds = backgroundsSnapshot.docs.map(doc => ({
+					id: doc.id,
+					...doc.data()
+				}));
+				setBackgrounds(fetchedBackgrounds);
+			} catch (error) {
+				console.error('Error fetching backgrounds:', error);
+			}
+		};
+
+		fetchBackgrounds();
+	}, [user]);
+
 	// Update node data function
 	const updateNodeData = useCallback((nodeId, newData) => {
 		setNodes((nds) =>
@@ -2069,6 +2412,263 @@ const CanvasWorkspace = () => {
 	const addNodeToCanvas = useCallback((newNode) => {
 		setNodes((nds) => nds.concat(newNode));
 	}, []);
+
+			// Edit mode state
+	const [editModeNodes, setEditModeNodes] = useState(new Set());
+
+	// Slideshow editing handlers
+	const handleEditSlideshow = useCallback((slideshowData, nodeId) => {
+		if (!reactFlowInstance) return;
+
+		// Check if already in edit mode - if so, close it
+		if (editModeNodes.has(nodeId)) {
+			// Close edit mode
+			setNodes((nds) => nds.filter(node => 
+				!node.id.startsWith(`background-select-${nodeId}-`) && 
+				!node.id.startsWith(`preview-${nodeId}`)
+			));
+			setEdges((eds) => eds.filter(edge => 
+				!edge.id.startsWith(`edit-edge-${nodeId}`)
+			));
+			setEditModeNodes(prev => {
+				const newSet = new Set(prev);
+				newSet.delete(nodeId);
+				return newSet;
+			});
+			setSelectedSlideshowForEdit(null);
+			setCurrentSlideTexts({});
+			setCurrentBackgroundUrls({});
+			return;
+		}
+
+		// Get current slideshow node position
+		const slideshowNode = reactFlowInstance.getNode(nodeId);
+		if (!slideshowNode) return;
+
+		const slideTexts = slideshowData.slideTexts || [
+			'First slide content',
+			'Second slide content', 
+			'Third slide content',
+			'Fourth slide content'
+		];
+
+		// Create nodes positioned around the slideshow with proper spacing
+		const startX = slideshowNode.position.x;
+		const startY = slideshowNode.position.y;
+
+		// Create 4 background nodes (left side, vertically stacked)
+		const backgroundNodes = [];
+		for (let i = 0; i < 4; i++) {
+			backgroundNodes.push({
+				id: `background-select-${nodeId}-${i}`,
+				type: 'backgroundSelect',
+				position: { 
+					x: startX - 380, // Left side
+					y: startY + (i * 150) // Vertical spacing
+				},
+				data: {
+					selectedBackgroundUrl: slideshowData.backgroundUrls?.[i] || slideshowData.backgroundUrl || '',
+					slideText: slideTexts[i] || '',
+					slideIndex: i,
+					originalSlideshowId: nodeId,
+					originalSlideshowData: slideshowData
+				}
+			});
+		}
+
+		// Background preview node (right side, just preview)
+		const previewNode = {
+			id: `preview-${nodeId}`,
+			type: 'backgroundPreview',
+			position: { 
+				x: startX + 320, 
+				y: startY
+			},
+			data: {
+				slideTexts: slideTexts,
+				backgroundUrl: slideshowData.backgroundUrl,
+				backgroundUrls: slideshowData.backgroundUrls,
+				originalSlideshowId: nodeId,
+				originalSlideshowData: slideshowData
+			}
+		};
+
+		// Create edges between nodes
+		const newEdges = [];
+		
+		// Edges from slideshow to each background node
+		backgroundNodes.forEach((bgNode, index) => {
+			newEdges.push({
+				id: `edit-edge-${nodeId}-bg-${index}`,
+				source: nodeId,
+				target: bgNode.id,
+				type: 'smoothstep',
+				style: { stroke: '#84cc16', strokeWidth: 2, strokeDasharray: '5,5' },
+				animated: true
+			});
+		});
+
+		// Edge from slideshow to preview
+		newEdges.push({
+			id: `edit-edge-${nodeId}-preview`,
+			source: nodeId,
+			target: previewNode.id,
+			type: 'smoothstep',
+			style: { stroke: '#84cc16', strokeWidth: 2, strokeDasharray: '5,5' },
+			animated: true
+		});
+
+		// Add all nodes and edges to canvas
+		setNodes((nds) => [...nds, ...backgroundNodes, previewNode]);
+		setEdges((eds) => [...eds, ...newEdges]);
+
+		// Mark as in edit mode
+		setEditModeNodes(prev => new Set([...prev, nodeId]));
+
+		// Store reference for saving later
+		setSelectedSlideshowForEdit({
+			...slideshowData,
+			nodeId: nodeId,
+			backgroundNodeIds: backgroundNodes.map(n => n.id),
+			previewNodeId: previewNode.id
+		});
+
+		// Smaller zoom to editing area
+		setTimeout(() => {
+			const editBounds = {
+				x: startX - 400,
+				y: startY - 50,
+				width: 900,
+				height: 650
+			};
+			
+			reactFlowInstance.fitBounds(editBounds, { 
+				padding: 0.1,
+				duration: 800
+			});
+		}, 100);
+	}, [reactFlowInstance, editModeNodes]);
+
+	// Collect slide texts from slide edit nodes
+	const [currentSlideTexts, setCurrentSlideTexts] = useState({});
+	const [currentBackgroundUrls, setCurrentBackgroundUrls] = useState({});
+
+	const handleUpdateSlide = useCallback((slideIndex, text) => {
+		setCurrentSlideTexts(prev => ({
+			...prev,
+			[slideIndex]: text
+		}));
+	}, []);
+
+	const handleUpdateBackground = useCallback((slideIndex, backgroundUrl) => {
+		setCurrentBackgroundUrls(prev => ({
+			...prev,
+			[slideIndex]: backgroundUrl
+		}));
+	}, []);
+
+	const handleSaveAllSlides = useCallback(async () => {
+		if (!selectedSlideshowForEdit || !user) return;
+
+		try {
+			// Collect all slide texts in order
+			const slideTexts = [0, 1, 2, 3].map(index => 
+				currentSlideTexts[index] || selectedSlideshowForEdit.slideTexts?.[index] || `Slide ${index + 1} content`
+			);
+
+			// Collect all background URLs in order (1-2-3-4)
+			const backgroundUrls = [0, 1, 2, 3].map(index => 
+				currentBackgroundUrls[index] || 
+				selectedSlideshowForEdit.backgroundUrls?.[index] || 
+				selectedSlideshowForEdit.backgroundUrl || 
+				selectedSlideshowForEdit.selectedBackgroundUrl || ''
+			);
+
+			// Call the regenerateSlideshow cloud function
+			const regenerateSlideshow = httpsCallable(functions, 'regenerateSlideshow');
+			
+			const result = await regenerateSlideshow({
+				originalSlideshowId: selectedSlideshowForEdit.generationId || selectedSlideshowForEdit.id,
+				slideTexts: slideTexts,
+				backgroundUrls: backgroundUrls, // Send array of backgrounds
+				backgroundUrl: backgroundUrls[0], // Fallback for compatibility
+				textColor: selectedSlideshowForEdit.textColor || 'white',
+				userId: user.uid
+			});
+
+			if (result.data.success) {
+				// Update the original slideshow node
+				updateNodeData(selectedSlideshowForEdit.nodeId, {
+					...selectedSlideshowForEdit,
+					slideTexts: slideTexts,
+					backgroundUrls: backgroundUrls,
+					backgroundUrl: backgroundUrls[0],
+					selectedBackgroundUrl: backgroundUrls[0],
+					isGenerating: true
+				});
+
+				// Close edit mode - remove all edit nodes and edges
+				const nodeIdToClose = selectedSlideshowForEdit.nodeId;
+				setNodes((nds) => nds.filter(node => 
+					!node.id.startsWith(`background-select-${nodeIdToClose}-`) && 
+					!node.id.startsWith(`preview-${nodeIdToClose}`)
+				));
+				setEdges((eds) => eds.filter(edge => 
+					!edge.id.startsWith(`edit-edge-${nodeIdToClose}`)
+				));
+				setEditModeNodes(prev => {
+					const newSet = new Set(prev);
+					newSet.delete(nodeIdToClose);
+					return newSet;
+				});
+
+				// Clear editing state
+				setSelectedSlideshowForEdit(null);
+				setCurrentSlideTexts({});
+				setCurrentBackgroundUrls({});
+
+				// Start polling for completion
+				const pollForCompletion = async () => {
+					const generationRef = doc(db, 'users', user.uid, 'generations', result.data.generationId);
+					
+					const pollInterval = setInterval(async () => {
+						try {
+							const generationDoc = await getDoc(generationRef);
+							if (generationDoc.exists()) {
+								const data = generationDoc.data();
+								
+								if (data.status === 'completed') {
+									clearInterval(pollInterval);
+									
+									// Update node with final data
+									updateNodeData(nodeIdToClose, {
+										...data,
+										isGenerating: false
+									});
+								} else if (data.status === 'failed') {
+									clearInterval(pollInterval);
+									updateNodeData(nodeIdToClose, {
+										isGenerating: false,
+										error: 'Slideshow regeneration failed'
+									});
+								}
+							}
+						} catch (error) {
+							console.error('Error polling for completion:', error);
+						}
+					}, 2000);
+
+					// Stop polling after 2 minutes
+					setTimeout(() => clearInterval(pollInterval), 120000);
+				};
+
+				pollForCompletion();
+			}
+		} catch (error) {
+			console.error('Error saving slideshow changes:', error);
+			alert('Error saving slideshow changes');
+		}
+	}, [selectedSlideshowForEdit, user, updateNodeData, currentSlideTexts, currentBackgroundUrls]);
 
 	const menuOptions = [
 		{ type: 'image', label: 'Image', icon: Image },
@@ -2730,7 +3330,9 @@ const CanvasWorkspace = () => {
 		imageUpload: (props) => <ImageUpload {...props} onUpdateNode={updateNodeData} />,
 		videoUpload: (props) => <VideoUpload {...props} />,
 		generatedFrame: (props) => <GeneratedFrame {...props} />,
-		slideshowResult: (props) => <SlideshowResultNode {...props} />,
+		slideshowResult: (props) => <SlideshowResultNode {...props} onEditSlideshow={handleEditSlideshow} />,
+		backgroundSelect: (props) => <BackgroundSelectNode {...props} onUpdateBackground={handleUpdateBackground} onUpdateSlideText={handleUpdateSlide} />,
+		backgroundPreview: (props) => <BackgroundPreviewNode {...props} onSaveAll={handleSaveAllSlides} currentBackgroundUrls={currentBackgroundUrls} currentSlideTexts={currentSlideTexts} />,
 		slideshow: (props) => (
 			<SlideshowNode 
 				{...props} 
@@ -2740,7 +3342,7 @@ const CanvasWorkspace = () => {
 				onDropdownStateChange={setIsAnyDropdownOpen}
 			/>
 		),
-	}), [updateNodeData, addNodeToCanvas, handleGenerate, user]);
+	}), [updateNodeData, addNodeToCanvas, handleGenerate, user, handleEditSlideshow, handleUpdateSlide, handleSaveAllSlides, handleUpdateBackground]);
 
 	// Event handlers for right-click menus
 	const onPaneClick = useCallback((event) => {
@@ -2973,6 +3575,8 @@ const CanvasWorkspace = () => {
 						</button>
 					</div>
 				)}
+
+
 
 				{/* Canvas Tutorial */}
 				<CanvasTutorial 

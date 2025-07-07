@@ -995,7 +995,7 @@ function Layout() {
         // Use larger size class
         ? <img src={suggestion.imageUrl} alt={suggestion.name} className={`${iconSizeClass} rounded object-cover`} /> 
         // Use larger size class for fallback span
-        : <span className={`flex items-center justify-center ${iconSizeClass} rounded bg-green-500/20 text-green-400`}><ImageIcon size={14} weight="bold" /></span>;
+        : <span className={`flex items-center justify-center ${iconSizeClass} rounded bg-lime-500/20 text-lime-400`}><ImageIcon size={14} weight="bold" /></span>;
     }
   };
 
@@ -1370,7 +1370,7 @@ function Layout() {
                         </>
                       ) : canvasStatus.lastSaved ? (
                         <>
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-lime-500 rounded-full"></div>
                           <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
                             Saved {canvasStatus.lastSaved.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
@@ -1407,7 +1407,7 @@ function Layout() {
                           window.dispatchEvent(new CustomEvent('clearCanvas'));
                         }
                       }}
-                      className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-lime-50 dark:hover:bg-lime-950/30 transition-colors"
                     >
                       <X size={18} />
                     </motion.button>
@@ -1631,7 +1631,7 @@ function Layout() {
       {user && firestoreUserData && (
         <div 
           onClick={() => setIsBillingModalOpen(true)}
-          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-red-200 dark:hover:border-red-700 transition-colors"
+          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
         >
           <img 
             src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"}
@@ -1725,7 +1725,7 @@ function Layout() {
                     className={`w-full py-3 font-medium rounded-xl transition-colors ${
                       isPortalLoading 
                         ? 'bg-neutral-300 dark:bg-neutral-700 text-stone-500 dark:text-stone-500 cursor-not-allowed'
-                        : 'bg-green-500 hover:bg-green-600 text-white'
+                        : 'bg-lime-500 hover:bg-lime-600 text-white'
                     }`}>
                     {isPortalLoading ? 'Opening...' : 'Get 10,000 Credits $89/m'}
                   </button>

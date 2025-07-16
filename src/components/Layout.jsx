@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from "firebase/functions"; // Import functions SDK
 import { 
-  Sun, Moon, Plus, ArrowRight, ArrowUpRight, 
+  Plus, ArrowRight, ArrowUpRight, 
   User as UserIcon, // Aliased for consistency 
   User,
   ImageSquare as ImageIcon, // Aliased
@@ -66,9 +66,15 @@ const planPriceMap = {
 function Layout() {
   const user = auth.currentUser;
   const navigate = useNavigate();
+  
+  // Redirect to signup if user is not logged in
+  useEffect(() => {
+    if (!user) {
+      navigate('/signup');
+    }
+  }, [user, navigate]);
   const location = useLocation(); // Mevcut konum bilgisini almak için
   const chatInputRef = useRef(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [isChatInputVisible, setIsChatInputVisible] = useState(false); // State for chat input visibility
   const [plan] = useState('Free'); // Add plan state (can be fetched later)
 
@@ -609,30 +615,6 @@ function Layout() {
     }
   }, [location, user?.displayName, firestoreUserData]); // MODIFIED: Added firestoreUserData to dependencies
 
-  // Dark mode effect
-  useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode') === 'true';
-    setIsDarkMode(savedMode); 
-    if (savedMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(prevMode => {
-      const newMode = !prevMode;
-      localStorage.setItem('darkMode', newMode);
-      if (newMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      return newMode;
-    });
-  };
-
   // --- Handle Manage Billing (Moved from Dashboard) ---
   const handleManageBilling = async () => {
     setIsPortalLoading(true);
@@ -720,22 +702,6 @@ function Layout() {
       return nextVisibleState;
     });
   };
-
-  // --- Keyboard shortcuts ---
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // Cmd+M or Ctrl+M for toggling dark mode
-      if ((event.metaKey || event.ctrlKey) && event.key === 'm') {
-        event.preventDefault();
-        toggleDarkMode();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [toggleDarkMode]); // Add toggleDarkMode to dependency array
 
   // --- Handle Input Change --- (REMOVED @ MENTION LOGIC)
   const handleInputChange = (event) => {
@@ -980,7 +946,6 @@ function Layout() {
       else if (suggestion.id < 700) IconComponent = Compass;     // UI Control
       else if (suggestion.id < 800) IconComponent = Power;       // Authentication
       // Add more specific checks if needed, e.g., for TOGGLE_THEME
-      // if (suggestion.id === 603) IconComponent = Sun; // Or Moon depending on state?
 
       // Use larger size class for command icon container
       return <span className={`flex items-center justify-center ${iconSizeClass} rounded ${colorClass}`}><IconComponent size={14} weight="bold" /></span>; // Slightly bigger inner icon too
@@ -1120,7 +1085,7 @@ function Layout() {
 
     processNextInQueueItem();
 
-  }, [isInitialDataLoaded, commandQueue, currentlyExecuting, pendingConfirmation, navigate, products, creators, backgrounds, user, toggleDarkMode, refreshDashboardGenerations, setGeneratingItem, fetchCreatorsAndBackgrounds, fetchProducts, setActiveImageData, auth, db, setPendingConfirmation, refreshLayoutData]);
+  }, [isInitialDataLoaded, commandQueue, currentlyExecuting, pendingConfirmation, navigate, products, creators, backgrounds, user, refreshDashboardGenerations, setGeneratingItem, fetchCreatorsAndBackgrounds, fetchProducts, setActiveImageData, auth, db, setPendingConfirmation, refreshLayoutData]);
 
   // --- NEW: Video Status Polling Effect (using Firestore onSnapshot) ---
   useEffect(() => {
@@ -1210,8 +1175,6 @@ function Layout() {
     commandQueue, // <-- ADDED for canvas
     pageTitle,
     pageSubtitle,
-    isDarkMode,
-    toggleDarkMode,
     navigate,
     creators,
     backgrounds,
@@ -1229,8 +1192,6 @@ function Layout() {
     commandQueue, // <-- ADDED
     pageTitle,
     pageSubtitle,
-    isDarkMode,
-    // toggleDarkMode, // Assuming this is stable (useCallback)
     // navigate, // Stable from react-router-dom
     creators, // Array reference
     backgrounds, // Array reference
@@ -1238,14 +1199,13 @@ function Layout() {
     user, // User object reference
     // refreshLayoutData, // Assuming this is stable (useCallback)
     // refreshDashboardGenerations // Stable (useCallback)
-    // For functions like toggleDarkMode, navigate, refreshLayoutData, refreshDashboardGenerations,
+    // For functions like navigate, refreshLayoutData, refreshDashboardGenerations,
     // if they are guaranteed stable (e.g., from useCallback with empty deps, or from libraries),
     // they don't strictly need to be in the useMemo dep array if we trust their stability.
     // However, including them is safer if there's any doubt. For now, let's include potentially changing objects/values.
     // For simplicity in this first pass, including all.
-    // We need to ensure toggleDarkMode, refreshLayoutData, refreshDashboardGenerations are stable via useCallback.
+    // We need to ensure refreshLayoutData, refreshDashboardGenerations are stable via useCallback.
     // navigate from react-router-dom is stable.
-    toggleDarkMode, // Assuming stable due to useCallback
     refreshLayoutData, // Assuming stable due to useCallback
     refreshDashboardGenerations, // Stable (useCallback)
     notifyGenerationComplete, // <-- ADDED
@@ -1342,16 +1302,7 @@ function Layout() {
               </div>
             </div>
               
-            {/* Center: Dynamic Island on Canvas page */}
-              <div className="flex-1 flex justify-center">
-              {isCanvasPage && (
-                <DynamicIsland 
-                  generatingItem={generatingItem}
-                  commandQueue={commandQueue || []}
-                  isDarkMode={isDarkMode || false}
-                />
-              )}
-              </div>
+
               
             {/* Right: Action Icons */}
             <div className="flex items-center gap-3">
@@ -1436,24 +1387,6 @@ function Layout() {
                 {/* Tooltip */}
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   Settings
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
-                </div>
-              </div>
-              
-              <div className="relative group">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  onClick={toggleDarkMode}
-                  className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
-                  aria-label="Toggle dark mode"
-                >
-                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-                </motion.button>
-                {/* Tooltip */}
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
                 </div>
               </div>
@@ -1634,7 +1567,7 @@ function Layout() {
           className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
         >
           <img 
-            src={isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"}
+            src="/logonaked-white.png"
             alt="Lungo AI Logo"
             className="h-2.5 w-auto opacity-80 transform rotate-90"
           />

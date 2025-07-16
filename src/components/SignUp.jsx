@@ -10,13 +10,6 @@ const googleProvider = new GoogleAuthProvider();
 function SignUp() {
   const navigate = useNavigate(); // Initialize useNavigate
   const [isLoading, setIsLoading] = useState(true); // Add loading state
-  const [isSignUpDarkMode, setIsSignUpDarkMode] = useState(false); // NEW: State for dark mode
-
-  // NEW: Effect to read dark mode from localStorage
-  useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode') === 'true';
-    setIsSignUpDarkMode(savedMode);
-  }, []);
 
   // Simulate loading
   useEffect(() => {
@@ -49,7 +42,7 @@ function SignUp() {
   // --- Full Page Loader ---
   if (isLoading) {
     return (
-      <div className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isSignUpDarkMode ? 'bg-neutral-900 text-white' : 'bg-white text-black'}`}>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-900 text-white">
         {/* Animated Logo Loader using Framer Motion */}
         <motion.div
           style={{
@@ -75,7 +68,7 @@ function SignUp() {
   // --- End Full Page Loader ---
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
       {/* Animated background grid */}
       <div className="absolute inset-0 z-0">
         <div className="grid-animation"></div>
@@ -94,9 +87,9 @@ function SignUp() {
       <div className="max-w-sm w-full relative z-10">
         {/* Logo and Header Section */}
         <div className="text-center mb-10">
-          <img src="/logonaked-black.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
-          <h1 className="text-3xl font-normal tracking-wide text-black mb-2">lungo ai</h1>
-          <p className="text-base text-gray-500">Join Lungo AI and bring your ideas to life.</p>
+          <img src="/logonaked.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
+          <h1 className="text-3xl font-normal tracking-wide text-white mb-2">lungo ai</h1>
+          <p className="text-base text-gray-400">Join Lungo AI and bring your ideas to life.</p>
         </div>
 
         {/* Main Content - No Card Border */}
@@ -107,8 +100,8 @@ function SignUp() {
             <button
               onClick={handleGoogleSignUp}
               className="group w-full flex items-center justify-center px-5 py-3
-                        border border-gray-100 rounded-md
-                        bg-white hover:border-gray-200
+                        border border-gray-600 rounded-md
+                        bg-neutral-800 hover:bg-neutral-700 hover:border-gray-500
                         transition-all duration-200 ease-in-out"
             >
               <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -117,7 +110,7 @@ function SignUp() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              <span className="text-sm font-normal">Continue with Google</span>
+              <span className="text-sm font-normal text-white">Continue with Google</span>
             </button>
 
             {/* Twitter Button - REMOVED */}
@@ -140,9 +133,9 @@ function SignUp() {
           </div>
 
           {/* Privacy Note - UPDATED */}
-          <p className="mt-6 text-xs text-center text-gray-500 dark:text-gray-400">
+          <p className="mt-6 text-xs text-center text-gray-400">
             By clicking "Continue with Google", you acknowledge that you have read and 
-            understood, and agree to Lungo AI's <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-black dark:hover:text-white transition-colors">Terms & Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-black dark:hover:text-white transition-colors">Privacy Policy</a>.
+            understood, and agree to Lungo AI's <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Terms & Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Privacy Policy</a>.
           </p>
         </div>
       </div>

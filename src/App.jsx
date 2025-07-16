@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import Generation from './pages/Generation';
 import CampaignCreator from './pages/CampaignCreator';
 import CanvasWorkspace from './pages/CanvasWorkspace';
+import CreativeStudio from './pages/CreativeStudio';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ function App() {
               <Route path="generation" element={<Generation />} />
               <Route path="campaigns" element={<CampaignCreator />} />
               <Route path="studio" element={<CanvasWorkspace />} />
+              <Route path="creative" element={<CreativeStudio />} />
             </Route>
           </Routes>
         </div>

@@ -29,26 +29,26 @@ const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
 
 // --- OpenAI and Google AI Initialization ---
 // Vertex AI API configuration
-const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'ugcai-f429e';
+const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'lungoai-39982';
 const VERTEX_AI_LOCATION = 'us-central1';
 const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
-  // Basic Plan
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 2500 }, // Monthly Basic
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 2500 }, // Yearly Basic
-  // Pro Plan
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 10000 }, // Monthly Pro
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 10000 }, // Yearly Pro
-  // Business Plan
-  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 30000 }, // Monthly Business
-  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 30000 }  // Yearly Business
+  // Basic Plan ($9)
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 50 }, // Monthly Basic
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 50 }, // Yearly Basic
+  // Pro Plan ($29)
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 300 }, // Monthly Pro
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 300 }, // Yearly Pro
+  // Business Plan ($49)
+  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 600 }, // Monthly Business
+  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 600 }  // Yearly Business
 };
 // --- End Plan Credit Allocations ---
 
 // --- Cloud Tasks Configuration ---
 // TODO: Replace with your actual project ID, location, and queue name if different
-const tasksProjectId = process.env.GCLOUD_PROJECT || 'ugcai-f429e'; // Use environment variable or verify hardcoded ID
+const tasksProjectId = process.env.GCLOUD_PROJECT || 'lungoai-39982'; // Use environment variable or verify hardcoded ID
 const tasksLocation = 'us-central1'; // Match your function region
 const runwayTasksQueueName = 'runway-polling-queue'; // The queue you created in Cloud Console for Runway polling
 const runwayTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/handleVideoPollingTask`; // URL of the Runway polling function
@@ -80,368 +80,6 @@ const VIDEO_PIPELINE_TIMEOUT_SECONDS = 540; // Timeout for the pipeline initiati
 const directImageGenTasksQueueName = 'direct-image-gen-queue';
 const directImageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performDirectImageGenerationTask`;
 const DIRECT_IMAGE_GEN_TIMEOUT_SECONDS = IMAGE_GEN_TIMEOUT_SECONDS; // Reuse existing timeout
-
-// --- NEW: Cloud Tasks Configuration for Slideshow Generation ---
-const slideshowTasksQueueName = 'slideshow-generation-queue';
-const slideshowTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performSlideshowGenerationTask`;
-const SLIDESHOW_GEN_TIMEOUT_SECONDS = 540; // Timeout for slideshow generation, adjust as needed
-
-
-// Helper function to generate the detailed prompt using GPT-4o
-async function generateDetailedUgcPrompt(params, openaiInstance) {
-    // Destructure params
-    const { subject_description, clothing, setting, style, age, gender } = params; 
-
-    // --- Age Check --- 
-    if (age !== undefined && age !== null) {
-        const parsedAge = parseInt(age, 10);
-        if (!isNaN(parsedAge) && parsedAge < 18) {
-             logger.warn(`Attempted to generate image for age ${parsedAge}. Blocked.`);
-             throw new HttpsError('invalid-argument', 'Cannot generate images of individuals under 18.');
-        }
-    }
-
-    const femaleClothingExamples = [
-        "in a black backless crop top highlighting cleavage",
-        "in a white halter neck top showing shoulders and subtle cleavage",
-        "in a red asymmetric one-shoulder top with a plunging neckline",
-        "in a sheer black mesh top over a visible bralette showing cleavage",
-        "in a structured navy blue corset top with bust-enhancing design, paired with jeans",
-        "in a charcoal twist-front crop top that subtly reveals cleavage",
-        "in a grey long sleeve top with bust-level cut-out details",
-        "in a white tie-front blouse revealing a hint of cleavage",
-        "in a black tube top (bandeau style) with chest exposure",
-        "in an oversized sleeveless knitted top in off-black with visible neckline",
-        "in a satin cowl neck top in pearl grey, softly draping around the chest",
-        "in a fitted 90s-style baby tee in off-white, slightly low-cut",
-        "in a bralette top with matching mini shrug in graphite grey, showing cleavage",
-        "in a layered sheer mesh long sleeve top in black over a low-cut bra",
-        "in a puff sleeve off-the-shoulder top in soft white with romantic cleavage reveal",
-        "in a wrap crop top tied at the side in deep red, exposing bust line",
-        "in a ribbed tank top in charcoal with modest chest exposure",
-      
-        "in a black asymmetric strappy top and high-waisted wide-leg trousers, showing bustline",
-        "in a silk camisole top in deep wine with lace trim and cleavage, paired with shorts",
-        "in an oversized white band t-shirt tucked into faux leather leggings, slightly lifted to show neckline",
-        "in a matching activewear set by Nike — black sports bra with cleavage and high-waisted leggings",
-        "in a floral print sundress in navy with thin straps and open neckline",
-        "in a modern blazer in dove grey (worn open) over a white bralette and biker shorts",
-        "in a sky blue button-down shirt tied at the waist over denim shorts, unbuttoned to reveal bust",
-        "in a black mini dress with a thigh slit and plunging neckline",
-      
-        "in a cropped zip-up hoodie by Adidas (black) layered over a ribbed white crop top showing cleavage, with high-waisted jeans",
-        "in a black Adidas cropped hoodie with mesh panels and visible cleavage, paired with leggings",
-        "in a white Nike crop hoodie with bold logo and open zipper revealing bustline, worn with joggers",
-      
-        "in a sheer zip-up hoodie in smoke grey over a lace bralette showing full cleavage, with cargo pants",
-        "in a cropped leather moto jacket (black) over a red lace cami with deep neckline and ripped jeans",
-        "in a distressed denim zip-up jacket over a white ribbed crop tank showing bust, with biker shorts",
-        "in a lightweight bomber hoodie in slate grey with sheer paneling and strappy low-cut crop top",
-        "in an oversized varsity zip jacket in black over a lace-trimmed bralette, revealing cleavage, paired with denim cutoffs",
-        "in a tech-fabric zip hoodie in deep grey over a mesh reflective crop top with visible bustline and cargo pants",
-        "in a sporty black mesh-panel zip hoodie over a bandeau top with cleavage, paired with leggings",
-        "in a cropped black track jacket by Nike, paired with a ribbed tube top showing bust and matching pants",
-      
-        "in a cropped grey fleece hoodie (unzipped slightly to show neckline) and black jogger pants",
-        "in a tailored oversized blazer in dark charcoal over a low-cut knit cami and straight-leg jeans",
-        "in a belted shirt dress in steel blue with a soft V-neckline revealing cleavage, paired with ankle boots"
-      ];
-    // --- REVISED CLOTHING LISTS (TOPS & BOTTOMS) ---
-    const femaleTops = [
-        // --- Trendy Tops (2025 Inspired) ---
-        "stylish backless crop top", "chic halter neck top showing shoulders", "asymmetric one-shoulder top",
-        "delicate sheer mesh top over a simple bralette", "structured corset top", "trendy twist-front crop top",
-        "long sleeve top with subtle cut-out details at the waist", "light tie-front blouse", "simple tube top (bandeau style)",
-        "oversized knitted sleeveless top", "smooth satin cowl neck top", "fitted 90s style baby tee",
-        "bralette top with a matching mini shrug", "layered sheer mesh long sleeve top", "romantic off-the-shoulder puff sleeve top",
-        "wrap crop top tied at the side", "basic ribbed tank top", "silk camisole top with delicate lace trim",
-        "oversized band t-shirt", "stylish sports bra (as part of activewear set)", "button-down shirt (can be tied)",
-        "cropped zip-up hoodie", "Adidas cropped zip-up hoodie with mesh panels", "Nike crop hoodie with bold logo",
-        "sheer mesh zip-up hoodie over a lace bralette", "cropped leather moto jacket over a black lace cami",
-        "distressed denim zip-up jacket with a white ribbed crop tank", "lightweight bomber zip-up hoodie with sheer paneling over a strappy crop top",
-        "oversized varsity-style zip jacket over a lace-trimmed bralette", "tech-fabric windcheater zip-up hoodie with a mesh-reflective crop top",
-        "sporty mesh-panel zip hoodie over a bandeau", "cropped track jacket", "knit cami", "ribbed mock-neck tank",
-        "comfortable grey fleece hoodie (slightly cropped)", "plain white crew-neck t-shirt", // Added basics
-        "black v-neck t-shirt" // Added basics
-    ];
-    const femaleBottoms = [
-        "high-waisted wide-leg trousers", "tailored shorts", "faux leather leggings", "high-waisted jeans",
-        "matching leggings (for activewear set)", "denim shorts", "biker shorts", "plain skirt",
-        "pants", "gym tights", "ripped skinny jeans", "high-waisted cargo pants", "denim cutoffs",
-        "joggers", "track pants", "straight-leg jeans", "high-waisted midi skirt"
-        // Sundress/minidress/gown examples removed as they are full outfits
-      ];
-
-    // --- NEW: Combined Male Clothing Examples ---
-    const maleClothingExamples = [
-        "in a well-fitting plain white crew-neck t-shirt and dark wash jeans",
-        "in a classic black v-neck t-shirt and chino pants",
-        "in a light blue button-down shirt (top button undone) and beige shorts",
-        "in a grey Henley shirt with sleeves rolled up and dark jeans",
-        "in a fitted dark grey polo shirt and comfortable trousers",
-        "in a simple black tank top (showing athletic arms) and casual shorts",
-        "in an open casual flannel shirt (red and black plaid) over a plain white t-shirt and ripped black jeans",
-        "in a comfortable charcoal knit sweater and dark chino pants",
-        "in a stylish black bomber jacket over a grey t-shirt and slim-fit black jeans",
-        "in a modern athletic zip-up hoodie (navy blue) and grey jogger pants",
-        "in a tailored light grey linen shirt (casually untucked) and white cuffed shorts",
-        "in a black turtleneck sweater and smart grey wool trousers",
-        "in a denim jacket over a striped t-shirt and black jeans",
-        "in a relaxed-fit olive green utility shirt and cargo pants",
-        "in a cream-colored cable-knit cardigan over a chambray shirt and brown corduroy pants",
-        "in a fitted black leather jacket, white graphic tee, and dark distressed jeans",
-        "in a modern navy blue Harrington jacket, a simple white long-sleeve top, and stone-colored chinos",
-        "in a light-wash denim shirt (worn open) over a black muscle-fit tank top and black skinny jeans",
-        "in a burgundy short-sleeve button-up shirt with a subtle print and tailored navy shorts",
-        "in an oversized neutral-toned hoodie, slightly distressed light-wash jeans, and clean white sneakers (implied)"
-    ];
-    // --- END NEW ---    
-
-    const settingExamples = [
-        // Realistic, visually appealing environments with influencer-style clarity
-      
-        "Seated at a cozy, modern café — sunlight pouring through large windows, sitting at a wooden table with a coffee cup, plants and minimal decor around.",
-        "Leaning against a brick wall on a quiet city street during golden hour, with soft lighting and subtle street activity in the background.",
-        "Standing inside a bright loft-style studio apartment — large windows, natural shadows, a few plants, and a clean, minimalist setup.",
-        "Relaxing in a well-decorated living room — aesthetic furniture, wall art, and a few indoor plants creating a warm, homey vibe.",
-        "Sitting on a park bench near a fountain in a public park — trees in the background, casual people walking by, a peaceful urban setting.",
-        "Standing in front of a clean, white indoor backdrop — neutral tones to keep the focus on the subject, ideal for a minimal profile shot.",
-        "Browsing inside a cozy local bookstore — surrounded by warm lighting and tall bookshelves filled with colorful covers.",
-        "Walking through a university campus — classic architecture in the background, paved walkways, and scattered groups of students nearby.",
-        "Standing at the entrance of a small art gallery — framed artworks visible behind glass doors, warm indoor lighting spilling outside.",
-        "Waiting at a tram stop or bus station in the city — realistic urban elements like maps, benches, and subtle motion in the background.",
-        "Sitting on a bench in a park — trees in the background, casual people walking by, a peaceful urban setting."
-      ];
-
-    const facialFeatureKeywords = [
-        // Keep these as they relate to conventional attractiveness
-        "symmetrical face", "sharp features", "clear skin", "smooth complexion", 
-        "large bright eyes", "almond-shaped eyes", "defined eyelashes", 
-        "defined nose bridge", "full lips", "defined jawline", "high cheekbones"
-    ];
-    const facialExpressionKeywords = [
-        // More varied expressions - REVISED LIST
-        "subtle confident smile", 
-        "serene neutral expression", 
-        "bright engaging smile", 
-        "neutral expression", // Added again for more chance
-        "closed-mouth smile", // Added
-        "gentle smile",       // Added
-        "calm expression"     // Added
-        // Removed: "playful smirk", "thoughtful gaze", "slightly moody pout", "surprised (subtle)"
-    ];
-
-    // --- Body Shape & Bust Keywords (Keep existing variety) --- 
-    const bodyShapeKeywords = ["athletic build", "slim build", "average build", "curvy figure", "hourglass figure", "pear-shaped figure", "tall and lean"];
-    const bustSizeKeywords = ["small bust", "medium bust", "large bust", "fuller chest", "average bust"];
-    // ------------------------------------------------------------
-
-    // Determine subject term ('woman'/'man') - Moved earlier for clothing selection
-    let subjectTerm = 'person'; 
-    if (gender) {
-        subjectTerm = gender.toLowerCase() === 'man' ? 'man' : 'woman';
-    } else {
-        // Basic inference from subject description if gender not explicitly provided
-        // --- ADD CHECK HERE --- 
-        if (subject_description && typeof subject_description === 'string') { 
-            if (subject_description.toLowerCase().includes(' man') || subject_description.toLowerCase().startsWith('man')) subjectTerm = 'man';
-            else if (subject_description.toLowerCase().includes(' boy') || subject_description.toLowerCase().startsWith('boy')) subjectTerm = 'man';
-            else if (subject_description.toLowerCase().includes(' woman') || subject_description.toLowerCase().startsWith('woman')) subjectTerm = 'woman';
-            else if (subject_description.toLowerCase().includes(' girl') || subject_description.toLowerCase().startsWith('girl')) subjectTerm = 'woman';
-        } else {
-            logger.warn("generateDetailedUgcPrompt: subject_description is missing or not a string, cannot infer gender from it.");
-        }
-        // --- END CHECK --- 
-    }
-    // Adjust boy/girl to man/woman if age implies adulthood
-    if (age && parseInt(age, 10) >= 18) {
-        if (subjectTerm === 'boy') subjectTerm = 'man';
-        if (subjectTerm === 'girl') subjectTerm = 'woman';
-    }
-
-    // Select clothing based on gender
-    let finalClothing;
-    if (clothing) { // User provided clothing takes precedence
-        finalClothing = clothing;
-    } else if (subjectTerm === 'man') {
-        finalClothing = maleClothingExamples[Math.floor(Math.random() * maleClothingExamples.length)];
-    } else { // Default to female or person if unspecified
-        // MODIFIED: Select from femaleClothingExamples directly
-        finalClothing = femaleClothingExamples[Math.floor(Math.random() * femaleClothingExamples.length)];
-    }
-
-    const finalSetting = setting || settingExamples[Math.floor(Math.random() * settingExamples.length)];
-    // Update default style for influencer aesthetic
-    const finalStyle = style || 'modern influencer aesthetic, high quality realistic photo, dynamic composition, natural lighting, fashion focus'; 
-    const finalGaze = "looking directly at the camera lens"; // Force gaze
-    const finalExpression = facialExpressionKeywords[Math.floor(Math.random() * facialExpressionKeywords.length)];
-
-    // Select facial features (logic remains the same)
-    const selectedFeatures = [];
-    const numFeaturesToSelect = Math.floor(Math.random() * 3) + 2; 
-    const shuffledFeatures = [...facialFeatureKeywords].sort(() => 0.5 - Math.random());
-    for (let i = 0; i < numFeaturesToSelect; i++) {
-        selectedFeatures.push(shuffledFeatures[i]);
-    }
-    const featureEmphasisString = selectedFeatures.join(', ');
-
-    // --- Determine Body Shape Description for Prompt --- 
-    let bodyShapePromptSegment;
-    const maleBodyShapeKeywords = ["athletic build", "lean physique", "muscular build", "average male build", "defined torso", "broad shoulders"];
-
-    if (subjectTerm === 'woman') {
-        // Use the user-provided default description for women
-        bodyShapePromptSegment = `Describe the body shape as follows: Bust is moderately full and naturally shaped (soft bust). Waist is clearly narrower than bust/hips (defined waist or snatched waist). Hips are gently rounded and not overly wide (petite curves or rounded hips). The overall shape is a balanced slim hourglass with gentle curves. Emphasize natural and realistic proportions consistent with this description and the subject's ethnicity.`;
-    } else if (subjectTerm === 'man') {
-        // Define specific body shape description for men
-        const finalBodyShape = bodyShapeKeywords[Math.floor(Math.random() * bodyShapeKeywords.length)];
-        const selectedMaleKeyword = maleBodyShapeKeywords[Math.floor(Math.random() * maleBodyShapeKeywords.length)];
-        bodyShapePromptSegment = `Describe the body shape using realistic adult male proportions consistent with the described ethnicity and body type. Specifically incorporate terms like: '${finalBodyShape}' AND '${selectedMaleKeyword}'. Ensure a natural and masculine physique. Avoid overly exaggerated features.`;
-    } else { // Fallback for 'person' or unspecified
-        bodyShapePromptSegment = `Describe the body shape using realistic and varied adult proportions consistent with the described ethnicity.`;
-    }
-
-    // --- Construct Updated Instruction Prompt for GPT-4o ---
-    // --- Determine Makeup Instruction based on Gender ---
-    let makeupInstruction;
-    if (subjectTerm === 'woman') {
-        makeupInstruction = "Apply natural-looking, appropriate makeup (e.g., everyday makeup, light glam) suitable for the subject and overall style.";
-    } else if (subjectTerm === 'man') {
-        makeupInstruction = "The subject must have clear, natural skin with NO visible makeup.";
-    } else { // Neutral default
-        makeupInstruction = "Ensure natural-looking skin.";
-    }
-
-    // --- NEW: Realism Enhancements for Subject ---
-    const realismDetails = "Incorporate high detail skin texture, visible pores, and realistic imperfections. Emphasize natural skin texture, slight vellus hair on face/arms if appropriate. Ensure realistic and varied eye reflections.";
-    // --- END: Realism Enhancements ---
-
-    // --- NEW: Background Detailing Logic ---
-    let backgroundEnhancement = "";
-    let plausiblePlaceName = ""; // Variable to hold generated name
-    // Simple check for keywords suggesting specific locations
-    if (finalSetting.toLowerCase().includes("cafe")) {
-        plausiblePlaceName = ["The Daily Grind", "Maple Leaf Cafe", "Corner Perk", "Urban Bean"][Math.floor(Math.random() * 4)];
-        backgroundEnhancement = ` Add details like other patrons blurred in the background, coffee cups on tables, maybe plants. Include the cafe name '${plausiblePlaceName}' subtly, perhaps visible reversed on a window or on a small menu board.`;
-    } else if (finalSetting.toLowerCase().includes("university") || finalSetting.toLowerCase().includes("campus")) {
-        plausiblePlaceName = ["Northwood University Commons", "Central City College", "Oakridge Institute Plaza"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Include architectural details, maybe other students walking in the distance (blurred). Add the name '${plausiblePlaceName}' subtly, perhaps engraved on a stone sign near an entrance or on a banner.`;
-    } else if (finalSetting.toLowerCase().includes("bookstore")) {
-        plausiblePlaceName = ["The Reading Nook", "Chapters & Verse", "Old Town Books"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Fill the background with bookshelves, books, maybe a comfortable reading chair. Include the name '${plausiblePlaceName}' subtly on a sign near the entrance or a bookmark display.`;
-    } else if (finalSetting.toLowerCase().includes("gallery")) {
-        plausiblePlaceName = ["Avant Garde Gallery", "City Art Space", "The Modern Frame"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Show abstract or modern paintings on the walls, track lighting, perhaps another visitor blurred in the background. Include the name '${plausiblePlaceName}' subtly on a plaque near the entrance or on a brochure stand.`;
-    } // Add more cases for other settings as needed
-    // --- END: Background Detailing Logic ---
-
-    // --- Define missing prompt variables ---
-    const backgroundInstructions = "Ensure the background is detailed, makes sense for the scene, and is in sharp focus."; // Example default
-    const hairDetails = "Hair should be realistic, with natural flow and texture, fitting the described subject."; // Example default
-    // --- END Define missing prompt variables ---
-
-    const instructionPrompt = `
-    Generate a highly detailed, concise, and effective prompt for an AI image generator (e.g., DALL-E 3) to create a specific type of image.
-
-    Objective: Create a photorealistic, high-quality image emulating a **natural, spontaneous selfie taken with a modern smartphone (e.g., iPhone, Android)**.
-    The shot should be a **closer, more intimate perspective** (phone not visible, arm relaxed as if holding a phone closer).
-    The ENTIRE image, including the background and all its elements, MUST be in **sharp focus**. Strictly avoid any depth of field effects, bokeh, or artificial background blur.
-
-    Core Subject (DO NOT CHANGE THESE ASPECTS):
-    - Base the person entirely on this description: "${subject_description}".
-    - Ensure the subject clearly appears as a ${subjectTerm}.
-    - ${age && parseInt(age, 10) >= 18 ? `The subject should appear to be approximately ${parseInt(age, 10)} years old.` : ''}
-    - Create a conventionally attractive face. Enhance the base description by naturally incorporating details like: ${featureEmphasisString}.
-    - ${realismDetails} // Skin and realism details for the person.
-    - ${makeupInstruction} // Makeup instruction based on gender.
-    - Body Shape: ${bodyShapePromptSegment} // Body shape description. Ensure the overall description is SFW.
-    - Accessories: Minimal and subtle accessories are acceptable if they complement the style (e.g., simple necklace, delicate bracelet, understated rings). Avoid large, distracting jewelry, sunglasses, or hats unless explicitly part of subject/clothing descriptions.
-
-    Required Elements (These aspects SHOULD BE DETAILED and VARIED by you, the AI, based on user inputs and realism goals):
-    1.  Clothing (Person Aspect - Keep current logic, describe fit/fabric/color/style): The subject is wearing: "${finalClothing}". Describe fit (e.g., 'well-fitting', 'slightly oversized'), fabric, color, and subtle details. Clothing should align with a modern, trendy style appropriate for the setting: "${finalSetting}". Describe cleavage appropriately if relevant to neckline.
-
-    2.  Setting (ENVIRONMENT - Detail this extensively):
-        *   The user-specified setting is: "${finalSetting}". This is PARAMOUNT.
-        *   Describe this specific setting with rich, naturalistic details. ${backgroundInstructions}
-        *   The setting must complement the subject and overall aesthetic.
-        *   CRITICAL: The entire scene, especially the background, MUST be rendered in sharp, crisp focus, showing distinct textures and edge sharpness.
-        *   The background should feel authentic, "lived-in," and not overly pristine or staged. Include subtle signs of normal use or slight, natural disarray appropriate for the setting (e.g., a slightly creased cushion, a few stray leaves, minor scuffs on a wall).
-
-    3.  Lighting (ENVIRONMENT - Detail this extensively and make it DYNAMIC):
-        *   Describe lighting that is **highly specific, natural, and dynamic to the provided setting ("${finalSetting}")**.
-        *   For example:
-            *   If outdoors with foliage: "Face partially illuminated through broken shadows cast by foliage above. Sunlight filters through leaves, creating sharp, irregular dappled shadow patterns across face and hair."
-            *   If indoors near window: "Soft, directional window light illuminating one side of the face, with gentle falloff into shadow on the other."
-            *   If urban at night: "Mixed lighting from street lamps and shop windows, creating areas of warm and cool light with visible highlights and reflections."
-        *   The lighting MUST realistically illuminate both subject and background, creating a cohesive scene.
-        *   Detail the direction, quality (e.g., soft, harsh, diffused, dappled), and color temperature of light sources appropriate for "${finalSetting}".
-        *   The lighting should visibly affect the subject: skin (natural highlights/shadows, e.g., rembrandt lighting if applicable) and clothing (revealing texture).
-
-    4.  Smartphone Camera & Lens Emulation (TECHNICAL DETAILS - Incorporate these):
-        *   The image should exhibit characteristics of a high-quality modern smartphone photo (e.g., iPhone, Android).
-        *   Include "soft lens characteristics": slight chromatic aberration around high-contrast edges (especially in the background).
-        *   Specify a "natural, often warm color balance" typical of smartphone processing.
-        *   Describe "natural contrast roll-off" in both shadows and highlights, avoiding overly crushed blacks or blown-out whites.
-        *   Incorporate "minor, subtle digital compression artifacts" and "a very slight, fine-grained sensor noise pattern" in darker areas to give an organic digital texture. These should be almost imperceptible but add to realism.
-
-    5.  Color & Grading (AESTHETIC):
-        *   Aim for cinematic color grading, potentially warm tones, soft natural contrast, and a very subtle film grain if it enhances the "real photo" feel without looking like an explicit filter. Colors should appear natural and not overly saturated.
-
-    6.  Composition & Pose (SELFIE DETAILS - Make this feel spontaneous):
-        *   Portrait orientation.
-        *   Composition and framing should be natural, contextually appropriate for "${finalSetting}", and embody a **spontaneous selfie feel**.
-        *   Encourage "imperfect framing" and "subtle signs of handheld stability" (e.g., a very slight, natural tilt or off-center composition).
-        *   Camera angle can vary: "slightly below eye level," "eye-level," or "slightly above," typical of how one might naturally take a selfie.
-        *   If in a confined space like a **car**: framing MUST be chest-up or close-up on face/upper torso. NO lap/legs/shorts/pants. Use a slightly lower camera angle. Arm holding (unseen) phone should be relaxed and close.
-        *   If **seated/standing**: waist-up or head-and-shoulders frame from a natural selfie angle.
-        *   Prioritize a natural, unforced pose. Subject's gaze: "${finalGaze}". Expression: "${finalExpression}".
-        *   Ensure head doesn't appear disproportionately large due to an overly close/wide-angle effect unless it's a specific artistic choice for a typical selfie. Framing should feel intentional yet casual.
-
-    7.  Overall Style (AESTHETIC - Combine all elements):
-        *   The image MUST have the style: "${finalStyle}".
-        *   Emphasize photorealistic details, natural and dynamic lighting specific to the scene.
-        *   **Reiterate: Sharp focus throughout the entire image (subject and background).**
-        *   The final image should resemble a spontaneous, high-quality, real-life selfie taken on a modern smartphone during a casual moment, rich in environmental and lighting detail.
-
-    Safety Compliance: PRIORITIZE SFW content adhering to OpenAI's safety policies. Avoid suggestive or borderline content.
-
-    Output Requirements:
-    - Combine ALL elements into a single, coherent paragraph for the image generator.
-    - Output MUST be ONLY the generated prompt string (no intros, labels).
-    - Focus on descriptive keywords, photorealistic details.
-    - Ensure prompt is SFW.
-
-    Example of a Desired Output Structure (This is to guide YOUR structure, the AI generating the prompt. Content will vary based on inputs):
-    "Photorealistic close-up selfie, modern smartphone photo emulation: A [age, ${subjectTerm}, ethnicity, attractive face with ${featureEmphasisString}, realistic skin with natural imperfections & pores, ${subjectTerm === 'man' ? 'no makeup' : 'natural everyday makeup'}, ${hairDetails}] with a [body description from ${bodyShapePromptSegment}], striking a natural, unforced pose. The framing is [e.g., 'slightly off-center, chest-up, with a subtle handheld tilt, from a slightly low camera angle typical of a relaxed car selfie' or 'eye-level, waist-up, with imperfect but intentional framing']. Gaze is ${finalGaze} with a ${finalExpression}. They are wearing a trendy [detailed clothing description: ${finalClothing}] appropriate for the setting and gender. The background is exactly [extremely detailed setting description based on ${finalSetting} and ${backgroundInstructions}, e.g., 'sun-dappled green foliage filling the frame, every leaf in sharp focus showing distinct texture and highlights from filtered sunlight'], rendered in crisp focus throughout, showing authentic, lived-in details. The scene is illuminated by [highly specific and dynamic lighting description, e.g., 'bright, natural sunlight filtering through leaves, casting sharp, irregular dappled shadow patterns across her face, hair, and parts of the background, creating strong contrasts and highlights']. The image exhibits soft lens characteristics of a smartphone: slight chromatic aberration on high-contrast background edges, a warm color balance, natural contrast roll-off. Subtle digital textures like minor compression artifacts and very faint sensor noise are present in shadows. Overall style: ${finalStyle}, spontaneous real-life selfie look."
-
-    Generate the prompt now based on the provided details.
-`;
-
-    logger.info("Generating detailed prompt for influencer style with GPT-4o (V2 - Enhanced Selfie Realism):", instructionPrompt); // Added V2 to log
-
-    try {
-        const completion = await openaiInstance.chat.completions.create({
-            model: "gpt-4o-mini", 
-            messages: [{ role: "user", content: instructionPrompt }],
-            temperature: 0.5, // Allow a bit more creativity
-            max_tokens: 300, // Allow slightly longer prompt for detail
-        });
-        const detailedPrompt = completion.choices[0]?.message?.content?.trim();
-
-        if (!detailedPrompt) {
-            logger.error("GPT-4o failed to generate a detailed image prompt.");
-            throw new Error("Failed to generate detailed prompt via text AI.");
-        }
-
-        logger.info("Generated detailed prompt:", detailedPrompt);
-        // MODIFIED: Return an object with prompt and subjectTerm
-        return { detailedPrompt: detailedPrompt, subjectTerm: subjectTerm };
-
-    } catch (error) {
-        logger.error("Error calling GPT-4o for detailed prompt generation:", error);
-        throw new HttpsError('internal', 'Failed to generate detailed image prompt using helper AI.', error.message);
-    }
-}
 
 // --- NEW: Enhanced Prompt Generation Using Image Rules ---
 async function enhancePromptWithRules(originalPrompt, subtype, selectedFrame, openaiInstance) {
@@ -554,6 +192,44 @@ function getImageSetRulesByFrameId(frameId) {
                 }
             }
         },
+
+        'empty_highway_fashion': {
+    name: 'Highway Fashion Shoot',
+    rules: {
+        composition_and_perspective: {
+            camera_type: "Full-frame DSLR or mirrorless, or high-end 35mm film SLR (for analog look)",
+            focal_length_mm: "24mm to 35mm (wide angle for dramatic perspective and sense of space)",
+            aperture_range: "f/3.5 - f/5.6 (ensuring subject is sharp, background slightly softened but still readable)",
+            focus_mode: "Single autofocus on subject, with focus tracking if walking shots are included",
+            framing: "Full-body or three-quarters, subject centered or slightly off-center for dynamic composition. Use leading lines of the highway for depth.",
+            orientation: "Horizontal (landscape) preferred to emphasize the road’s expanse; vertical for editorial close-ups",
+            camera_position: "Low angle (waist to knee-level), 3–8 meters from subject for strong foreground and receding lines. Handheld or tripod, depending on desired stability and low-light needs."
+        },
+        location_and_background: {
+            setting: "Deserted highway—visibly empty in both directions, no cars or people. Ideally dawn, sunset, or overcast noon for light quality.",
+            background_elements: "Empty asphalt, distant horizon, road markings (lines, arrows), road signs if present; NO urban clutter, no traffic.",
+            background_blur: "Mild to moderate—background details like distant signage or horizons are visible but not distracting.",
+            depth_of_field: "Moderate; subject crisply in focus, with road texture and vanishing point softly receding."
+        },
+        lighting: {
+            lighting_type: "Natural light—soft golden hour or overcast daylight preferred. Use reflectors for subtle fill on face if necessary.",
+            white_balance: "Daylight (5200K–6000K), slightly cool for crispness or warm for editorial vibe; avoid excessive warmth.",
+            exposure_compensation: "+0.3EV to ensure subject’s features and clothing are detailed, retain sky/horizon highlights.",
+            ISO_setting: "ISO 100–400, keeping grain minimal, allowing high detail in subject and texture in road.",
+            shutter_speed: "1/250s to 1/640s, freezing any subtle movement (walking, fabric flow), avoid motion blur."
+        },
+        subject_pose_and_expression: {
+            poses: "Confident, editorial stances: standing upright, weight shifted, hands in pockets or jacket, slow purposeful walk, strong gait. Singular, statuesque poses to convey attitude.",
+            facial_expression: "Neutral to subtly fierce—a fashion gaze. Minimal smile, controlled expression, slight squint against light or direct, piercing look at camera.",
+            gaze_direction: "Primarily directed at camera; optionally gazing off to horizon for cinematic effect."
+        },
+        fashion_and_style: {
+            clothing: "High-fashion or streetstyle garments—contrasting bold colors or monochrome, tailored coats, statement boots, layered textures. Clean, stylish silhouettes that stand out against the asphalt.",
+            accessories: "Sunglasses, minimalist jewelry, belts or scarves sparingly; statement pieces that do not compete with the subject.",
+            hair: "Styled: windblown, slicked back, or intentionally tousled for cinematic feel. Avoid overly polished looks; natural movement is key."
+        }
+    }
+},
                  'city_street_style': {
              name: 'City Street Style',
              rules: {
@@ -598,12 +274,12 @@ function getImageSetRulesByFrameId(frameId) {
   rules: {
     composition_and_perspective: {
       camera_type: "Professional digital camera or analog body with a genuine circular fisheye lens (8mm–12mm full-frame equivalent) OR action camera (GoPro, etc.) in strict selfie mode. No post-crop or digital emulation – authentic optical barrel distortion only.",
-      focal_length_mm: "Exactly 8–12mm focal length on full-frame sensor, generating extreme barrel distortion; subject’s facial features and limbs must expand and warp aggressively towards lens edges.",
+      focal_length_mm: "Exactly 8–12mm focal length on full-frame sensor, generating extreme barrel distortion; subject's facial features and limbs must expand and warp aggressively towards lens edges.",
       aperture_range: "Wide open to moderately stopped (f/2.8–f/4), maximizing depth of field; every foreground and background element absolutely tack sharp across frame.",
-      focus_mode: "Manual or reliable autofocus locked at very close range (subject’s face/hand almost touching the lens). There must be no blur; both central and edge elements rendered in full clarity.",
+      focus_mode: "Manual or reliable autofocus locked at very close range (subject's face/hand almost touching the lens). There must be no blur; both central and edge elements rendered in full clarity.",
       framing: "Ultra-tight bust or chest-up composition, with face overpoweringly dominating center; one arm stretched out to top/side corner, hand enlarged/distorted by proximity. Strongly forced perspective: face and hand exaggeratedly prominent, corners heavily curved.",
       orientation: "Portrait (vertical) format is mandatory. Camera must be slightly canted/tilted, imparting dynamic, handheld immediacy. Viewer should viscerally sense the arm extension and aggressive spatial engagement.",
-      camera_position: "Camera at maximum arm’s reach, slightly above eye-line, angled down towards subject for confrontational, immersive perspective; lens directly faces subject, but is offset just enough to amplify the distortion."
+      camera_position: "Camera at maximum arm's reach, slightly above eye-line, angled down towards subject for confrontational, immersive perspective; lens directly faces subject, but is offset just enough to amplify the distortion."
     },
     location_and_background: {
       setting: "Harsh city exterior: rough concrete, cracked ground, metallic roll-down doors as primary backdrop.",
@@ -638,7 +314,7 @@ function getImageSetRulesByFrameId(frameId) {
             camera_type: "Authentic early 2000s compact digital (e.g., Canon IXUS/PowerShot, Nikon Coolpix, Sony Cyber-shot) or entry-level DSLR of that era, with visible built-in pop-up flash. Strictly no modern bodies/lens corrections.",
             focal_length_mm: "38mm to 50mm equivalent (standard to slightly wide; moderate field of view, distinctly NOT ultra-wide); optical zoom at default or 1–2×, never digital.",
             aperture_range: "f/2.8–f/4.5, as typical for these compact built-in lenses; maintains moderate depth of field and supports sharp flash-lit subject rendering.",
-            focus_mode: "Single shot autofocus, with classic early-2000s margin of error—focus must land on the subject’s eyes or upper face, but slight softness or missed focus on surroundings is acceptable and even preferred for authenticity.",
+            focus_mode: "Single shot autofocus, with classic early-2000s margin of error—focus must land on the subject's eyes or upper face, but slight softness or missed focus on surroundings is acceptable and even preferred for authenticity.",
             framing: "Waist-up (torso-dominant), tight vertical/portrait orientation, subject centered with crowd partially cropped at edges for that snapshot, slightly rushed feel. Minimal empty space; presence is immediate and immersive.",
             orientation: "Strictly upright/vertical (portrait), hand-held, possibly with subtle camera shake or tilt indicating candid, fast execution amidst crowd.",
             camera_position: "Lens at or slightly above subject's eye level, camera angled down just slightly, extremely close to subject (within 1–1.5 meters), as if shot rapidly while navigating a dense street scene."
@@ -647,10 +323,10 @@ function getImageSetRulesByFrameId(frameId) {
             setting: "Congested city crosswalk or intersection at dusk—scene is unmistakably urban, flooding with pedestrians and city signage.",
             background_elements: "Dense, blurred crowd in motion; city signage glowing, traffic lights (e.g. noticeably illuminated green circle), reflective windows, storefront facades. Background figures partially streaked with motion blur and flash-shadow interaction.",
             background_blur: "Distinctive background blur from subject movement and slow sync flash, not optical bokeh. People in background are ghosted, moving, sometimes smeared, yet identifiable in silhouette.",
-            depth_of_field: "Moderate—sharpest focus on main subject’s face/shoulders, background detail lost to crowd movement and mild digital noise, NOT lens blur."
+            depth_of_field: "Moderate—sharpest focus on main subject's face/shoulders, background detail lost to crowd movement and mild digital noise, NOT lens blur."
         },
         lighting: {
-            lighting_type: "On-camera, direct built-in pop-up flash. Flash is harsh, revealing every pore and detail of the subject’s illuminated face, with evident overexposed highlights (e.g., on skin or any reflective accessory like cell phone screens). Background remains in moody, natural ambient light with significant contrast between subject and environment.",
+            lighting_type: "On-camera, direct built-in pop-up flash. Flash is harsh, revealing every pore and detail of the subject's illuminated face, with evident overexposed highlights (e.g., on skin or any reflective accessory like cell phone screens). Background remains in moody, natural ambient light with significant contrast between subject and environment.",
             white_balance: "Auto or default daylight (often with faint blue/green tinge and obvious digital color noise), producing colder highlights and a nostalgic, slightly plastic Y2K skin tone.",
             exposure_compensation: "Zero (0EV); accept overblown highlights and sharp-edged flash shadows, especially under chin and behind subject. Hotspots on metallic or glass surfaces are explicit and unfiltered.",
             ISO_setting: "ISO 100–400 typical for compacts; mild visible digital grain or color noise in shaded background areas and on darker clothing. Never waxy-smooth or noise-reduced.",
@@ -714,11 +390,11 @@ hair: "Trimmed, sharp, and neatly styled to project confidence and self-awarenes
         composition_and_perspective: {
             camera_type: "Modern top-tier smartphone (iPhone 13 Pro/Pixel 7/Galaxy S series etc.) or high-end compact digital (Sony RX100 etc.), shot *only* with native camera app, utilizing Portrait or Standard Photo mode. Strictly handheld, never tripod.",
             focal_length_mm: "24mm–28mm equivalent for the majority (standard wide lens; no tele crop, no ultrawide); provides slight natural facial flattering, authentic field-of-view feel for dining context.",
-            aperture_range: "Smartphone-native f/1.8–f/2.4, or compact’s f/1.8–f/2.8, to ensure high subject/background separation when possible: crisp food and face, subtle but *never artificial* computational blur.",
+            aperture_range: "Smartphone-native f/1.8–f/2.4, or compact's f/1.8–f/2.8, to ensure high subject/background separation when possible: crisp food and face, subtle but *never artificial* computational blur.",
             focus_mode: "High-speed face/eye/smile/subject-detection autofocus. Both face and food (in-hand or being eaten) must be razor sharp. Any background softness comes only from physical or direct digital bokeh, not focus miss.",
             framing: "Perfectly centered or just off-center for lively candor, with bust-up to mid-waist portrait framing. Food is always clearly visible, never obscured—typically held within 15cm of mouth, hand or chopsticks present, eating gesture *mid-action* (lifting, slurping, prepping for bite, mouth mid-open). No static, awkward or paused poses.",
             orientation: "Almost always vertical (portrait) format, echoing Instagram/TikTok Reels; occasional true square is permitted if clearly composed for social snapshot (1:1 aspect ratio visible).",
-            camera_position: "Camera leveled precisely with or just above subject’s eyes; never too high. Shot across table, arm’s length (selfie), or by companion shooting from direct, intimate eating distance. Point of view must communicate shared moment—never distanced, voyeuristic, or posed for perfection."
+            camera_position: "Camera leveled precisely with or just above subject's eyes; never too high. Shot across table, arm's length (selfie), or by companion shooting from direct, intimate eating distance. Point of view must communicate shared moment—never distanced, voyeuristic, or posed for perfection."
         },
         location_and_background: {
             setting: "Lively, visually layered real-world dining: neon-lit open-air markets, cozy bistro interiors, warm-lit home tables with visible city view, bustling restaurants, or late-night curbside street food stands. Outdoor shots clearly telegraph night or magic hour ambiance.",
@@ -735,12 +411,12 @@ hair: "Trimmed, sharp, and neatly styled to project confidence and self-awarenes
         },
         subject_pose_and_expression: {
             poses: "Mid-action only: fork twirling, chopsticks to lips, noodles just about to slurp, full bite in progress, taco or sushi poised for taste. Arm and hand position is relaxed, never posed—elbows close to body, shoulders natural.",
-            facial_expression: "Unselfconscious enjoyment or anticipation: closed eyes with savor, lips partly open, cheeks slightly puffed, toothy or closed-mouth smile, or gentle ‘eating in progress’ focus. Always authentic and candid—no forced grins, staged duckfaces, or exaggerated commercial tropes.",
+            facial_expression: "Unselfconscious enjoyment or anticipation: closed eyes with savor, lips partly open, cheeks slightly puffed, toothy or closed-mouth smile, or gentle 'eating in progress' focus. Always authentic and candid—no forced grins, staged duckfaces, or exaggerated commercial tropes.",
             gaze_direction: "Often downward toward food in hand, bowl/plate, or gaze softly off-camera at companions, with only the occasional, spontaneous look toward camera for a captured-in-moment, vibrant, unposed energy."
         },
         fashion_and_style: {
             clothing: "Effortless daily elegance: cozy knits, neutral blouses/shirts, subtle prints, oversized blazers or tailored jackets, casual chic tanks or long-sleeve tops. Main color tones muted, earth-inspired, or naturally patterned—absolutely no flashy logos or mismatched brights.",
-            accessories: "Minimal—simple metallic earrings, delicate chains, *very occasional* sunglasses (on head/outdoors only), subtle AirPods or headphones (for a home, ‘winding down’ scene only), and everyday rings. Jewelry is never the focus.",
+            accessories: "Minimal—simple metallic earrings, delicate chains, *very occasional* sunglasses (on head/outdoors only), subtle AirPods or headphones (for a home, 'winding down' scene only), and everyday rings. Jewelry is never the focus.",
             hair: "Naturally styled to match the vibe: loose and tousled, tied back for practicality, sometimes accessorized with a subtle clip or bun. Zero hard gel, helmet-hair, or overdone looks—must *read* as fresh, relaxed, and conducive to eating."
         }
     }
@@ -756,7 +432,7 @@ hair: "Trimmed, sharp, and neatly styled to project confidence and self-awarenes
             focus_mode: "Face-priority autofocus; ensures facial clarity with gentle highlight transitions on hair and background sand dunes",
             framing: "Medium crop, subject centered or rule-of-thirds aligned; includes upper body or seated pose, balanced to feature environment and person equally",
             orientation: "Portrait orientation (vertical), slight upward tilt to capture sky and landscape; natural selfie perspective",
-            camera_position: "Handheld or surface-propped; arm’s length, ~60–80 cm; angled to capture beachscape layers (sand, sky, props) in parallel with facial glow"
+            camera_position: "Handheld or surface-propped; arm's length, ~60–80 cm; angled to capture beachscape layers (sand, sky, props) in parallel with facial glow"
         },
         location_and_background: {
             setting: "Beachside in daylight; open skies, sandy textures, minimal clutter; natural slopes or dunes adding organic structure",
@@ -1208,307 +884,6 @@ async function generateEnhancedGeneralPrompt(originalPrompt, frameRules, openaiI
     return originalPrompt;
 }
 
-// NEW HELPER FUNCTION FOR ENVIRONMENT DETAILS
-// =============================================
-// SLIDESHOW IMAGE GENERATION FUNCTIONS
-// =============================================
-
-async function generateSlideshowBackgroundPrompt(slideText, style, openaiInstance) {
-    // Get background rules from frameMapping
-    const backgroundRules = getImageSetRulesByFrameId('background');
-    
-    const prompt = `
-Create a concise, high-quality image prompt for a slideshow background based on this slide content: "${slideText}"
-
-Background Requirements:
-- Style: ${style || 'cinematic, atmospheric'}
-- Composition: Wide establishing shot showcasing the setting
-- Lighting: Natural or ambient lighting that enhances mood
-- Mood: Cinematic, atmospheric, and visually compelling
-- Colors: Rich and harmonious colors
-- Details: Environmental details that tell a story
-
-Generate a focused prompt (max 50 words) that creates an engaging background for this slide content.
-Focus on mood, atmosphere, and visual elements that complement the text.
-
-Prompt:`;
-
-    try {
-        const completion = await openaiInstance.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{
-                role: "user",
-                content: prompt
-            }],
-            max_tokens: 100,
-            temperature: 0.7,
-        });
-
-        return completion.choices[0].message.content.trim();
-    } catch (error) {
-        logger.error("[generateSlideshowBackgroundPrompt] Error:", error);
-        // Fallback simple prompt
-        return `Cinematic background scene, atmospheric lighting, rich colors, environmental storytelling, ${style || 'professional photography'}`;
-    }
-}
-
-async function generateSlideshowImagesAI(slideTexts, imageGenerationMode, style, openaiInstance) {
-    logger.info(`[generateSlideshowImagesAI] Generating ${imageGenerationMode} for ${slideTexts.length} slides`);
-    
-    try {
-        if (imageGenerationMode === 'single_ai_shared') {
-            // Generate one image for all slides
-            const combinedText = slideTexts.join(', ');
-            const enhancedPrompt = await generateSlideshowBackgroundPrompt(combinedText, style, openaiInstance);
-            
-            logger.info(`[generateSlideshowImagesAI] Single AI prompt: ${enhancedPrompt}`);
-            
-            // Use existing generateImage logic
-            const imageResult = await generateSingleImage(enhancedPrompt, 'background');
-            
-            // Return same image for all slides
-            return slideTexts.map(() => imageResult.imageUrl);
-            
-        } else if (imageGenerationMode === 'ai_per_slide') {
-            // Generate separate image for each slide
-            const imagePromises = slideTexts.map(async (slideText, index) => {
-                const enhancedPrompt = await generateSlideshowBackgroundPrompt(slideText, style, openaiInstance);
-                logger.info(`[generateSlideshowImagesAI] Slide ${index + 1} prompt: ${enhancedPrompt}`);
-                
-                const imageResult = await generateSingleImage(enhancedPrompt, 'background');
-                return imageResult.imageUrl;
-            });
-            
-            // Generate all images in parallel
-            const imageUrls = await Promise.all(imagePromises);
-            logger.info(`[generateSlideshowImagesAI] Generated ${imageUrls.length} images`);
-            
-            return imageUrls;
-        }
-        
-        return [];
-    } catch (error) {
-        logger.error("[generateSlideshowImagesAI] Error generating images:", error);
-        throw error;
-    }
-}
-
-async function generateSingleImage(prompt, subtype) {
-    logger.info(`[generateSingleImage] Generating image for prompt: ${prompt}`);
-    
-    try {
-        // Initialize Replicate directly
-        const replicateToken = process.env.REPLICATE_API_TOKEN;
-        if (!replicateToken) {
-            throw new Error('Replicate API token not found');
-        }
-        
-        const Replicate = require('replicate');
-        const replicate = new Replicate({ auth: replicateToken });
-        
-        // Use Imagen-4 for slideshow images
-        const input = {
-            prompt: prompt,
-            aspect_ratio: "9:16",
-            output_format: "png", 
-            safety_tolerance: 2
-        };
-        
-        logger.info(`[generateSingleImage] Generating with Imagen-4: ${prompt.substring(0, 100)}...`);
-        
-        const output = await replicate.run("google/imagen-4", { input });
-        
-        let imageUrl;
-        if (typeof output === 'string' && output.startsWith('http')) {
-            imageUrl = output;
-        } else if (Array.isArray(output) && output.length > 0) {
-            imageUrl = output[0];
-        } else {
-            throw new Error('Invalid output format from Replicate');
-        }
-        
-        logger.info(`[generateSingleImage] Successfully generated image: ${imageUrl}`);
-        return { imageUrl: imageUrl };
-        
-    } catch (error) {
-        logger.error("[generateSingleImage] Error generating image:", error);
-        throw error;
-    }
-}
-
-async function generateSlideshowImages(params) {
-    const { slideTexts, connectedImages, imageGenerationMode, style } = params;
-    
-    logger.info(`[generateSlideshowImages] Mode: ${imageGenerationMode}, Slides: ${slideTexts.length}, Connected: ${connectedImages?.length || 0}`);
-    
-    // Initialize OpenAI
-    const openaiInstance = new OpenAI({ apiKey: process.env.OPENAI_KEY });
-    
-    try {
-        // Priority 1: Use connected images if available
-        if (connectedImages && connectedImages.length > 0) {
-            logger.info(`[generateSlideshowImages] Using ${connectedImages.length} connected images`);
-            
-            // Use connected images, repeat if needed
-            const imageUrls = slideTexts.map((_, index) => {
-                const imageIndex = index % connectedImages.length;
-                return connectedImages[imageIndex].imageUrl;
-            });
-            
-            return {
-                success: true,
-                imageUrls: imageUrls,
-                mode: 'connected_images',
-                cost: 30 // Connected images cost
-            };
-        }
-        
-        // Priority 2: Generate AI images based on mode
-        if (imageGenerationMode === 'single_ai_shared' || imageGenerationMode === 'ai_per_slide') {
-            // Generate AI images
-            const imageUrls = await generateSlideshowImagesAI(slideTexts, imageGenerationMode, style, openaiInstance);
-            const cost = imageGenerationMode === 'single_ai_shared' ? 60 : 150;
-            
-            return {
-                success: true,
-                imageUrls: imageUrls,
-                mode: imageGenerationMode,
-                cost: cost
-            };
-        }
-        
-        throw new Error(`Unknown image generation mode: ${imageGenerationMode}`);
-        
-    } catch (error) {
-        logger.error("[generateSlideshowImages] Error:", error);
-        throw error;
-    }
-}
-
-async function generateEnvironmentDetailsPrompt(baseSettingDescription, requestedStyle, baseClothingDescription, openaiInstance) {
-    const settingExamples = [
-        // Realistic, visually appealing environments with influencer-style clarity (Copy from generateDetailedUgcPrompt or refine)
-        "Seated at a cozy, modern café — sunlight pouring through large windows, sitting at a wooden table with a coffee cup, plants and minimal decor around.",
-        "Leaning against a brick wall on a quiet city street during golden hour, with soft lighting and subtle street activity in the background.",
-        "Standing inside a bright loft-style studio apartment — large windows, natural shadows, a few plants, and a clean, minimalist setup.",
-        // ... (ensure these are diverse and high-quality examples)
-    ];
-
-    const finalSetting = baseSettingDescription || settingExamples[Math.floor(Math.random() * settingExamples.length)];
-    const finalStyle = requestedStyle || 'modern influencer aesthetic, high quality realistic photo, dynamic composition, natural lighting, fashion focus';
-    const finalClothing = baseClothingDescription;
-    
-    // --- Background Detailing Logic (Copied from generateDetailedUgcPrompt for consistency) ---
-    let backgroundEnhancement = "";
-    let plausiblePlaceName = ""; 
-    if (finalSetting.toLowerCase().includes("cafe")) {
-        plausiblePlaceName = ["The Daily Grind", "Maple Leaf Cafe", "Corner Perk", "Urban Bean"][Math.floor(Math.random() * 4)];
-        backgroundEnhancement = ` Add details like other patrons blurred in the background, coffee cups on tables, maybe plants. Include the cafe name '${plausiblePlaceName}' subtly, perhaps visible reversed on a window or on a small menu board.`;
-    } else if (finalSetting.toLowerCase().includes("university") || finalSetting.toLowerCase().includes("campus")) {
-        plausiblePlaceName = ["Northwood University Commons", "Central City College", "Oakridge Institute Plaza"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Include architectural details, maybe other students walking in the distance (blurred). Add the name '${plausiblePlaceName}' subtly, perhaps engraved on a stone sign near an entrance or on a banner.`;
-    } else if (finalSetting.toLowerCase().includes("bookstore")) {
-        plausiblePlaceName = ["The Reading Nook", "Chapters & Verse", "Old Town Books"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Fill the background with bookshelves, books, maybe a comfortable reading chair. Include the name '${plausiblePlaceName}' subtly on a sign near the entrance or a bookmark display.`;
-    } else if (finalSetting.toLowerCase().includes("gallery")) {
-        plausiblePlaceName = ["Avant Garde Gallery", "City Art Space", "The Modern Frame"][Math.floor(Math.random() * 3)];
-        backgroundEnhancement = ` Show abstract or modern paintings on the walls, track lighting, perhaps another visitor blurred in the background. Include the name '${plausiblePlaceName}' subtly on a plaque near the entrance or on a brochure stand.`;
-    } // Add more cases as needed from generateDetailedUgcPrompt if they were good
-    // --- END: Background Detailing Logic ---
-
-    const backgroundInstructions = "Ensure the background is detailed, makes sense for the scene, and is in sharp focus.";
-
-    // REVISED environmentInstructionPrompt to be more aligned with generateDetailedUgcPrompt for environment parts
-    const environmentInstructionPrompt = `
-    You are an AI assistant tasked with generating a highly detailed and evocative description for the **environment and visual properties** of an image, based on a core setting and style. This description will be part of a larger prompt for an AI image generator.
-    Do NOT describe any people, characters, or figures.
-
-    Objective: Create a photorealistic, high-quality image emulating a **natural, spontaneous selfie taken with a modern smartphone (e.g., iPhone, Android)**.
-    The shot should be a **closer, more intimate perspective** (phone not visible, arm relaxed as if holding a phone closer).
-    The ENTIRE image, including the background and all its elements, MUST be in **sharp focus**. Strictly avoid any depth of field effects, bokeh, or artificial background blur.
-
-    
-    Required Elements (These aspects SHOULD BE DETAILED and VARIED by you, the AI, based on user inputs and realism goals):
-    1.  Clothing (Person Aspect - Keep current logic, describe fit/fabric/color/style): The subject is wearing: "${finalClothing}". Describe fit (e.g., 'well-fitting', 'slightly oversized'), fabric, color, and subtle details. Clothing should align with a modern, trendy style appropriate for the setting: "${finalSetting}". Describe cleavage appropriately if relevant to neckline.
-
-    2.  Setting (ENVIRONMENT - Detail this extensively):
-        *   The user-specified setting is: "${finalSetting}". This is PARAMOUNT.
-        *   Describe this specific setting with rich, naturalistic details. ${backgroundInstructions}
-        *   The setting must complement the subject and overall aesthetic.
-        *   CRITICAL: The entire scene, especially the background, MUST be rendered in sharp, crisp focus, showing distinct textures and edge sharpness.
-        *   The background should feel authentic, "lived-in," and not overly pristine or staged. Include subtle signs of normal use or slight, natural disarray appropriate for the setting (e.g., a slightly creased cushion, a few stray leaves, minor scuffs on a wall).
-
-    3.  Lighting (ENVIRONMENT - Detail this extensively and make it DYNAMIC):
-        *   Describe lighting that is **highly specific, natural, and dynamic to the provided setting ("${finalSetting}")**.
-        *   For example:
-            *   If outdoors with foliage: "Face partially illuminated through broken shadows cast by foliage above. Sunlight filters through leaves, creating sharp, irregular dappled shadow patterns across face and hair."
-            *   If indoors near window: "Soft, directional window light illuminating one side of the face, with gentle falloff into shadow on the other."
-            *   If urban at night: "Mixed lighting from street lamps and shop windows, creating areas of warm and cool light with visible highlights and reflections."
-        *   The lighting MUST realistically illuminate both subject and background, creating a cohesive scene.
-        *   Detail the direction, quality (e.g., soft, harsh, diffused, dappled), and color temperature of light sources appropriate for "${finalSetting}".
-        *   The lighting should visibly affect the subject: skin (natural highlights/shadows, e.g., rembrandt lighting if applicable) and clothing (revealing texture).
-
-    4.  Smartphone Camera & Lens Emulation (TECHNICAL DETAILS - Incorporate these):
-        *   The image should exhibit characteristics of a high-quality modern smartphone photo (e.g., iPhone, Android).
-        *   Include "soft lens characteristics": slight chromatic aberration around high-contrast edges (especially in the background).
-        *   Specify a "natural, often warm color balance" typical of smartphone processing.
-        *   Describe "natural contrast roll-off" in both shadows and highlights, avoiding overly crushed blacks or blown-out whites.
-        *   Incorporate "minor, subtle digital compression artifacts" and "a very slight, fine-grained sensor noise pattern" in darker areas to give an organic digital texture. These should be almost imperceptible but add to realism.
-
-    5.  Color & Grading (AESTHETIC):
-        *   Aim for cinematic color grading, potentially warm tones, soft natural contrast, and a very subtle film grain if it enhances the "real photo" feel without looking like an explicit filter. Colors should appear natural and not overly saturated.
-
-    6.  Composition & Pose (SELFIE DETAILS - Make this feel spontaneous):
-        *   Portrait orientation.
-        *   Composition and framing should be natural, contextually appropriate for "${finalSetting}", and embody a **spontaneous selfie feel**.
-        *   Encourage "imperfect framing" and "subtle signs of handheld stability" (e.g., a very slight, natural tilt or off-center composition).
-        *   Camera angle can vary: "slightly below eye level," "eye-level," or "slightly above," typical of how one might naturally take a selfie.
-        *   If in a confined space like a **car**: framing MUST be chest-up or close-up on face/upper torso. NO lap/legs/shorts/pants. Use a slightly lower camera angle. Arm holding (unseen) phone should be relaxed and close.
-        *   If **seated/standing**: waist-up or head-and-shoulders frame from a natural selfie angle.
-        *   Prioritize a natural, unforced pose. Subject's gaze: "${finalGaze}". Expression: "${finalExpression}".
-        *   Ensure head doesn't appear disproportionately large due to an overly close/wide-angle effect unless it's a specific artistic choice for a typical selfie. Framing should feel intentional yet casual.
-
-    7.  Overall Style (AESTHETIC - Combine all elements):
-        *   The image MUST have the style: "${finalStyle}".
-        *   Emphasize photorealistic details, natural and dynamic lighting specific to the scene.
-        *   **Reiterate: Sharp focus throughout the entire image (subject and background).**
-        *   The final image should resemble a spontaneous, high-quality, real-life selfie taken on a modern smartphone during a casual moment, rich in environmental and lighting detail.
-
-    Safety Compliance: PRIORITIZE SFW content adhering to OpenAI's safety policies. Avoid suggestive or borderline content.
-
-    Output Requirements:
-    - Combine ALL elements into a single, coherent paragraph for the image generator.
-    - Output MUST be ONLY the generated prompt string (no intros, labels).
-    - Focus on descriptive keywords, photorealistic details.
-    - Ensure prompt is SFW.
-
-    Generate the environment description paragraph now.
-    `;
-
-    logger.info("Generating environment details prompt with GPT-4o-mini (Revised for Quality):", environmentInstructionPrompt);
-
-    try {
-        const completion = await openaiInstance.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: environmentInstructionPrompt }],
-            temperature: 0.5,
-            max_tokens: 300, // INCREASED max_tokens to 300
-        });
-        const environmentDetails = completion.choices[0]?.message?.content?.trim();
-
-        if (!environmentDetails) {
-            logger.error("GPT-4o-mini failed to generate environment details (Revised for Quality).");
-            throw new Error("Failed to generate environment details via text AI (Revised).");
-        }
-
-        logger.info("Generated environment details (Revised for Quality):", environmentDetails);
-        return environmentDetails;
-
-    } catch (error) {
-        logger.error("Error calling GPT-4o-mini for environment details generation (Revised for Quality):", error);
-        throw new HttpsError('internal', 'Failed to generate environment details using helper AI (Revised).', error.message);
-    }
-}
 
 // Helper function to download files from URLs
 async function downloadFile(url, destPath) {
@@ -1557,19 +932,13 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
 
     const data = request.data;
     
-    // --- Dynamic Credit Check Based on Quality ---
+    // --- Dynamic Credit Check Based on Model ---
     const userRef = db.collection('users').doc(userId);
-    let requiredCredits = 90; // Default high quality
-    if (data.quality === 'low') {
-        requiredCredits = 30;
-    } else if (data.quality === 'medium') {
-        requiredCredits = 60;
-    } else {
-        requiredCredits = 90; // high quality
-    }
+    const selectedModel = data.model || 'google/imagen-4';
+    let requiredCredits = getImageCredits(selectedModel);
     
     try {
-        logger.info(`[generateImage User: ${userId}] Performing credit check for ${data.quality || 'high'} quality (${requiredCredits} credits).`);
+        logger.info(`[generateImage User: ${userId}] Performing credit check for model ${selectedModel} (${requiredCredits} credits).`);
         const userDoc = await userRef.get();
         if (!userDoc.exists) {
             logger.error(`[generateImage User: ${userId}] User profile not found for credit check.`);
@@ -1577,8 +946,8 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         }
         const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
         if (currentCredits < requiredCredits) {
-            logger.warn(`[generateImage User: ${userId}] Insufficient general_credits (${currentCredits}) for ${data.quality || 'high'} quality image generation (needs ${requiredCredits}).`);
-            throw new HttpsError('resource-exhausted', `Insufficient general credits for ${data.quality || 'high'} quality image generation. You need at least ${requiredCredits} credits. You have ${currentCredits}.`);
+            logger.warn(`[generateImage User: ${userId}] Insufficient general_credits (${currentCredits}) for ${selectedModel} image generation (needs ${requiredCredits}).`);
+            throw new HttpsError('resource-exhausted', `Insufficient general credits for ${selectedModel} image generation. You need at least ${requiredCredits} credits. You have ${currentCredits}.`);
         }
         logger.info(`[generateImage User: ${userId}] Credit check passed. Credits: ${currentCredits}, Required: ${requiredCredits}.`);
     } catch (error) {
@@ -1703,23 +1072,75 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         let modelInput;
         let modelName;
 
-        if (selectedModel === 'ideogram-ai/ideogram-v3-quality') {
-            modelName = 'ideogram-ai/ideogram-v3-quality';
-            modelInput = {
-                prompt: finalPromptToUse,
-                aspect_ratio: data.aspectRatio === "1:1" ? "1:1" : data.aspectRatio === "16:9" ? "16:9" : "9:16",
-                model: "V_3_QUALITY",
-                magic_prompt_option: "AUTO"
-            };
-        } else {
-            // Default to Imagen 4
-            modelName = 'google/imagen-4';
-            modelInput = {
-                prompt: finalPromptToUse,
-                aspect_ratio: data.aspectRatio === "1:1" ? "1:1" : data.aspectRatio === "16:9" ? "16:9" : "9:16",
-                output_format: "png",
-                safety_tolerance: 2
-            };
+        switch (selectedModel) {
+            case 'black-forest-labs/flux-kontext-max':
+                modelName = 'black-forest-labs/flux-kontext-max';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16"
+                };
+                // Add image input if provided
+                if (data.imageUrl) {
+                    modelInput.image = data.imageUrl;
+                }
+                break;
+
+            case 'black-forest-labs/flux-kontext-pro':
+                modelName = 'black-forest-labs/flux-kontext-pro';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16"
+                };
+                // Add image input if provided
+                if (data.imageUrl) {
+                    modelInput.image = data.imageUrl;
+                }
+                break;
+
+            case 'google/imagen-4':
+                modelName = 'google/imagen-4';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16",
+                    output_format: "png",
+                    safety_tolerance: 2
+                };
+                break;
+
+            case 'google/imagen-4-ultra':
+                modelName = 'google/imagen-4-ultra';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16",
+                    output_format: "png",
+                    safety_tolerance: 2
+                };
+                break;
+
+            case 'ideogram-ai/ideogram-v3-quality':
+                modelName = 'ideogram-ai/ideogram-v3-quality';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16",
+                    model: "V_3_QUALITY",
+                    magic_prompt_option: "AUTO"
+                };
+                // Add image input if provided
+                if (data.imageUrl) {
+                    modelInput.image_url = data.imageUrl;
+                }
+                break;
+
+            default:
+                // Default to Imagen 4
+                modelName = 'google/imagen-4';
+                modelInput = {
+                    prompt: finalPromptToUse,
+                    aspect_ratio: data.aspectRatio || "9:16",
+                    output_format: "png",
+                    safety_tolerance: 2
+                };
+                break;
         }
 
         logger.info(`[generateImage User: ${userId}] ====== SENDING TO REPLICATE ${modelName.toUpperCase()} ======`);
@@ -1963,581 +1384,6 @@ exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds:
     }
 });
 
-exports.generateImageSlideshow = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    // Destructure ALL parameters, including the new image generation parameters
-    const { 
-        topic, 
-        slide_1_text, 
-        slide_2_text, 
-        slide_3_text, 
-        slide_4_text, 
-        background_name, 
-        image_style, 
-        language, 
-        _slideshow_type_context,
-        connectedImages,           // NEW: Connected images from canvas
-        imageGenerationMode,      // NEW: connected_images, from_assets, single_ai_shared, ai_per_slide  
-        style                     // NEW: Style for AI generation
-    } = request.data;
-    
-    const targetLanguage = language || 'en'; // Default to English if not provided
-    const slideshowType = _slideshow_type_context || 'learn_grow'; // Default to learn_grow if not provided
-    const generationId = Date.now().toString();
-
-    // --- Define Slideshow Type Instructions ---
-    const getSlideshowTypeInstruction = (type) => {
-        switch (type) {
-            case 'top_3_lists':
-                return `
-                SLIDESHOW TYPE: Top 3 Lists
-                GOAL: Present information in an easy-to-digest ranking format that educates and engages.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: Title + Hook: Present the list topic as a question or bold statement (e.g., "Top 3 Ways to...")
-                2. Slide 2: "#1 - [First Item]": Present the top item with brief explanation
-                3. Slide 3: "#2 - [Second Item]": Present the second item with brief explanation  
-                4. Slide 4: "#3 - [Third Item]": Present the third item with brief explanation
-        
-                TONE: Clear, informative, authoritative. Use numbered format consistently.
-                `;
-        
-            case 'before_after':
-                return `
-                SLIDESHOW TYPE: Before & After
-                GOAL: Show transformation, progress, or dramatic change to inspire and engage.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: "Before" Setup: Show the starting point or problem state
-                2. Slide 2: The Challenge: Explain what was wrong or what needed to change
-                3. Slide 3: The Change: Show the transformation process or key moment
-                4. Slide 4: "After" Result: Reveal the final outcome or current state
-        
-                TONE: Inspiring, relatable, encouraging. Focus on the transformation journey.
-                `;
-        
-            case 'step_by_step':
-                return `
-                SLIDESHOW TYPE: Step-by-Step Guide
-                GOAL: Provide clear, actionable instructions that viewers can follow.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: Introduction: Present what will be taught (e.g., "Perfect Morning Routine")
-                2. Slide 2: "STEP 1": First action with brief explanation
-                3. Slide 3: "STEP 2": Second action with brief explanation
-                4. Slide 4: "STEP 3": Final action with brief explanation
-        
-                TONE: Instructional, clear, actionable. Use "STEP" prefix and keep instructions simple.
-                `;
-        
-            case 'question_reveal':
-                return `
-                SLIDESHOW TYPE: Question & Reveal
-                GOAL: Create curiosity with a question, then provide a surprising or educational answer.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: The Question: Pose an intriguing question to hook viewers
-                2. Slide 2: Options/Build-up: Present possible answers or build suspense
-                3. Slide 3: The Reveal: Give the surprising answer or reveal
-                4. Slide 4: Explanation: Explain why this answer is correct or significant
-        
-                TONE: Curious, engaging, educational. Build suspense then deliver the payoff.
-                `;
-        
-            case 'personal_story':
-                return `
-                SLIDESHOW TYPE: Personal Story
-                GOAL: Share a relatable personal experience that creates emotional connection.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: Setup: Introduce a situation or emotion (e.g., "Yesterday this happened...")
-                2. Slide 2: Build: Give context and describe the experience
-                3. Slide 3: Turning Point: Share the key realization or moment
-                4. Slide 4: Reflection: End with a relatable takeaway or lesson learned
-        
-                TONE: Personal, authentic, relatable. Use first-person voice and honest emotion.
-                `;
-        
-            case 'problem_solution':
-                return `
-                SLIDESHOW TYPE: Problem & Solution
-                GOAL: Identify a common problem and present a clear solution.
-        
-                STRUCTURE (4 slides total):
-                1. Slide 1: Problem Hook: Present a relatable problem or pain point
-                2. Slide 2: Problem Impact: Show how this problem affects people
-                3. Slide 3: Solution Introduction: Present the solution or method
-                4. Slide 4: Solution Result: Show the positive outcome or benefit
-        
-                TONE: Solution-focused, helpful, empowering. Focus on solving real problems.
-                `;
-        
-            default:
-                return `
-                SLIDESHOW TYPE: Top 3 Lists (default)
-                Use a 4-slide structure:
-                1. Hook with a list topic
-                2-4. Present 3 numbered items with brief explanations
-                Aim to educate or inform in a simple, structured way.
-                `;
-        }
-    };
-
-    const slideshowTypeInstruction = getSlideshowTypeInstruction(slideshowType);
-    logger.info(`[${generationId}] Using slideshow type: ${slideshowType}`);
-
-    // --- Initialize OpenAI Client (as before) ---
-    let openai;
-    try {
-        const apiKey = process.env.OPENAI_KEY;
-        if (!apiKey) {
-            logger.error("generateImageSlideshow: OpenAI API Key not found.");
-            throw new HttpsError('internal', 'OpenAI service configuration error.');
-        }
-        openai = new OpenAI({ apiKey: apiKey });
-    } catch (error) {
-        logger.error("generateImageSlideshow: Error initializing OpenAI:", error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
-    }
-    // --- End OpenAI Client Initialization ---
-
-        // --- Check User Credits ---
-        const userRef = db.collection('users').doc(userId);
-    try {
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
-            throw new HttpsError('not-found', 'User profile not found.');
-        }
-        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
-        if (currentCredits <= 0) {
-            throw new HttpsError('resource-exhausted', 'Insufficient general credits to generate slideshow.');
-        }
-    } catch (error) {
-        logger.error(`Error fetching user credits for slideshow (user ${userId}):`, error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Could not verify user credits for slideshow.');
-    }
-    // --- End Credit Check ---
-
-    let slideTexts = [slide_1_text, slide_2_text, slide_3_text, slide_4_text];
-    const providedTextCount = slideTexts.filter(text => text && text.trim() !== '').length;
-
-    try {
-        // --- Fetch User Products for Context ---
-        let productForTopic = null;
-        let productContext = '';
-        try {
-            const productsSnapshot = await db.collection('users').doc(userId).collection('products').limit(3).get();
-                if (!productsSnapshot.empty) {
-                    const firstProductDoc = productsSnapshot.docs[0];
-                productForTopic = {
-                    name: firstProductDoc.data().name || firstProductDoc.data().product_name,
-                    description: firstProductDoc.data().description || firstProductDoc.data().product_description
-                };
-                productContext += "\n\nUser's products for context (use if relevant to the topic):";
-                productsSnapshot.forEach(doc => {
-                    const p = doc.data();
-                    productContext += `\n- ${p.name || p.product_name}: ${p.description || p.product_description}`.substring(0, 150) + "...";
-                });
-            }
-        } catch (productError) {
-            logger.warn(`Could not fetch user products for slideshow context for user ${userId}:`, productError);
-        }
-
-        // --- Determine the effective topic ---
-        let effectiveTopic = topic;
-        if (!effectiveTopic) {
-            if (productForTopic && productForTopic.name) {
-                effectiveTopic = "Create engaging, poetic, or relatable slideshow content that resonates with users and invites comments.";
-                logger.info(`No topic provided. Using conceptual topic inspired by product '${productForTopic.name}'.`);
-            } else {
-                logger.error(`Slideshow generation for user ${userId} failed: No topic and no products found.`);
-                throw new HttpsError('failed-precondition', 'Please add a product in Settings or specify a topic for the slideshow.');
-            }
-        }
-
-        // --- Background Selection Logic ---
-        let selectedBackgroundUrl = null;
-        let selectedBackgroundImageName = 'none';
-        let aiSelectedBackgroundId = null;
-        let actualBackgroundUsedForContext = null; // This will hold the chosen BG object (name, desc, id, imageUrl)
-
-            const userBackgroundsSnapshot = await db.collection('users').doc(userId).collection('backgrounds').get();
-            const availableBackgrounds = [];
-            if (!userBackgroundsSnapshot.empty) {
-            userBackgroundsSnapshot.forEach(doc => {
-                availableBackgrounds.push({
-                    id: doc.id,
-                    name: doc.data().name,
-                    description: doc.data().description,
-                    imageUrl: doc.data().imageUrl
-                });
-            });
-        }
-
-        if (background_name) {
-            const foundBg = availableBackgrounds.find(bg => bg.name === background_name);
-            if (foundBg) {
-                actualBackgroundUsedForContext = foundBg;
-                selectedBackgroundUrl = foundBg.imageUrl;
-                selectedBackgroundImageName = foundBg.name;
-                logger.info(`User specified background: "${background_name}". Found and will be used. URL: ${selectedBackgroundUrl}`);
-            } else {
-                logger.warn(`User specified background "${background_name}" not found. AI will select from available if any.`);
-                // actualBackgroundUsedForContext remains null, AI will select if availableBackgrounds.length > 0
-            }
-        }
-
-        // --- AI Call for Text Generation and/or Background Selection ---
-        const needAiForText = providedTextCount < 4;
-        const needAiForBackgroundSelection = !actualBackgroundUsedForContext && availableBackgrounds.length > 0;
-
-        if (needAiForText || needAiForBackgroundSelection) {
-            let textGenPrompt;
-            let expectedJsonResponseFormat = {
-                slide1_text: "string", slide2_text: "string", slide3_text: "string", slide4_text: "string"
-            };
-
-            // --- CORE INSTRUCTION BLOCK (REVISED) ---
-            const coreTextInstruction = `
-                ${slideshowTypeInstruction}
-
-                ${productContext ? 
-                `IMPORTANT PRODUCT CONTEXT: ${productContext}
-                Your first task is to deeply understand this product context. From this, you MUST derive a general THEME or TOPIC (e.g., if the product is about astrology, the theme is 'astrology'; if it's about Notion templates for students, the theme could be 'student productivity' or 'academic organization').
-                DO NOT use the product's specific name, brand, or its exact features in the slide text. Instead, all slide text MUST be about the general THEME you derived.` 
-                : 
-                `The primary theme for this 4-slide slideshow is: "${effectiveTopic}".`}
-                
-                Generate text for each of the 4 slides IN ${targetLanguage.toUpperCase()}.
-                Each slide's text MUST be short, engaging, and directly reflect the THEME (derived from product context if provided, otherwise from the "${effectiveTopic}").
-                The content MUST follow the slideshow type guidelines specified above.
-                The tone should be natural, relatable, poetic, or intriguing.
-                
-                CRITICAL RULES FOR SLIDE TEXT:
-                1. MUST NOT be a question of any kind. Do not end with a question mark.
-                2. MUST NOT include generic calls to action or conversational phrases (e.g., avoid "Join the conversation", "How do you...", "Find your...", "Discover the...", "Check this out", "Stay tuned").
-                3. MUST NOT mention any specific product names, brand names, or detailed product features from the context provided.
-                4. MUST be a statement, a short piece of a narrative, an evocative description, or a relatable feeling connected to the derived THEME.
-                5. MUST align with the slideshow type guidelines to create the appropriate mood and messaging.
-
-                Focus on making statements, telling a mini-story, or evoking an emotion related to the THEME while following the slideshow type requirements.
-
-                If specific text for some slides is provided below, use that text for those slides and generate text ONLY for the empty/missing slides, ensuring thematic consistency with the DERIVED THEME and adherence to ALL critical rules.
-                Provided texts: Slide 1: "${slide_1_text || ''}", Slide 2: "${slide_2_text || ''}", Slide 3: "${slide_3_text || ''}", Slide 4: "${slide_4_text || ''}"
-            `;
-            // --- END CORE INSTRUCTION BLOCK ---
-
-            if (actualBackgroundUsedForContext) { // Case 1: Background already chosen by user (valid)
-                const bgDescForAI = `The chosen background is named \"${actualBackgroundUsedForContext.name}\" (ID: ${actualBackgroundUsedForContext.id}) and described as: \"${actualBackgroundUsedForContext.description || 'No description available'}\". While generating text, ensure it thematically aligns with this background, but DO NOT make the text *about* the background itself. The core theme and product context are paramount.`;
-                textGenPrompt = `
-                    ${coreTextInstruction}
-                    ${bgDescForAI}
-                    Return a JSON object like: ${JSON.stringify(expectedJsonResponseFormat)}. Ensure each key has a non-empty string value.`;
-            } else if (availableBackgrounds.length > 0) { // Case 2: AI needs to select a background
-                logger.info(`AI will select a background from ${availableBackgrounds.length} options.`);
-                const backgroundOptionsForAI = availableBackgrounds.map(bg =>
-                    `ID: "${bg.id}", Name: "${bg.name}", Description: "${bg.description || 'No description'}"`
-                ).join('\n');
-                expectedJsonResponseFormat.selected_background_id = "string"; // AI must return this
-            
-            textGenPrompt = `
-                ${coreTextInstruction}
-
-                    Available backgrounds for you to choose from:
-                    ${backgroundOptionsForAI}
-
-                    Your tasks:
-                    1. From the list above, select the ONE background ID that you think is most thematically suitable for the slideshow's core theme ("${effectiveTopic}") and product context.
-                    
-                    2. Generate the 4 slide texts according to all instructions above, ensuring they fit your chosen background thematically, but are primarily about the core theme/product.
-                    
-                    Return a JSON object like: ${JSON.stringify(expectedJsonResponseFormat)}.
-                    The "selected_background_id" MUST be one of the IDs from the provided list. Ensure all text keys have non-empty string values.`;
-            } else { // Case 3: No specific background chosen by user, and none available for AI to choose.
-                logger.warn(`No specific background context for AI, and no backgrounds available for user ${userId}. Generating generic text.`);
-                textGenPrompt = `
-                    ${coreTextInstruction}
-                    No specific background image will be used. Generate text that fits the theme.
-                Return a JSON object like: ${JSON.stringify(expectedJsonResponseFormat)}. Ensure each key has a non-empty string value.`;
-            }
-            
-            logger.info(`Invoking AI. NeedText: ${needAiForText}, NeedBGSelect: ${needAiForBackgroundSelection}. Topic: "${effectiveTopic}", Lang: ${targetLanguage}`);
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4.1-nano",
-                messages: [{ role: "user", content: textGenPrompt }],
-                temperature: 0.7,
-                response_format: { type: "json_object" },
-            });
-            const aiResponse = JSON.parse(completion.choices[0].message.content);
-
-            slideTexts = [
-                slide_1_text || aiResponse.slide1_text,
-                slide_2_text || aiResponse.slide2_text,
-                slide_3_text || aiResponse.slide3_text,
-                slide_4_text || aiResponse.slide4_text
-            ].map(text => text ? text.trim() : 'Generated text placeholder');
-            logger.info("Finalized slide texts from AI/user:", slideTexts);
-
-            if (aiResponse.selected_background_id && !actualBackgroundUsedForContext) {
-                const chosenBgByAI = availableBackgrounds.find(bg => bg.id === aiResponse.selected_background_id);
-                if (chosenBgByAI) {
-                    aiSelectedBackgroundId = chosenBgByAI.id; // Store the ID chosen by AI
-                    selectedBackgroundUrl = chosenBgByAI.imageUrl;
-                    selectedBackgroundImageName = chosenBgByAI.name;
-                    actualBackgroundUsedForContext = chosenBgByAI; // Update the context object
-                    logger.info(`AI selected background ID: "${aiSelectedBackgroundId}", Name: "${selectedBackgroundImageName}", URL: ${selectedBackgroundUrl}`);
-        } else {
-                    logger.warn(`AI selected background ID "${aiResponse.selected_background_id}" which was not found in available list. Attempting fallback.`);
-                    if (availableBackgrounds.length > 0) {
-                        actualBackgroundUsedForContext = availableBackgrounds[0]; // Fallback to first
-                        aiSelectedBackgroundId = actualBackgroundUsedForContext.id;
-                        selectedBackgroundUrl = actualBackgroundUsedForContext.imageUrl;
-                        selectedBackgroundImageName = actualBackgroundUsedForContext.name;
-                        logger.info(`Fell back to first available background: ID: "${aiSelectedBackgroundId}", Name: "${selectedBackgroundImageName}"`);
-                    } else {
-                        logger.warn("No backgrounds available for AI fallback.");
-                        // selectedBackgroundUrl remains null, selectedBackgroundImageName 'none'
-                    }
-                }
-            }
-        } else {
-            logger.info("All texts provided by user, and background (if any) was already determined or none exist. No AI call needed.");
-            slideTexts = slideTexts.map(text => text.trim());
-            // selectedBackgroundUrl and selectedBackgroundImageName are already set if a valid user choice was made.
-            // If user choice was invalid and no BGs, they remain null/'none'.
-        }
-
-        if (!selectedBackgroundUrl && availableBackgrounds.length > 0 && !actualBackgroundUsedForContext && !aiSelectedBackgroundId) {
-             logger.warn("Final check: No background selected, but backgrounds are available. Using the first one as a last resort.");
-             actualBackgroundUsedForContext = availableBackgrounds[0];
-             selectedBackgroundUrl = actualBackgroundUsedForContext.imageUrl;
-             selectedBackgroundImageName = actualBackgroundUsedForContext.name;
-             // Not setting aiSelectedBackgroundId here as it's a true fallback, not an AI choice.
-        }
-
-
-        // --- NEW: Image Generation Logic ---
-        let finalImageUrls = [];
-        let generationCost = 50; // Base slideshow cost
-        
-        logger.info(`[${generationId}] Image generation mode: ${imageGenerationMode || 'legacy'}`);
-        
-        if (imageGenerationMode && imageGenerationMode !== 'legacy') {
-            // Handle special cases first
-            if (imageGenerationMode === 'from_assets') {
-                // Use existing user background images
-                if (availableBackgrounds.length > 0) {
-                    logger.info(`[${generationId}] Using ${availableBackgrounds.length} available background assets`);
-                    
-                    // Cycle through available backgrounds for each slide
-                    finalImageUrls = slideTexts.map((_, index) => {
-                        const backgroundIndex = index % availableBackgrounds.length;
-                        return availableBackgrounds[backgroundIndex].imageUrl;
-                    });
-                    
-                    generationCost += 30; // from_assets cost
-                    logger.info(`[${generationId}] Used ${finalImageUrls.length} background assets, cost: 30`);
-                } else {
-                    logger.warn(`[${generationId}] No background assets available for from_assets mode`);
-                    throw new Error('No background assets available');
-                }
-            } else {
-                // Use AI generation system for other modes
-                try {
-                    const imageGenResult = await generateSlideshowImages({
-                        slideTexts: slideTexts,
-                        connectedImages: connectedImages,
-                        imageGenerationMode: imageGenerationMode,
-                        style: style
-                    });
-                    
-                    if (imageGenResult.success) {
-                        finalImageUrls = imageGenResult.imageUrls;
-                        generationCost += imageGenResult.cost;
-                        logger.info(`[${generationId}] Generated ${finalImageUrls.length} images with mode: ${imageGenResult.mode}, additional cost: ${imageGenResult.cost}`);
-                    } else {
-                        throw new Error('Image generation failed');
-                    }
-                    
-                } catch (imageGenError) {
-                    logger.error(`[${generationId}] Image generation failed:`, imageGenError);
-                    // Fall back to legacy background system
-                    logger.info(`[${generationId}] Falling back to legacy background system`);
-                }
-            }
-        }
-        
-        // --- Legacy: Render Texts onto Background Images ---
-        const processedImageUrls = [];
-        if (!finalImageUrls.length && selectedBackgroundUrl && slideTexts.every(text => text && text.trim() !== '')) {
-            logger.info(`[${generationId}] Starting to render ${slideTexts.length} slides onto background: ${selectedBackgroundUrl}`);
-            const tempDir = os.tmpdir();
-            const backgroundFileName = `background_${generationId}.png`;
-            const backgroundFilePath = path.join(tempDir, backgroundFileName);
-
-            try {
-                await downloadFile(selectedBackgroundUrl, backgroundFilePath);
-                logger.info(`[${generationId}] Background image downloaded to: ${backgroundFilePath}`);
-
-                for (let i = 0; i < slideTexts.length; i++) {
-                    const slideText = slideTexts[i];
-                    if (!slideText || slideText.trim() === '') {
-                        logger.warn(`[${generationId}] Skipping slide ${i + 1} due to empty text.`);
-                        processedImageUrls.push(null);
-                        continue;
-                    }
-                    const outputSlideFileName = `slide_${i + 1}_${generationId}.jpg`; // CHANGED to .jpg
-                    const outputSlideFilePath = path.join(tempDir, outputSlideFileName);
-
-                    // --- NEW: Smartly split text into lines without breaking words (approx 30 chars) ---
-                    let processedSlideText = '';
-                    if (slideText) {
-                        const words = slideText.split(' ');
-                        let currentLine = '';
-                        for (const word of words) {
-                            if (currentLine === '') {
-                                currentLine = word;
-                            } else if ((currentLine + ' ' + word).length <= 30) {
-                                currentLine += ' ' + word;
-            } else {
-                                processedSlideText += currentLine + '\n';
-                                currentLine = word;
-                            }
-                        }
-                        processedSlideText += currentLine; // Add the last line
-                        if (processedSlideText.endsWith('\n')) { // Remove trailing newline if any
-                           processedSlideText = processedSlideText.slice(0, -2);
-                        }
-                    }
-                    // --- END NEW ---
-
-                    // Corrected escaping for text that now includes \n:
-                    const escapedText = processedSlideText
-                        .replace(/\\/g, '\\\\') // Escape actual backslashes first
-                        .replace(/%/g, '%%')
-                        .replace(/'/g, "\\'")
-                        .replace(/:/g, '\\:');
-                        // REMOVED: .replace(/\n/g, '\\\\N');
-
-                    // --- REVERTED: fontfile path to a common system path ---
-                    const drawTextFilter = `drawtext=text='${escapedText}':fontfile='/usr/share/fonts/truetype/msttcorefonts/Arial.ttf':fontcolor=white:fontsize=50:borderw=2:bordercolor=black@0.7:x=(w-text_w)/2:y=(h-text_h)/2`;
-
-                    await new Promise((resolve, reject) => {
-                        ffmpeg(backgroundFilePath)
-                            .outputOptions('-y')
-                            .videoFilter(drawTextFilter)
-                            // .toFormat('jpg') // REMOVED .toFormat('jpg')
-                            .outputOptions('-c:v mjpeg') // ADDED explicit MJPEG codec for JPG output
-                            .save(outputSlideFilePath) // outputSlideFilePath still ends in .jpg
-                            .on('end', () => {
-                                logger.info(`[${generationId}] Successfully rendered text for slide ${i + 1} to ${outputSlideFilePath}`);
-                                resolve();
-                            })
-                            .on('error', (err) => {
-                                logger.error(`[${generationId}] FFmpeg error rendering slide ${i + 1}:`, err.message, err.stderr);
-                                reject(new Error(`FFmpeg error for slide ${i + 1}: ${err.message}`));
-                            });
-                    });
-
-                    const storagePath = `generations/${userId}/${generationId}/slide_${i + 1}.png`;
-                    const [file] = await bucket.upload(outputSlideFilePath, {
-                        destination: storagePath,
-                        metadata: { contentType: 'image/png' },
-                        public: true,
-                    });
-                    processedImageUrls.push(file.publicUrl());
-                    logger.info(`[${generationId}] Uploaded rendered slide ${i + 1} to ${storagePath}. URL: ${file.publicUrl()}`);
-                    await fs.unlink(outputSlideFilePath);
-                }
-            } catch (imgProcessingError) {
-                logger.error(`[${generationId}] Error during image processing/upload for slideshow:`, imgProcessingError);
-            } finally {
-                try {
-                    if (await fs.stat(backgroundFilePath).catch(() => false)) { // Check if file exists before unlinking
-                       await fs.unlink(backgroundFilePath);
-                    }
-                } catch (unlinkError) {
-                    logger.warn(`[${generationId}] Could not delete temp background file: ${backgroundFilePath}`, unlinkError);
-                }
-            }
-        } else {
-            logger.warn(`[${generationId}] Skipping image rendering: Missing background URL or some slide texts are empty.`);
-        }
-        // --- END Render Texts onto Background Images ---
-
-        // --- Final Image URLs Selection ---
-        const finalUsedImageUrls = finalImageUrls.length > 0 ? finalImageUrls : (processedImageUrls.length > 0 ? processedImageUrls : null);
-        
-        // Firestore saving logic
-        const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
-        const generationData = {
-            userId: userId,
-            type: 'slideshow',
-            topic: effectiveTopic,
-            slideTexts: slideTexts,
-            selectedBackgroundUrl: selectedBackgroundUrl || null,
-            backgroundImageName: selectedBackgroundImageName, // This now reflects the final chosen name
-            userProvidedBackgroundName: background_name || null, // What user originally typed
-            aiSelectedBackgroundId: aiSelectedBackgroundId || null, // ID if AI selected it
-            imageStyle: image_style || null,
-            language: targetLanguage,
-            processedImageUrls: finalUsedImageUrls, // NEW: Use finalUsedImageUrls instead
-            imageGenerationMode: imageGenerationMode || 'legacy', // NEW: Store generation mode
-            generationCost: generationCost, // NEW: Store total cost
-            timestamp: FieldValue.serverTimestamp(),
-        };
-
-        // Transaction for saving generation and decrementing credits
-        await db.runTransaction(async (transaction) => {
-            const userSnapshot = await transaction.get(userRef);
-            const currentCredits = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
-            if (currentCredits < generationCost) { // CHECK if enough credits for slideshow
-                throw new HttpsError('resource-exhausted', `Insufficient general credits for slideshow (needs ${generationCost}).`);
-            }
-            transaction.update(userRef, { general_credits: FieldValue.increment(-generationCost) }); // DECREMENT by dynamic cost
-            transaction.set(generationDocRef, generationData);
-        });
-
-        logger.info(`Slideshow generation record saved (ID: ${generationDocRef.id}) and general_credits decremented by ${generationCost} for user ${userId}.`); // UPDATED LOG
-        return { 
-            success: true, 
-            message: "Slideshow content and images generated successfully.", 
-            data: { 
-                generationId: generationDocRef.id, 
-                slideTexts, 
-                selectedBackgroundUrl, 
-                processedImageUrls: finalUsedImageUrls, // NEW: Return final image URLs
-                imageGenerationMode: imageGenerationMode || 'legacy',
-                cost: generationCost
-            } 
-        };
-
-    } catch (error) {
-        logger.error(`Error in generateImageSlideshow for user ${userId}:`, error);
-        if (error instanceof OpenAI.APIError) {
-            logger.error('OpenAI API Error in slideshow:', error.status, error.name, error.message);
-            throw new HttpsError('internal', `OpenAI API Error: ${error.name}`);
-        }
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to generate slideshow: ${error.message}`);
-    }
-});
-
-exports.editImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => { // Added timeout
-    // ... (editImage function remains the same - Placeholder) ...
-    logger.warn("editImage function is not fully implemented.");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-     return { success: false, message: "Image editing not implemented yet.", data: null };
-}); // <-- Ensure semicolon if needed
-
 
 // --- NEW: Function to Create Stripe Checkout Session ---
 exports.createStripeCheckoutSession = onCall(async (request) => { // Removed secrets option
@@ -2625,7 +1471,6 @@ exports.createStripePortalSession = onCall(async (request) => { // Removed secre
   }
 });
 
-// --- NEW: generateImageDescription Function ---
 exports.generateImageDescription = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
   const userId = request.auth?.uid;
   if (!userId) {
@@ -3134,405 +1979,241 @@ exports.performImageGenerationTask = onRequest(
     }
 );
 
-// NEW: Function to generate the TikTok OAuth Authorization URL
-exports.getTikTokAuthUrl = onCall({ region: 'us-central1' }, async (request) => {
+// --- NEW: Video Generation Function ---
+exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, memory: '2GB' }, async (request) => {
     const userId = request.auth?.uid;
+    let generationRef; // Declare here to be accessible in catch block
+
     if (!userId) {
-        logger.error("getTikTokAuthUrl: Authentication Error.");
+        logger.error("generateVideo: Authentication Error.");
         throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }
 
-    if (!request.data) {
-        logger.error("getTikTokAuthUrl: request.data is null or undefined. Client must send 'redirectUri' and 'state'.");
-        throw new HttpsError('invalid-argument', 'Request data is missing. Please ensure "redirectUri" and "state" are provided in the call.');
+    const {
+        prompt,
+        imageUrl = null,
+        aspectRatio = '9:16',
+        duration = 5,
+        model = 'google/veo-3-fast',
+        subtype = 'text_to_video',
+        negative_prompt,
+        resolution,
+        mode,
+        camera_fixed,
+        prompt_optimizer
+    } = request.data;
+
+    if (!prompt && !imageUrl) {
+        throw new HttpsError('invalid-argument', 'Either prompt or imageUrl must be provided.');
     }
 
-    const { redirectUri, state } = request.data;
-
-    if (!redirectUri) {
-        throw new HttpsError('invalid-argument', 'Missing "redirectUri" in the request. This must match your TikTok app configuration.');
-    }
-    if (!state) {
-        throw new HttpsError('invalid-argument', 'Missing "state" parameter for security.');
-    }
-
-    const tiktokClientKey = process.env.TIKTOK_CLIENT_KEY;
-    if (!tiktokClientKey) {
-        logger.error("TikTok API client key not configured (TIKTOK_CLIENT_KEY).");
-        throw new HttpsError('internal', 'TikTok API integration is not configured correctly on the server.');
-    }
-
-    const TIKTOK_AUTH_BASE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
-    
-    const scopes = [
-        'user.info.basic',
-        'user.info.profile',
-        'user.info.stats',
-        'video.list',
-        'video.publish',
-        'video.upload'
-    ];
-
-    const params = new URLSearchParams({
-        client_key: tiktokClientKey,
-        scope: scopes.join(','),
-        response_type: 'code',
-        redirect_uri: redirectUri,
-        state: state,
-        disable_auto_auth: '1' // <<< ADDED THIS PARAMETER
+    logger.info(`generateVideo called by user: ${userId}`, {
+        prompt: prompt?.substring(0, 100) + '...',
+        hasImage: !!imageUrl,
+        aspectRatio,
+        duration,
+        model,
+        subtype,
+        negative_prompt: negative_prompt?.substring(0, 50) + '...',
+        resolution,
+        mode,
+        camera_fixed,
+        prompt_optimizer
     });
 
-    const authorizationUrl = `${TIKTOK_AUTH_BASE_URL}?${params.toString()}`;
-
-    logger.info(`Generated TikTok Auth URL for user ${userId}. State: ${state}, DisableAutoAuth: 1`);
-    return { authorizationUrl, state };
-});
-
-async function fetchTikTokUserInfo(accessToken, openId) { // Internal helper, not exported
-    const TIKTOK_USER_INFO_ENDPOINT = 'https://open.tiktokapis.com/v2/user/info/';
-    const requestedFields = ["open_id", "union_id", "avatar_url", "display_name", "is_verified", "follower_count", "following_count", "likes_count", "video_count"];
-
     try {
-        logger.info(`Fetching TikTok user info for open_id: ${openId} with fields: ${requestedFields.join(',')}`);
-        // OLD POST REQUEST:
-        // const response = await axios.post(TIKTOK_USER_INFO_ENDPOINT,
-        //     { fields: requestedFields }, 
-        //     {
-        //         headers: {
-        //             'Authorization': `Bearer ${accessToken}`,
-        //             'Content-Type': 'application/json', 
-        //         }
-        //     }
-        // );
-
-        // NEW GET REQUEST:
-        const response = await axios.get(TIKTOK_USER_INFO_ENDPOINT, {
-          headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                // 'Content-Type': 'application/json', // Not needed for GET typically
-            },
-            params: {
-                fields: requestedFields.join(',') // Pass fields as a comma-separated string in query params
-            }
-        });
-
-        const userDataContainer = response.data; 
-
-        if (userDataContainer.error && userDataContainer.error.code !== "ok") { // TikTok uses "ok" for success code in user info
-            logger.error(`Error fetching TikTok user info. Code: ${userDataContainer.error.code}, Msg: ${userDataContainer.error.message}`, userDataContainer.error);
-            throw new Error(`TikTok API error fetching user info: ${userDataContainer.error.message} (Code: ${userDataContainer.error.code})`);
+        // Initialize Replicate
+        const replicateToken = process.env.REPLICATE_API_TOKEN;
+        if (!replicateToken) {
+            throw new Error('Replicate API token not found');
         }
-
-        if (!userDataContainer.data || !userDataContainer.data.user) {
-            logger.error('TikTok user info response missing data.user field.', userDataContainer);
-            throw new Error('Received incomplete user info data from TikTok.');
-        }
-
-        logger.info('Successfully fetched TikTok user info:', userDataContainer.data.user);
-        return userDataContainer.data.user;
-
-    } catch (error) {
-        logger.error(`Error in fetchTikTokUserInfo for open_id ${openId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-        if (axios.isAxiosError(error) && error.response && error.response.data) {
-            const tiktokErrorContainer = error.response.data;
-            const tiktokError = tiktokErrorContainer.error || tiktokErrorContainer;
-            let errMsg = tiktokError.message || tiktokError.description || tiktokError.error_description || JSON.stringify(tiktokError);
-            if (tiktokError.code || tiktokError.error_code) errMsg = `(Code: ${tiktokError.code || tiktokError.error_code}) ${errMsg}`;
-            throw new Error(`TikTok API error (user info): ${errMsg}`);
-        }
-        throw error;
-    }
-}
-
-exports.exchangeTikTokAuthCode = onCall({region: 'us-central1'}, async (request) => {
-  const { authorizationCode, redirectUri } = request.data;
-  const userId = request.auth?.uid;
-
-  // <<< ADDED EXTENSIVE LOGGING from previous step - kept for safety >>>
-  logger.info(`exchangeTikTokAuthCode INVOCATION DETAILS:\\n    User ID: ${userId},\\n    Authorization Code (first 10 chars): ${authorizationCode ? authorizationCode.substring(0,10) : 'N/A'}...\\n    Received Redirect URI: ${redirectUri}\\n    TIKTOK_CLIENT_KEY is set: ${process.env.TIKTOK_CLIENT_KEY ? 'Yes' : 'No - THIS IS A PROBLEM!'}\\n    TIKTOK_CLIENT_SECRET is set: ${process.env.TIKTOK_CLIENT_SECRET ? 'Yes' : 'No - THIS IS A PROBLEM!'}\\n  `);
-
-  if (!userId) {
-    logger.error("exchangeTikTokAuthCode: Authentication Error.");
-    throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-  }
-
-  if (!authorizationCode || !redirectUri) {
-    logger.error("exchangeTikTokAuthCode: Missing authorizationCode or redirectUri.");
-    throw new HttpsError('invalid-argument', 'Missing authorizationCode or redirectUri.');
-  }
-
-  const clientKey = process.env.TIKTOK_CLIENT_KEY;
-  const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
-
-  if (!clientKey || !clientSecret) {
-    logger.error("TikTok API client key or secret is not configured in environment variables (TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET).");
-    throw new HttpsError('internal', 'TikTok API configuration error.');
-  }
-
-  try {
-    const requestBody = new URLSearchParams();
-    requestBody.append('client_key', clientKey);
-    requestBody.append('client_secret', clientSecret);
-    requestBody.append('code', authorizationCode);
-    requestBody.append('grant_type', 'authorization_code');
-    requestBody.append('redirect_uri', redirectUri);
-
-    const tokenResponse = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', requestBody, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-
-    logger.info("TikTok token exchange successful. Response data:", tokenResponse.data);
-
-    const accessToken = tokenResponse.data.access_token;
-    const openId = tokenResponse.data.open_id;
-    const expiresIn = tokenResponse.data.expires_in;
-    const refreshToken = tokenResponse.data.refresh_token;
-    const refreshExpiresIn = tokenResponse.data.refresh_expires_in;
-    const scope = tokenResponse.data.scope;
-    const tokenType = tokenResponse.data.token_type || "Bearer";
-
-    if (!accessToken || !openId) {
-        logger.error("TikTok token response missing access_token or open_id.", tokenResponse.data);
-        throw new HttpsError('internal', 'Failed to retrieve essential tokens from TikTok.');
-    }
-
-    const tiktokIntegrationData = {
-      accessToken: accessToken,
-      openId: openId,
-      expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + expiresIn * 1000)),
-      refreshToken: refreshToken,
-      refreshExpiresInSeconds: refreshExpiresIn,
-      refreshExpiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + refreshExpiresIn * 1000)),
-      scope: scope,
-      tokenType: tokenType,
-      provider: "tiktok",
-      type: "tiktok", // <<< ADDED TYPE FIELD
-      retrievedAt: admin.firestore.FieldValue.serverTimestamp(),
-      user_info: null // Initialize user_info as null
-    };
-
-    // <<< MODIFIED: Create a new document with an auto-generated ID >>>
-    const integrationRef = db.collection("users").doc(userId).collection("integrations").doc(); // Auto-generate ID
-    await integrationRef.set(tiktokIntegrationData);
-    const newIntegrationId = integrationRef.id; // Get the new ID
-
-    logger.info(`New TikTok integration (ID: ${newIntegrationId}) data for user ${userId} (openId: ${openId}) successfully saved.`);
-    return {
-       success: true,
-       message: "New TikTok account tokens linked successfully. Fetching user details...",
-       integrationId: newIntegrationId, // <<< RETURN NEW INTEGRATION ID
-       // For client-side, if needed immediately (though updateUserDetails will fetch fresh)
-       // openId: openId 
-    };
-
-  } catch (error) {
-    logger.error("Error during TikTok token exchange or Firestore save:", error.response ? error.response.data : error.message, error.stack);
-    if (error.isAxiosError && error.response) {
-      logger.error("TikTok API Error Details:", error.response.status, error.response.data);
-      throw new HttpsError('internal', `Failed to exchange TikTok code: ${error.response.data.error_description || error.response.data.error || 'TikTok API Error'}`);
-    }
-    throw new HttpsError('internal', `Failed to exchange TikTok code: ${error.message}`);
-  }
-});
-
-
-// 3. Initiate Photo Post
-exports.initiateTikTokPhotoPost = onCall({ region: 'us-central1' }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("initiateTikTokPhotoPost: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    // MODIFIED: Added post_mode to destructuring
-    const { accessToken, postInfo, sourceInfo, post_mode } = request.data;
-
-    // MODIFIED: post_mode is now essential for determining behavior
-    if (!accessToken || !postInfo || !sourceInfo || !post_mode) {
-        logger.error(`initiateTikTokPhotoPost: User ${userId} called with missing parameters.`, { hasToken: !!accessToken, hasPostInfo: !!postInfo, hasSourceInfo: !!sourceInfo, hasPostMode: !!post_mode });
-        throw new HttpsError('invalid-argument', 'Missing "accessToken", "postInfo", "sourceInfo", or "post_mode" in the request.');
-    }
-    if (post_mode !== "DIRECT_POST" && post_mode !== "MEDIA_UPLOAD") {
-        logger.error(`initiateTikTokPhotoPost: User ${userId} provided invalid post_mode: ${post_mode}`);
-        throw new HttpsError('invalid-argument', 'Invalid "post_mode" provided. Must be "DIRECT_POST" or "MEDIA_UPLOAD".');
-    }
-
-    if (!sourceInfo.source || (sourceInfo.source === "PULL_FROM_URL" && !sourceInfo.photo_url && (!sourceInfo.photo_images || sourceInfo.photo_images.length === 0) ) || (sourceInfo.source === "FILE_UPLOAD" && !sourceInfo.photo_size)) {
-        logger.error(`initiateTikTokPhotoPost: User ${userId} provided invalid sourceInfo.`, sourceInfo);
-        throw new HttpsError('invalid-argument', 'Invalid "sourceInfo" provided. For FILE_UPLOAD, ensure "photo_size" is present. For PULL_FROM_URL, ensure "photo_url" or "photo_images" list is present.');
-    }
-
-
-    const TIKTOK_PHOTO_INIT_ENDPOINT = 'https://open.tiktokapis.com/v2/post/publish/content/init/';
-    logger.info(`User ${userId} initiating TikTok photo post. Mode: ${post_mode}, Title: ${postInfo.title}, Source: ${sourceInfo.source}`);
-
-    // MODIFIED: Construct payload based on post_mode
-    let requestPayload = {
-        media_type: "PHOTO", // This is fixed for this endpoint as per docs for photos
-        post_mode: post_mode,
-        source_info: sourceInfo,
-        // post_info will be constructed based on mode
-    };
-
-    let finalPostInfo = {};
-    if (post_mode === "DIRECT_POST") {
-        // For direct post, include all relevant details from the client's postInfo
-        finalPostInfo = { ...postInfo }; // e.g., title, description, privacy_level, disable_comment, auto_add_music etc.
-        if (!finalPostInfo.privacy_level) {
-            // TikTok API for photo direct post *requires* privacy_level if post_mode is DIRECT_POST
-            // This should be validated or handled client-side, or we can default/error here.
-            // For now, let's assume client sends it or a query to creator_info was made to get options.
-             logger.warn(`initiateTikTokPhotoPost: DIRECT_POST mode for user ${userId} but privacy_level is missing in postInfo. TikTok might reject this.`);
-        }
-    } else if (post_mode === "MEDIA_UPLOAD") {
-        // For media upload (draft), only title and description are typically used from post_info.
-        // Other details like privacy, music are set by the user in TikTok app.
-        if (postInfo.title) finalPostInfo.title = postInfo.title;
-        if (postInfo.description) finalPostInfo.description = postInfo.description;
-        // auto_add_music is not shown in MEDIA_UPLOAD examples, so we omit it.
-    }
-    requestPayload.post_info = finalPostInfo;
-
-
-    try {
-        const response = await axios.post(TIKTOK_PHOTO_INIT_ENDPOINT,
-            requestPayload, // Use the dynamically constructed payload
-            {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json; charset=UTF-8', // TikTok docs sometimes show 'application/json'
-                }
-            }
-        );
-
-        const responseData = response.data;
-        if (responseData.error && responseData.error.code !== "ok") {
-            logger.error(`initiateTikTokPhotoPost (${post_mode}): TikTok API error for user ${userId}. Code: ${responseData.error.code}, Msg: ${responseData.error.message}`, responseData.error);
-            throw new HttpsError('aborted', `TikTok API error (${post_mode} photo): ${responseData.error.message} (Code: ${responseData.error.code})`);
-        }
-
-        logger.info(`initiateTikTokPhotoPost (${post_mode}): Successfully initiated photo post for user ${userId}. Publish ID: ${responseData.data.publish_id}`);
-        return { success: true, data: responseData.data };
-
-    } catch (error) {
-        logger.error(`initiateTikTokPhotoPost (${post_mode}): Error for user ${userId}:`, error.response ? JSON.stringify(error.response.data) : error.message, error.stack);
-         if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.error) {
-            const tiktokError = error.response.data.error;
-            throw new HttpsError('aborted', `TikTok API error (${post_mode} photo): ${tiktokError.message} (Code: ${tiktokError.code})`);
-        }
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `Failed to initiate TikTok photo post (${post_mode}): ${error.message}`);
-    }
-});
-
-
-// --- NEW: Generate Product Topics Function ---
-exports.generateProductTopics = onCall({ region: 'us-central1', timeoutSeconds: 540 }, async (request) => {
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("generateProductTopics: Authentication required.");
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-
-    const { productId, productName, productDescription } = request.data;
-    if (!productId || !productName || !productDescription) {
-        logger.error(`generateProductTopics: Missing required parameters for user ${userId}.`);
-        throw new HttpsError('invalid-argument', 'Missing required parameters: productId, productName, productDescription.');
-    }
-
-    logger.info(`generateProductTopics: Generating topics for product ${productId} (${productName}) for user ${userId}`);
-
-    try {
-        // Initialize OpenAI
-        const openaiApiKey = process.env.OPENAI_API_KEY;
-        if (!openaiApiKey) {
-            logger.error("generateProductTopics: OpenAI API key not found in environment variables.");
-            throw new HttpsError('failed-precondition', 'OpenAI API key not configured.');
-        }
-        const openai = new OpenAI({ apiKey: openaiApiKey });
-
-        // Generate topics prompt
-        const prompt = `Based on this product, generate 3-5 specific marketing topics for TikTok content. Each topic should be a single word or very short phrase (max 2 words) that represents a key selling point, benefit, or angle for the product.
-
-Product Name: ${productName}
-Product Description: ${productDescription}
-
-Generate topics that would work well for TikTok marketing, such as:
-- Key benefits (e.g., "convenience", "savings", "beauty")  
-- Target audience interests (e.g., "fitness", "lifestyle", "tech")
-- Use cases (e.g., "travel", "work", "home")
-- Emotional appeals (e.g., "confidence", "comfort", "success")
-
-Return ONLY the topics, one per line, nothing else. Each topic must be 1-2 words maximum.`;
-
-        // Call OpenAI API
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a marketing expert specializing in TikTok content strategy. Generate concise, impactful topics for product marketing."
-                },
-                {
-                    role: "user", 
-                    content: prompt
-                }
-            ],
-            max_tokens: 100,
-            temperature: 0.7
-        });
-
-        const generatedText = response.choices[0]?.message?.content?.trim();
-        if (!generatedText) {
-            throw new Error("Empty response from OpenAI");
-        }
-
-        // Parse topics (split by lines and clean up)
-        const topics = generatedText
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .map(line => line.replace(/^[-•*]\s*/, '')) // Remove bullet points
-            .filter(topic => topic.length <= 20) // Max 20 chars for safety
-            .slice(0, 5); // Max 5 topics
-
-        logger.info(`generateProductTopics: Generated ${topics.length} topics for product ${productId}: ${topics.join(', ')}`);
-
-        // Save topics to Firestore
-        const productRef = db.collection('users').doc(userId).collection('products').doc(productId);
-        await productRef.update({
-            topics: topics,
-            topicsGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        logger.info(`generateProductTopics: Successfully saved topics to Firestore for product ${productId}`);
         
-                         return {
+        const Replicate = require('replicate');
+        const replicate = new Replicate({ auth: replicateToken });
+
+        // Build model input based on selected model
+        let modelInput = {};
+        
+        switch (model) {
+            case 'google/veo-3-fast':
+            case 'google/veo-3':
+                modelInput = {
+                    prompt: prompt,
+                    ...(negative_prompt && { negative_prompt: negative_prompt })
+                };
+                break;
+
+            case 'google/veo-2':
+                modelInput = {
+                    ...(imageUrl && { image_input: imageUrl }),
+                    aspect_ratio: aspectRatio,
+                    duration: `${duration}s`
+                };
+                break;
+
+            case 'bytedance/seedance-1-pro':
+                modelInput = {
+                    prompt: prompt,
+                    ...(imageUrl && { image: imageUrl }),
+                    duration: duration,
+                    ...(resolution && { resolution: resolution }),
+                    aspect_ratio: aspectRatio,
+                    ...(camera_fixed !== undefined && { camera_fixed: camera_fixed })
+                };
+                break;
+
+            case 'kwaivgi/kling-v2.1':
+                modelInput = {
+                    prompt: prompt,
+                    ...(negative_prompt && { negative_prompt: negative_prompt }),
+                    ...(imageUrl && { start_image: imageUrl }),
+                    mode: mode || 'standard',
+                    duration: duration
+                };
+                break;
+
+            case 'minimax/hailuo-02':
+                modelInput = {
+                    prompt: prompt,
+                    ...(imageUrl && { first_frame_image: imageUrl }),
+                    duration: duration,
+                    ...(resolution && { resolution: resolution }),
+                    ...(prompt_optimizer !== undefined && { prompt_optimizer: prompt_optimizer })
+                };
+                break;
+
+            default:
+                throw new HttpsError('invalid-argument', `Unsupported model: ${model}`);
+        }
+
+        // Create generation record in Firestore
+        const generationId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        generationRef = db.collection('users').doc(userId).collection('generations').doc(generationId);
+        
+        const firestoreData = {
+            type: 'video',
+            subtype: subtype,
+            prompt: prompt,
+            model: model,
+            aspectRatio: aspectRatio,
+            duration: duration,
+            status: 'processing',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            creditsUsed: getVideoCredits(model, duration, resolution, mode),
+            error: null
+        };
+
+        // Conditionally add optional fields to avoid storing undefined/null
+        if (imageUrl) firestoreData.imageUrl = imageUrl;
+        if (negative_prompt) firestoreData.negative_prompt = negative_prompt;
+        if (resolution) firestoreData.resolution = resolution;
+        if (mode) firestoreData.mode = mode;
+        if (camera_fixed !== undefined) firestoreData.camera_fixed = camera_fixed;
+        if (prompt_optimizer !== undefined) firestoreData.prompt_optimizer = prompt_optimizer;
+
+        await generationRef.set(firestoreData);
+
+        logger.info(`generateVideo: Starting generation with model ${model} for user ${userId}`);
+        logger.info(`generateVideo: Model input:`, modelInput);
+        
+        // Generate video using Replicate
+        const output = await replicate.run(model, { input: modelInput });
+        
+        let videoUrl;
+        if (typeof output === 'string' && output.startsWith('http')) {
+            videoUrl = output;
+        } else if (Array.isArray(output) && output.length > 0) {
+            videoUrl = output[0];
+        } else if (output && output.video) {
+            videoUrl = output.video;
+        } else if (output && output.url) {
+            videoUrl = output.url;
+        } else {
+            throw new Error('Invalid output format from Replicate');
+        }
+
+        logger.info(`generateVideo: Successfully generated video: ${videoUrl}`);
+
+        // Update generation record with success
+        await generationRef.update({
+            status: 'completed',
+            videoUrl: videoUrl,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            error: null
+        });
+
+        return {
             success: true,
-            topics: topics,
-            message: `Generated ${topics.length} marketing topics for ${productName}` 
+            message: "Video generation completed successfully",
+            data: {
+                videoUrl: videoUrl,
+                generationId: generationId,
+                model: model,
+                duration: duration,
+                aspectRatio: aspectRatio,
+                creditsUsed: getVideoCredits(model, duration, resolution, mode)
+            }
         };
 
     } catch (error) {
-        logger.error(`generateProductTopics: Error for user ${userId}, product ${productId}:`, error.message, error.stack);
+        logger.error(`Error in generateVideo for user ${userId}:`, error);
         
-        // Try to save error to product document
-        try {
-            const productRef = db.collection('users').doc(userId).collection('products').doc(productId);
-            await productRef.update({
-                topicsGenerationError: error.message,
-                topicsGenerationErrorAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-        } catch (firestoreError) {
-            logger.error(`generateProductTopics: Failed to save error to Firestore:`, firestoreError.message);
+        // Update generation record with error
+        if (generationRef) {
+            try {
+                await generationRef.update({
+                    status: 'failed',
+                    error: error.message,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (updateError) {
+                logger.error(`Failed to update generation record:`, updateError);
+            }
         }
-
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Failed to generate product topics: ${error.message}`);
+        
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Video generation failed: ${error.message}`);
     }
 });
+
+// Helper function to calculate video generation credits
+function getVideoCredits(model, duration, resolution = '1080p', mode = 'standard') {
+    switch (model) {
+        case 'google/veo-3-fast':
+            return 60; // Fixed 60 credits
+            
+        case 'google/veo-3':
+            return 100; // Fixed 100 credits
+            
+        case 'google/veo-2':
+            return duration * 10; // 10 credits per second
+            
+        case 'bytedance/seedance-1-pro':
+            const creditsPerSecond = resolution === '480p' ? 1 : 3; // 1 for 480p, 3 for 1080p
+            return duration * creditsPerSecond;
+            
+        case 'kwaivgi/kling-v2.1':
+            const modeMultiplier = mode === 'pro' ? 2 : 1; // 1 for standard, 2 for pro
+            return duration * modeMultiplier;
+            
+        case 'minimax/hailuo-02':
+            const resolutionMultiplier = resolution === '768p' ? 1 : 2; // 1 for 768p, 2 for 1080p
+            return duration * resolutionMultiplier;
+            
+        default:
+            return duration * 10; // Default fallback
+    }
+}
+
+// Helper function to calculate image generation credits
+function getImageCredits(model) {
+    const baseCredits = {
+        'black-forest-labs/flux-kontext-max': 2,
+        'black-forest-labs/flux-kontext-pro': 1,
+        'google/imagen-4': 1,
+        'google/imagen-4-ultra': 2,
+        'ideogram-ai/ideogram-v3-quality': 3
+    };
+    
+    return baseCredits[model] || 1; // Default to Imagen-4 credits
+}

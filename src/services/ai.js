@@ -1,7 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import imageRules from './imageRules.json';
-
-const functions = getFunctions();
+import { getAuth } from 'firebase/auth';
 
 // Credit costs for different quality levels
 const QUALITY_CREDITS = {
@@ -9,11 +8,6 @@ const QUALITY_CREDITS = {
   medium: 60,
   high: 90
 };
-
-// Firebase Functions for secure API calls
-const generateImageFunction = httpsCallable(functions, 'generateImage');
-const generateVideoFunction = httpsCallable(functions, 'generateVideo');
-const generateSlideshowFunction = httpsCallable(functions, 'generateSlideshow');
 
 // Helper function to get random rules from a category
 const getRandomRules = (category, count = 2) => {
@@ -207,7 +201,17 @@ export const generateImage = async ({
   try {
     console.log('REQUESTING image generation with params:', { prompt, subtype, selectedFrame, quality });
 
-    // Use the direct synchronous image generation function
+    // Get current user and force token refresh before calling the function
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("The function must be called while authenticated.");
+    }
+    // Force refresh the token to ensure it's valid.
+    const idToken = await currentUser.getIdToken(true);
+
+    // Ensure function is called with current auth state
+    const functions = getFunctions();
     const generateImageFn = httpsCallable(functions, 'generateImage');
 
     // Determine commandCode for logging/legacy purposes, though the new flow
@@ -256,17 +260,94 @@ export const generateImage = async ({
 };
 
 // Video Generation Service (using Firebase Functions)
-export const generateVideo = async ({ prompt, imageUrl, aspectRatio, duration, model }) => {
+export const generateVideo = async ({ 
+  prompt, 
+  subtype = 'text_to_video',
+  model = 'google/veo-3-fast',
+  duration = 5,
+  imageUrl = null,
+  // Model-specific parameters
+  negative_prompt = null,
+  aspect_ratio = '9:16',
+  resolution = '1080p',
+  mode = 'standard',
+  camera_fixed = false,
+  prompt_optimizer = true
+}) => {
   try {
-    console.log('Generating video with Firebase Functions:', { prompt, imageUrl, aspectRatio, duration, model });
-
-    const result = await generateVideoFunction({
-      prompt: prompt,
-      imageUrl: imageUrl,
-      aspectRatio: aspectRatio || '9:16',
-      duration: parseInt(duration) || 5,
-      model: model || 'zeroscope_v2_xl'
+    console.log('Generating video with Firebase Functions:', { 
+      prompt, 
+      subtype, 
+      model, 
+      duration, 
+      imageUrl, 
+      negative_prompt, 
+      aspect_ratio, 
+      resolution, 
+      mode, 
+      camera_fixed, 
+      prompt_optimizer 
     });
+
+    // Get current user and force token refresh before calling the function
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("The function must be called while authenticated.");
+    }
+    // Force refresh the token to ensure it's valid.
+    const idToken = await currentUser.getIdToken(true);
+
+    // Ensure function is called with current auth state
+    const functions = getFunctions();
+    const generateVideoFn = httpsCallable(functions, 'generateVideo');
+
+    const requestData = {
+      prompt,
+      subtype,
+      model,
+      duration: parseInt(duration)
+    };
+
+    // Add parameters based on specific model requirements
+    switch (model) {
+      case 'google/veo-3-fast':
+      case 'google/veo-3':
+        if (negative_prompt) requestData.negative_prompt = negative_prompt;
+        break;
+        
+      case 'google/veo-2':
+        if (imageUrl && subtype === 'image_to_video') requestData.image = imageUrl;
+        requestData.aspect_ratio = aspect_ratio;
+        break;
+        
+      case 'bytedance/seedance-1-pro':
+        if (imageUrl && subtype === 'image_to_video') requestData.image = imageUrl;
+        requestData.resolution = resolution;
+        requestData.aspect_ratio = aspect_ratio;
+        requestData.camera_fixed = camera_fixed;
+        break;
+        
+      case 'kwaivgi/kling-v2.1':
+        if (negative_prompt) requestData.negative_prompt = negative_prompt;
+        if (imageUrl && subtype === 'image_to_video') requestData.start_image = imageUrl;
+        requestData.mode = mode;
+        break;
+        
+      case 'minimax/hailuo-02':
+        if (imageUrl && subtype === 'image_to_video') requestData.first_frame_image = imageUrl;
+        requestData.resolution = resolution;
+        requestData.prompt_optimizer = prompt_optimizer;
+        break;
+        
+      default:
+        // For any other models, include common parameters
+        if (imageUrl) requestData.imageUrl = imageUrl;
+        if (aspect_ratio) requestData.aspectRatio = aspect_ratio;
+    }
+
+    console.log('Sending request to `generateVideo` with data:', requestData);
+    const result = await generateVideoFn(requestData);
 
     if (!result.data.success || !result.data.data.videoUrl) {
         throw new Error(result.data.message || 'Backend returned an error for video generation.');
@@ -284,49 +365,6 @@ export const generateVideo = async ({ prompt, imageUrl, aspectRatio, duration, m
     return {
       success: false,
       error: errorMessage
-    };
-  }
-};
-
-// NEW: Slideshow Generation Service
-export const generateSlideshow = async ({ topic, slideshowType, language, background }) => {
-  try {
-    console.log('🎬 AI Service: Generating slideshow with params:', { topic, slideshowType, language, background });
-    
-    const generateSlideshowFn = httpsCallable(functions, 'generateImageSlideshow');
-    const result = await generateSlideshowFn({
-      topic,
-      _slideshow_type_context: slideshowType,
-      language,
-      background_name: background
-    });
-
-    console.log('🎬 AI Service: Backend response:', result);
-
-    // Check if the result has the expected structure
-    if (!result || !result.data) {
-      throw new Error('Invalid response from backend');
-    }
-
-    // Return standardized response based on actual backend structure
-    return {
-      success: true,
-      content: result.data.data, // Backend wraps data in .data.data
-      slideTexts: result.data.data?.slideTexts || [],
-      slideshowUrl: result.data.data?.selectedBackgroundUrl || null,
-      processedImageUrls: result.data.data?.processedImageUrls || [],
-      generationId: result.data.data?.generationId || null,
-      message: result.data.message
-    };
-
-  } catch (error) {
-    console.error('🎬 AI Service: Slideshow generation error:', error);
-    
-    // Return structured error instead of throwing
-    return {
-      success: false,
-      error: error.message || 'Slideshow generation failed',
-      message: error.message || 'Slideshow generation failed'
     };
   }
 };

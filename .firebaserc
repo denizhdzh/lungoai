@@ -1,15 +1,15 @@
 {
   "projects": {
-    "default": "ugcai-f429e"
+    "default": "lungoai-39982"
   },
   "targets": {
-    "ugcai-f429e": {
+    "lungoai-39982": {
       "hosting": {
         "app": [
-          "ugcai-f429e-c02d0"
+          "lungoai-39982-c02d0"
         ],
         "main": [
-          "ugcai-f429e"
+          "lungoai-39982"
         ]
       }
     }

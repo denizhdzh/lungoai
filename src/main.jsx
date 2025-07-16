@@ -12,23 +12,16 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import PricingSection from './components/PricingSection.jsx';
-import Generation from './pages/Generation.jsx';
 import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
 import { motion } from 'framer-motion';
-import CampaignCreator from './pages/CampaignCreator.jsx';
 import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 
-// --- IMMEDIATE THEME CHECK (Before React Renders) ---
-if (localStorage.getItem('darkMode') === 'true' || (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-  document.documentElement.classList.add('dark');
-  console.log("[main.jsx] Initial dark mode applied.");
-} else {
-  document.documentElement.classList.remove('dark');
-  console.log("[main.jsx] Initial light mode applied.");
-}
-// --- END IMMEDIATE THEME CHECK ---
+// --- FORCE DARK MODE ---
+document.documentElement.classList.add('dark');
+console.log("[main.jsx] Dark mode forced.");
+// --- END FORCE DARK MODE ---
 
 // Protected Route Component (Updated to use userData)
 function ProtectedRoute({ user, userData, userDataFetched, children }) {
@@ -195,10 +188,8 @@ function AppRouter() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="settings" element={<Settings />} />
         <Route path="pricing" element={<PricingSection id="pricing" />} />
-        <Route path="generation" element={<Generation />} />
         <Route path="aiguide" element={<CommandInfo />} />
         <Route path="admin" element={<Admin />} />
-        <Route path="campaign" element={<CampaignCreator />} />
         <Route path="studio" element={<CanvasWorkspace />} />
       </Route>
 

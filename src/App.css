@@ -40,3 +40,104 @@
 .read-the-docs {
   color: #888;
 }
+
+/* EXTREME Sci-Fi Edge Styling */
+.react-flow__edge {
+  filter: drop-shadow(0 0 20px #00f5ff) 
+          drop-shadow(0 0 40px rgba(0, 245, 255, 0.8)) 
+          drop-shadow(0 0 60px rgba(0, 245, 255, 0.4)) !important;
+  transition: all 0.3s ease;
+}
+
+.react-flow__edge:hover {
+  filter: drop-shadow(0 0 30px #00f5ff) 
+          drop-shadow(0 0 60px rgba(0, 245, 255, 1)) 
+          drop-shadow(0 0 90px rgba(0, 245, 255, 0.6)) !important;
+}
+
+/* Normal edges - solid lines, no animation */
+.react-flow__edge-path {
+  stroke: #00f5ff !important;
+  stroke-width: 4px !important;
+  stroke-linecap: round !important;
+  filter: url(#sci-fi-glow) !important;
+}
+
+/* Only animated edges get the fancy effects */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-width: 6px !important;
+  stroke-dasharray: 15 5 !important;
+  animation: epic-sci-fi-flow 1s linear infinite !important;
+}
+
+.react-flow__connectionline {
+  stroke: #ff00ff !important;
+  stroke-width: 8px !important;
+  filter: drop-shadow(0 0 20px #ff00ff) 
+          drop-shadow(0 0 40px rgba(255, 0, 255, 0.8)) !important;
+  stroke-dasharray: 10 5 !important;
+  animation: connection-glow 1.5s ease-in-out infinite !important;
+}
+
+.react-flow__edge .react-flow__edge-textwrapper {
+  filter: drop-shadow(0 0 10px #00f5ff) !important;
+}
+
+@keyframes epic-sci-fi-flow {
+  0% {
+    stroke-dashoffset: 0;
+    stroke: #00f5ff;
+  }
+  25% {
+    stroke: #0099ff;
+  }
+  50% {
+    stroke: #00ccff;
+  }
+  75% {
+    stroke: #0099ff;
+  }
+  100% {
+    stroke-dashoffset: 20;
+    stroke: #00f5ff;
+  }
+}
+
+@keyframes epic-sci-fi-pulse {
+  0%, 100% {
+    stroke-width: 8px;
+    opacity: 0.8;
+  }
+  50% {
+    stroke-width: 12px;
+    opacity: 1;
+  }
+}
+
+@keyframes connection-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px #ff00ff) drop-shadow(0 0 40px rgba(255, 0, 255, 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 30px #ff00ff) drop-shadow(0 0 60px rgba(255, 0, 255, 1));
+  }
+}
+
+/* Handle (connection point) styling */
+.react-flow__handle {
+  width: 2px !important;
+  height: 10px !important;
+  background: white !important;
+  border: none !important;
+  opacity: 1 !important;
+}
+
+.react-flow__handle-left {
+  border-radius: 1000px 0 0 1000px !important;
+  left: -4px !important;
+}
+
+.react-flow__handle-right {
+  border-radius: 0 1000px 1000px 0 !important;
+  right: -4px !important;
+}

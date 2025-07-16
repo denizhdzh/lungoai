@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 import { auth, db, storage, functions } from '../firebase';
-import { updateProfile, updatePassword as firebaseUpdatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser as firebaseDeleteUser } from 'firebase/auth';
+import { updateProfile, updatePassword as firebaseUpdatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser as firebaseDeleteUser, signOut } from 'firebase/auth';
 import { doc, collection, addDoc, getDocs, updateDoc, deleteDoc, setDoc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, getDoc } from '@firebase/firestore';
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from '@firebase/storage';
 // Import Firebase Functions

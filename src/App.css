@@ -1,46 +1,3 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
 /* EXTREME Sci-Fi Edge Styling */
 .react-flow__edge {
   filter: drop-shadow(0 0 20px #00f5ff) 
@@ -55,24 +12,22 @@
           drop-shadow(0 0 90px rgba(0, 245, 255, 0.6)) !important;
 }
 
-/* Normal edges - solid lines, no animation */
 .react-flow__edge-path {
   stroke: #00f5ff !important;
-  stroke-width: 4px !important;
+  stroke-width: 1px !important;
   stroke-linecap: round !important;
   filter: url(#sci-fi-glow) !important;
 }
 
-/* Only animated edges get the fancy effects */
 .react-flow__edge.animated .react-flow__edge-path {
-  stroke-width: 6px !important;
+  stroke-width: 1px !important;
   stroke-dasharray: 15 5 !important;
   animation: epic-sci-fi-flow 1s linear infinite !important;
 }
 
 .react-flow__connectionline {
   stroke: #ff00ff !important;
-  stroke-width: 8px !important;
+  stroke-width: 1px !important;
   filter: drop-shadow(0 0 20px #ff00ff) 
           drop-shadow(0 0 40px rgba(255, 0, 255, 0.8)) !important;
   stroke-dasharray: 10 5 !important;
@@ -103,17 +58,6 @@
   }
 }
 
-@keyframes epic-sci-fi-pulse {
-  0%, 100% {
-    stroke-width: 8px;
-    opacity: 0.8;
-  }
-  50% {
-    stroke-width: 12px;
-    opacity: 1;
-  }
-}
-
 @keyframes connection-glow {
   0%, 100% {
     filter: drop-shadow(0 0 20px #ff00ff) drop-shadow(0 0 40px rgba(255, 0, 255, 0.6));
@@ -123,21 +67,226 @@
   }
 }
 
-/* Handle (connection point) styling */
-.react-flow__handle {
-  width: 2px !important;
-  height: 10px !important;
-  background: white !important;
-  border: none !important;
-  opacity: 1 !important;
+
+.react-flow__handle::before,
+.react-flow__handle-left::before,
+.react-flow__handle-right::before,
+.react-flow__handle-top::before,
+.react-flow__handle-bottom::before {
+  content: "*" !important;
+  color: white !important;
+  font-size: 18px !important;
+  font-weight: bold !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  line-height: 1 !important;
+  display: block !important;
 }
 
 .react-flow__handle-left {
-  border-radius: 1000px 0 0 1000px !important;
-  left: -4px !important;
+  top: 50% !important;
+  left: -19px !important;
+  transform: translate(0, -50%) !important;
 }
 
 .react-flow__handle-right {
-  border-radius: 0 1000px 1000px 0 !important;
-  right: -4px !important;
+  right: -19px !important;
+  top: 50% !important;
+  transform: translate(0, -50%) !important;
+}
+
+.react-flow__handle-top {
+  left: 50% !important;
+  top: -19px !important;
+  transform: translate(-50%, 0) !important;
+}
+
+.react-flow__handle-bottom {
+  top: auto !important;
+  left: 50% !important;
+  bottom: -19px !important;
+  transform: translate(-50%, 0) !important;
+}
+
+.react-flow__handle.connectionindicator {
+  pointer-events: all !important;
+  cursor: crosshair !important;
+}
+
+/* Remove ReactFlow selected node styling */
+.react-flow__node.selected {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node.selected * {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node:focus * {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node * {
+  outline: none !important;
+}
+
+.react-flow__nodesselection {
+  display: none !important;
+}
+
+.react-flow__nodesselection-rect {
+  display: none !important;
+}
+
+.react-flow__node.selected::after {
+  display: none !important;
+}
+
+.react-flow__node.selected::before {
+  display: none !important;
+}
+
+.react-flow__node-default.selected {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-default.selected * {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node[data-selected="true"] {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node[data-selected="true"] * {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node * {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node div {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node,
+.react-flow__node:hover,
+.react-flow__node:focus,
+.react-flow__node:active,
+.react-flow__node.selected,
+.react-flow__node[data-selected="true"] {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  ring: none !important;
+}
+
+.react-flow__node-default {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-default.selected {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.react-flow__node-default:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-default::after,
+.react-flow__node-default::before,
+.react-flow__node-default.selected::after,
+.react-flow__node-default.selected::before {
+  display: none !important;
+  content: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-default.selected {
+  transform: none !important;
+  transition: none !important;
+}
+
+.react-flow__node-default {
+  --tw-ring-shadow: none !important;
+  --tw-ring-offset-shadow: none !important;
+}
+
+.react-flow__node-default.selected {
+  --tw-ring-shadow: none !important;
+  --tw-ring-offset-shadow: none !important;
+}
+
+.react-flow__node.selected {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: inherit !important;
+}
+
+.react-flow__node,
+.react-flow__node.selected,
+.react-flow__node[data-selected="true"],
+.react-flow__node:hover,
+.react-flow__node:focus,
+.react-flow__node:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: none !important;
+  filter: none !important;
+  transform: none !important;
+  z-index: inherit !important;
+}
+
+.react-flow__node *,
+.react-flow__node.selected *,
+.react-flow__node[data-selected="true"] * {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+  filter: none !important;
 }

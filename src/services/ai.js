@@ -248,8 +248,8 @@ export const generateImage = async ({
     // Return the direct result with imageUrl
     return {
       success: true,
-      imageUrl: result.data.data?.imageUrl || result.data.imageUrl,
-      data: result.data.data || result.data,
+      imageUrl: result.data.imageUrl, // Firebase Function returns imageUrl directly
+      data: result.data,
       message: "Image generation completed."
     };
 

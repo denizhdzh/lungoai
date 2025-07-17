@@ -53,12 +53,7 @@
 	}
 }
 
-/* React Flow Custom Selection - All Lime */
-.react-flow__node.selected {
-  outline: none !important;
-  box-shadow: 0 0 0 2px #84cc16 !important;
-  border-radius: 16px !important;
-}
+
 
 
 
@@ -83,21 +78,21 @@
 /* Generation Edge Animations */
 .react-flow__edge.generation-edge .react-flow__edge-path {
   stroke: #84cc16 !important;
-  stroke-width: 4px !important;
+  stroke-width: 1px !important;
   stroke-dasharray: 8 4 !important;
   animation: generationFlow 0.8s linear infinite;
 }
 
 .react-flow__edge.generated-edge .react-flow__edge-path {
   stroke: #84cc16 !important;
-  stroke-width: 3px !important;
+  stroke-width: 1px !important;
   stroke-dasharray: 5 5 !important;
   animation: successPulse 3s ease-in-out infinite;
 }
 
 .react-flow__edge.error-edge .react-flow__edge-path {
   stroke: #ef4444 !important;
-  stroke-width: 3px !important;
+  stroke-width: 1px !important;
   stroke-dasharray: 2 2 !important;
   animation: errorPulse 1s ease-in-out infinite;
 }

@@ -25,12 +25,6 @@ console.log("[main.jsx] Dark mode forced.");
 
 // Protected Route Component (Updated to use userData)
 function ProtectedRoute({ user, userData, userDataFetched, children }) {
-  // --- DEVELOPMENT OVERRIDE ---
-  // In development, always allow access to children to bypass login for testing.
-  if (import.meta.env.DEV) {
-    return children;
-  }
-  // --- END DEVELOPMENT OVERRIDE ---
 
   // Wait until auth is checked and user data is fetched
   if (!userDataFetched) {
@@ -52,7 +46,18 @@ function AppRouter() {
   const [authChecked, setAuthChecked] = useState(false);
   const [userData, setUserData] = useState(null); // State for Firestore user data
   const [userDataFetched, setUserDataFetched] = useState(false); // Track fetch status
+  const [logoAnimationComplete, setLogoAnimationComplete] = useState(false); // Track logo animation
   const navigate = useNavigate(); // Initialize navigate hook
+
+  // Fallback: Force animation complete after 4 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('[AppRouter] Animation fallback timeout triggered');
+      setLogoAnimationComplete(true);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => { // Make async
@@ -107,31 +112,15 @@ function AppRouter() {
     }
   };
 
-  // Wait until auth check AND user data fetch are complete before rendering routes
-  if (!authChecked || !userDataFetched) {
-    // Use custom logo spinner for initial loading
-    // const isDarkMode = document.documentElement.classList.contains('dark'); // No longer needed for src
-    // const logoSrc = isDarkMode ? "/logonaked-white.png" : "/logonaked-black.png"; // No longer needed for src
-
+  // Wait until auth check, user data fetch, AND logo animation are complete before rendering routes
+  if (!authChecked || !userDataFetched || !logoAnimationComplete) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white dark:bg-neutral-950 text-black dark:text-white">
-        <motion.div
-          style={{
-            width: 80, // Represents 4 units
-            boxSizing: 'border-box',
-            boxShadow: 'inset 0 0 0 10px currentColor', // Thicker inside border
-            marginBottom: 20, // Optional space below
-            borderRadius: '16px',
-          }}
-          animate={{
-            height: [80, 40, 80], // 4x4 -> 4x2 -> 4x4
-          }}
-          transition={{
-            duration: 1.5,
-            repeat: Infinity,
-            repeatType: "loop",
-            ease: "easeInOut",
-          }}
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-950 text-white">
+        <DotLottieReact
+          src="/lottie-logo.json"
+          loop={false}
+          autoplay
+          style={{ width: 120, height: 120 }}
         />
       </div>
     );

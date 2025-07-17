@@ -939,10 +939,17 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
     
     try {
         logger.info(`[generateImage User: ${userId}] Performing credit check for model ${selectedModel} (${requiredCredits} credits).`);
-        const userDoc = await userRef.get();
+        let userDoc = await userRef.get();
         if (!userDoc.exists) {
-            logger.error(`[generateImage User: ${userId}] User profile not found for credit check.`);
-            throw new HttpsError('not-found', 'User profile not found for credit check.');
+            logger.info(`[generateImage User: ${userId}] User profile not found, creating default profile.`);
+            // Create default user profile
+            const defaultProfile = {
+                general_credits: 50, // Give some starting credits
+                createdAt: admin.firestore.Timestamp.now(),
+                onboardingCompleted: true
+            };
+            await userRef.set(defaultProfile);
+            userDoc = await userRef.get(); // Refetch the document
         }
         const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
         if (currentCredits < requiredCredits) {

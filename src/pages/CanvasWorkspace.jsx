@@ -57,6 +57,7 @@ import {
 	Sparkle,
 	CaretDown,
 	Square,
+	Asterisk,
 	Rectangle,
 	DeviceMobile,
 	Palette,
@@ -88,6 +89,156 @@ import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, l
 import { httpsCallable } from 'firebase/functions';
 import CanvasTutorial from '../components/CanvasTutorial';
 import CustomDropdown from '../components/CustomDropdown';
+
+// Custom hook for handle hover behavior
+const useHandleHover = () => {
+	const [showHandles, setShowHandles] = useState(false);
+	const handleTimeoutRef = useRef(null);
+
+	const handleMouseEnter = useCallback(() => {
+		if (handleTimeoutRef.current) {
+			clearTimeout(handleTimeoutRef.current);
+		}
+		setShowHandles(true);
+	}, []);
+
+	const handleMouseLeave = useCallback(() => {
+		handleTimeoutRef.current = setTimeout(() => {
+			setShowHandles(false);
+		}, 2000);
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			if (handleTimeoutRef.current) {
+				clearTimeout(handleTimeoutRef.current);
+			}
+		};
+	}, []);
+
+	return { showHandles, handleMouseEnter, handleMouseLeave };
+};
+
+// Universal Node Wrapper with consistent styling
+const NodeWrapper = ({ 
+	children, 
+	selected, 
+	width, 
+	height, 
+	nodeType,
+	aspectRatio = '9:16',
+	onDragOver,
+	onDragLeave,
+	onDrop,
+	className = ""
+}) => {
+	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
+	
+	// Calculate dimensions based on aspect ratio
+	const getNodeDimensions = () => {
+		const baseSize = 320;
+		
+		switch(aspectRatio) {
+			case '16:9':
+				return { width: baseSize * (16/9), height: baseSize };
+			case '1:1':
+				return { width: baseSize, height: baseSize };
+			case '4:3':
+				return { width: baseSize * (4/3), height: baseSize };
+			case '3:4':
+				return { width: baseSize, height: baseSize * (4/3) };
+			case '9:16':
+				return { width: baseSize, height: baseSize * (16/9) };
+			default:
+				return { width: width || baseSize, height: height || baseSize * (16/9) };
+		}
+	};
+	
+	const { width: nodeWidth, height: nodeHeight } = width && height ? 
+		{ width, height } : getNodeDimensions();
+	
+	return (
+		<div 
+			className={`group bg-transparent border rounded-2xl p-2.5 transition-all duration-300 ease-in-out text-neutral-200 border-neutral-600 ${
+				selected ? 'border-lime-400' : ''
+			} ${className}`}
+			style={{ 
+				width: nodeWidth,
+				height: nodeHeight,
+				transition: 'width 0.3s ease, height 0.3s ease'
+			}}
+			onDragOver={onDragOver}
+			onDragLeave={onDragLeave}
+			onDrop={onDrop}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
+		>
+			{/* Node type label */}
+			<div className="absolute -top-6 left-0 text-xs text-neutral-400 font-bold duration-200 z-10">
+				{nodeType}
+			</div>
+
+			{/* Corner lines */}
+			<div className="absolute top-2 left-2 w-8 h-8 pointer-events-none z-10">
+				<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-xl"></div>
+			</div>
+			<div className="absolute bottom-2 right-2 w-8 h-8 pointer-events-none z-10">
+				<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-xl"></div>
+			</div>
+
+			{/* Inner frame */}
+			<div className="bg-neutral-900 rounded-xl shadow-lg w-full h-full">
+				{children}
+			</div>
+
+			{/* Handles */}
+			<Handle 
+				type="target" 
+				position={Position.Left} 
+				style={{
+					width: '32px',
+					height: '32px',
+					background: 'black',
+					border: '3px solid white',
+					borderRadius: '50%',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					fontSize: '18px',
+					fontWeight: 'bold',
+					color: 'white',
+					left: '-19px',
+					opacity: showHandles ? 1 : 0,
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<Asterisk size={16} weight="bold" />
+			</Handle>
+			<Handle 
+				type="source" 
+				position={Position.Right} 
+				style={{
+					width: '32px',
+					height: '32px',
+					background: 'black',
+					border: '3px solid white',
+					borderRadius: '50%',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					fontSize: '18px',
+					fontWeight: 'bold',
+					color: 'white',
+					right: '-19px',
+					opacity: showHandles ? 1 : 0,
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<Asterisk size={16} weight="bold" />
+			</Handle>
+		</div>
+	);
+};
 
 const LogoNaked = ({ className }) => (
 	<svg viewBox="0 0 566 399" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -1021,6 +1172,7 @@ const initialNodes = [];
 	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
+	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
 
 	// This effect syncs the component's internal state with props from the parent canvas.
 	// It's crucial for when data is loaded or updated externally, preventing "stale state".
@@ -1324,28 +1476,37 @@ const initialNodes = [];
 
 	return (
 		<div 
-			className={`group bg-transparent border rounded-2xl p-2.5 transition-all duration-300 ease-in-out text-neutral-200 ${
+			className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
 				isConnectionDragOver 
-					? 'border-lime-400 ring-2 ring-lime-400/30 bg-lime-500/5' 
-					: 'border-neutral-600'
-			} ${
-				selected 
-					? 'border-lime-400' 
+					? 'ring-2 ring-lime-400/30 bg-lime-500/5' 
 					: ''
 			}`}
 			style={{ 
 				width: nodeWidth,
 				height: nodeHeight,
-				borderWidth: selected ? '1px' : isConnectionDragOver ? '1px' : '1px',
 				transition: 'width 0.3s ease, height 0.3s ease'
 			}}
 			onDragOver={handleConnectionDragOver}
 			onDragLeave={handleConnectionDragLeave}
 			onDrop={handleConnectionDrop}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
 		>
+			{/* Corner lines */}
+			<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+				<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[40px]"></div>
+			</div>
+			<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+				<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[40px]"></div>
+			</div>
+
+			{/* Media type label */}
+			<div className="absolute -top-2 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+				{data.type === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION'}
+			</div>
 
 			{/* Inner frame */}
-			<div className="bg-neutral-900 rounded-xl shadow-lg w-full h-full">
+			<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
 				{/* Node content */}
 				<div className="p-4 space-y-3 h-full flex flex-col">
 				{/* Header */}
@@ -1480,8 +1641,6 @@ const initialNodes = [];
 			</div>
 		</div>
 
-		<Handle type="target" position={Position.Left} className="" />
-			<Handle type="source" position={Position.Right} className="" />
 		</div>
 	);
 };
@@ -1490,6 +1649,74 @@ const initialNodes = [];
 const VideoUpload = React.memo(({ data, selected, id }) => {
 	const { videoUrl, fileName } = data;
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
+	const [actualVideoSize, setActualVideoSize] = useState(null);
+	const [isHovered, setIsHovered] = useState(false);
+	const [isPlaying, setIsPlaying] = useState(false);
+	const videoRef = useRef(null);
+	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
+
+	// Calculate dimensions based on actual video size when available
+	const getVideoDimensions = () => {
+		// If we have actual video dimensions, use production node sizing logic
+		if (actualVideoSize) {
+			const { width: actualWidth, height: actualHeight } = actualVideoSize;
+			
+			// Base size same as production nodes
+			const baseSize = 320;
+			
+			// Calculate aspect ratio from actual dimensions
+			const aspectRatio = actualWidth / actualHeight;
+			
+			// Apply production node sizing logic
+			if (aspectRatio > 1) {
+				// Landscape: fix height, scale width
+				return {
+					width: Math.round(baseSize * aspectRatio),
+					height: baseSize
+				};
+			} else {
+				// Portrait: fix width, scale height
+				return {
+					width: baseSize,
+					height: Math.round(baseSize / aspectRatio)
+				};
+			}
+		}
+		
+		// Default to 9:16 aspect ratio (same as production nodes)
+		const squareSize = 320;
+		return { width: squareSize, height: squareSize * (16/9) };
+	};
+
+	const { width: videoWidth, height: videoHeight } = getVideoDimensions();
+
+	// Load actual video dimensions when video URL is available
+	useEffect(() => {
+		if (videoUrl) {
+			const video = document.createElement('video');
+			video.onloadedmetadata = () => {
+				setActualVideoSize({ width: video.videoWidth, height: video.videoHeight });
+			};
+			video.src = videoUrl;
+		}
+	}, [videoUrl]);
+
+	// Handle video hover play/pause
+	const handleVideoHover = useCallback(() => {
+		if (videoRef.current) {
+			setIsHovered(true);
+			videoRef.current.play();
+			setIsPlaying(true);
+		}
+	}, []);
+
+	const handleVideoLeave = useCallback(() => {
+		if (videoRef.current) {
+			setIsHovered(false);
+			videoRef.current.pause();
+			setIsPlaying(false);
+		}
+	}, []);
 
 	// Handle node connection drag and drop for frames
 	const handleConnectionDragOver = (e) => {
@@ -1518,85 +1745,97 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 	if (videoUrl) {
 		return (
 			<div 
-				className={`bg-transparent border rounded-2xl p-2.5 group transition-all ${
-					selected ? 'ring-2 ring-neutral-400/30' : ''
+				className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
+					selected ? 'ring-10 ring-lime-400/30' : ''
 				} ${
-					isConnectionDragOver 
-						? 'border-lime-400 ring-2 ring-lime-400/30 bg-lime-500/5' 
-						: 'border-neutral-600'
+					isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''
 				}`}
-				style={{ width: 150, height: 243 }}
+				style={{ 
+					width: videoWidth,
+					height: videoHeight,
+					transition: 'width 0.3s ease, height 0.3s ease'
+				}}
 				onDragOver={handleConnectionDragOver}
 				onDragLeave={handleConnectionDragLeave}
 				onDrop={handleConnectionDrop}
+				onMouseEnter={handleMouseEnter}
+				onMouseLeave={handleMouseLeave}
 			>
-				{/* Inner frame */}
-				<div className="bg-neutral-900 rounded-xl shadow-lg h-full relative">
-				{selected && (
-					<div className="absolute -top-6 left-0 text-xs text-neutral-400 font-medium  duration-200 z-10">
-						Video Asset
-					</div>
-				)}
-				<div className="relative w-full h-full">
-					<video
-						src={videoUrl}
-						alt={fileName || 'Uploaded video'}
-						className="w-full h-full object-cover rounded-xl"
-						controls
-						loop
-						muted
-					/>
+				{/* Corner lines - 100px */}
+				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
 				</div>
-				<Handle type="target" position={Position.Left} className=" " />
-				<Handle type="source" position={Position.Right} className=" " />
+				
+				{/* Media type label - right after L line */}
+				<div className="absolute -top-1.5 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+					VIDEO UPLOAD
+				</div>
+				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+				</div>
+
+				<div className="h-full relative">
+					<div 
+						className="relative w-full h-full cursor-pointer"
+						onMouseEnter={handleVideoHover}
+						onMouseLeave={handleVideoLeave}
+					>
+						<video
+							ref={videoRef}
+							src={videoUrl}
+							alt={fileName || 'Uploaded video'}
+							className="w-full h-full object-cover"
+							style={{ borderRadius: '40px' }}
+							loop
+							muted
+						/>
+					</div>
+				</div>
 			</div>
-		</div>
 		);
 	}
 
-			// Initial state with standardized design
+		// Upload state with ImageUpload styling
 		return (
 			<div 
-				className={`group bg-transparent border rounded-2xl p-2.5 transition-all text-neutral-200 ${
-					selected ? 'ring-1 ring-white/30' : ''
+				className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
+					selected ? 'ring-10 ring-lime-400/30' : ''
 				} ${
-					isConnectionDragOver 
-						? 'border-lime-400 ring-2 ring-lime-400/30 bg-lime-500/5' 
-						: 'border-neutral-600'
+					isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''
 				}`}
-				style={{ width: 350 }}
+				style={{ 
+					width: videoWidth,
+					height: videoHeight,
+					transition: 'width 0.3s ease, height 0.3s ease'
+				}}
 				onDragOver={handleConnectionDragOver}
 				onDragLeave={handleConnectionDragLeave}
 				onDrop={handleConnectionDrop}
+				onMouseEnter={handleMouseEnter}
+				onMouseLeave={handleMouseLeave}
 			>
-			{/* Inner frame */}
-			<div className="bg-neutral-900 rounded-xl shadow-lg">
-				<div className="p-4 space-y-3">
-				<div className="flex justify-between items-center text-xs font-medium text-neutral-400 px-1">
-					<span>VIDEO 1</span>
-					<span>UPLOAD</span>
+				{/* Corner lines - 100px */}
+				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+				</div>
+				
+				{/* Media type label - right after L line */}
+				<div className="absolute -top-1.5 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+					VIDEO UPLOAD
+				</div>
+				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
 				</div>
 
-				<div className="space-y-1 text-sm pt-2">
-					<p className="text-neutral-500 px-2 pb-1">Try to...</p>
-					<div className="w-full text-left flex items-center gap-3 hover:bg-neutral-700/50 p-2 rounded-lg transition-colors">
-						<Upload size={16} /> Upload a video
-					</div>
-				</div>
-				<div className="relative bg-neutral-800/50 rounded-lg">
-					<p className="text-neutral-400 text-sm p-3 pr-20">Drag and drop your video file here</p>
-					<div className="absolute right-2 bottom-2 flex items-center gap-2">
-						<span className="bg-black/50 text-xs font-bold rounded-full px-2 py-1">1×</span>
-						<button className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors">
-							<ArrowUp size={16} weight="bold" />
-						</button>
-					</div>
+				<div 
+					className="flex flex-col items-center justify-center h-full text-neutral-400 hover:bg-neutral-700/50 transition-colors cursor-pointer"
+					style={{ borderRadius: '40px' }}
+				>
+					<Upload size={32} className="mb-2" />
+					<span className="text-sm font-medium">Upload Video</span>
+					<span className="text-xs mt-1">Click or drag here</span>
 				</div>
 			</div>
-		</div>
-		<Handle type="target" position={Position.Left} className=" " />
-		<Handle type="source" position={Position.Right} className=" " />
-	</div>
 	);
 });
 
@@ -1604,15 +1843,54 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 	const [imageUrl, setImageUrl] = useState(data.imageUrl || null);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
+	const [actualImageSize, setActualImageSize] = useState(null);
 	const fileInputRef = useRef(null);
 
-	// Calculate dimensions based on uploaded image aspect ratio or default
+	// Calculate dimensions based on actual image size when available
 	const getImageDimensions = () => {
-		// Default to 9:16 aspect ratio
-		return { width: 190, height: 250 };
+		// If we have actual image dimensions, use production node sizing logic
+		if (actualImageSize) {
+			const { width: actualWidth, height: actualHeight } = actualImageSize;
+			
+			// Base size same as production nodes
+			const baseSize = 320;
+			
+			// Calculate aspect ratio from actual dimensions
+			const aspectRatio = actualWidth / actualHeight;
+			
+			// Apply production node sizing logic
+			if (aspectRatio > 1) {
+				// Landscape: fix height, scale width
+				return {
+					width: Math.round(baseSize * aspectRatio),
+					height: baseSize
+				};
+			} else {
+				// Portrait: fix width, scale height
+				return {
+					width: baseSize,
+					height: Math.round(baseSize / aspectRatio)
+				};
+			}
+		}
+		
+		// Default to 9:16 aspect ratio (same as production nodes)
+		const squareSize = 320;
+		return { width: squareSize, height: squareSize * (16/9) };
 	};
 
 	const { width: imageWidth, height: imageHeight } = getImageDimensions();
+
+	// Load actual image dimensions when image URL is available
+	useEffect(() => {
+		if (imageUrl) {
+			const img = document.createElement('img');
+			img.onload = () => {
+				setActualImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+			};
+			img.src = imageUrl;
+		}
+	}, [imageUrl]);
 
 	const handleImageUpload = (file) => {
 		if (file && file.type.startsWith('image/')) {
@@ -1652,36 +1930,81 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 	};
 
 
-
 	// If image uploaded, show it
 	if (imageUrl) {
 		return (
 			<div 
-				className={`bg-transparent group transition-all relative rounded-2xl ${
-					isConnectionDragOver 
-						? 'ring-2 ring-lime-400/30 bg-lime-500/5' 
-						: ''
+				className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
+					selected ? 'ring-10 ring-lime-400/30' : ''
 				} ${
-					selected 
-						? 'border border-lime-400' 
-						: 'border-transparent'
+					isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''
 				}`}
-				style={{ borderWidth: selected ? '1px' : '0px', width: imageWidth, height: imageHeight }}
+				style={{ 
+					width: imageWidth,
+					height: imageHeight,
+					transition: 'width 0.3s ease, height 0.3s ease'
+				}}
 				onDragOver={handleConnectionDragOver}
 				onDragLeave={handleConnectionDragLeave}
 				onDrop={handleConnectionDrop}
 			>
+				{/* Corner lines - 100px */}
+				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+				</div>
+				
+				{/* Media type label - right after L line */}
+				<div className="absolute -top-1.5 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+					IMAGE UPLOAD
+				</div>
+				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+				</div>
+
+				<div className="h-full relative">
 					<img 
 						src={imageUrl} 
 						alt="Uploaded" 
-					className="w-full h-full object-cover rounded-2xl"
+						className="w-full h-full object-cover"
+						style={{ borderRadius: '40px' }}
 					/>
 					<button
 						onClick={() => fileInputRef.current?.click()}
-					className="absolute top-2 right-2 w-8 h-8 bg-black/70 text-white rounded-full flex items-center justify-center hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-all"
+						className="absolute top-4 right-4 w-10 h-10 bg-black/70 text-white rounded-full flex items-center justify-center hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-all"
 					>
-					<PencilSimple size={16} />
+						<ArrowsClockwise size={16} />
 					</button>
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*"
+						onChange={(e) => handleImageUpload(e.target.files[0])}
+						className="hidden"
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	// Upload state
+	return (
+		<NodeWrapper 
+			selected={selected} 
+			width={imageWidth} 
+			height={imageHeight}
+			nodeType="IMAGE UPLOAD"
+			onDragOver={handleConnectionDragOver}
+			onDragLeave={handleConnectionDragLeave}
+			onDrop={handleConnectionDrop}
+			className={`cursor-pointer ${isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''}`}
+		>
+			<div 
+				className="flex flex-col items-center justify-center h-full text-neutral-400 hover:bg-neutral-700/50 rounded-xl transition-colors"
+				onClick={() => fileInputRef.current?.click()}
+			>
+				<Upload size={32} className="mb-2" />
+				<span className="text-sm font-medium">Upload Image</span>
+				<span className="text-xs mt-1">Click or drag here</span>
 				<input
 					ref={fileInputRef}
 					type="file"
@@ -1689,45 +2012,8 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 					onChange={(e) => handleImageUpload(e.target.files[0])}
 					className="hidden"
 				/>
-				<Handle type="source" position={Position.Right} className=" " />
-				<Handle type="target" position={Position.Left} className=" " />
-		</div>
-		);
-	}
-
-	// Upload state
-		return (
-		<div 
-			className={`bg-neutral-900 group transition-all cursor-pointer relative border-2 border-dashed border-neutral-600/60 hover:bg-neutral-700/50 rounded-2xl ${
-				isConnectionDragOver 
-					? 'ring-2 ring-lime-400/30 bg-lime-500/5 border-lime-400' 
-					: ''
-			} ${
-				selected 
-					? 'ring-1 ring-lime-400' 
-					: ''
-			}`}
-			style={{ width: imageWidth, height: imageHeight }}
-			onClick={() => fileInputRef.current?.click()}
-			onDragOver={handleConnectionDragOver}
-			onDragLeave={handleConnectionDragLeave}
-			onDrop={handleConnectionDrop}
-		>
-			<div className="flex flex-col items-center justify-center h-full text-neutral-400">
-				<Upload size={32} className="mb-2" />
-				<span className="text-sm font-medium">Upload Image</span>
-				<span className="text-xs mt-1">Click or drag here</span>
-					</div>
-			 <input
-				ref={fileInputRef}
-				type="file"
-				accept="image/*"
-				onChange={(e) => handleImageUpload(e.target.files[0])}
-				className="hidden"
-			/>
-			<Handle type="source" position={Position.Right} className=" " />
-			<Handle type="target" position={Position.Left} className=" " />
-	</div>
+			</div>
+		</NodeWrapper>
 	);
 });
 
@@ -1738,39 +2024,105 @@ const GeneratedFrame = ({ data, id, selected }) => {
 	const mediaUrl = videoUrl || imageUrl;
 	const isVideo = !!videoUrl;
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
+	const [actualMediaSize, setActualMediaSize] = useState(null);
+	const [isHovered, setIsHovered] = useState(false);
+	const [isPlaying, setIsPlaying] = useState(false);
+	const videoRef = useRef(null);
+	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
 
-	// Calculate dimensions based on aspect ratio (same system as AIFrame)
+	// Calculate dimensions based on actual media size when available
 	const getMediaDimensions = () => {
+		// If we have actual media dimensions, use production node sizing logic
+		if (actualMediaSize) {
+			const { width: actualWidth, height: actualHeight } = actualMediaSize;
+			
+			// Base size same as production nodes
+			const baseSize = 320;
+			
+			// Calculate aspect ratio from actual dimensions
+			const aspectRatio = actualWidth / actualHeight;
+			
+			// Apply production node sizing logic
+			if (aspectRatio > 1) {
+				// Landscape: fix height, scale width
+				return {
+					width: Math.round(baseSize * aspectRatio),
+					height: baseSize
+				};
+			} else {
+				// Portrait: fix width, scale height
+				return {
+					width: baseSize,
+					height: Math.round(baseSize / aspectRatio)
+				};
+			}
+		}
+		
+		// Fallback to aspect ratio based calculation (same as production nodes)
 		const aspectRatio = formData?.aspect_ratio || '9:16';
 		
-		// Base dimensions: 1:1 = 240x240 (square as reference for media)
-		const squareSize = 240;
+		// Base dimensions: 1:1 = 320x320 (same as production nodes)
+		const squareSize = 320;
 		
 		switch(aspectRatio) {
 			case '16:9':
-				return { width: squareSize * (16/9), height: squareSize }; // ~427x240
+				return { width: squareSize * (16/9), height: squareSize }; // ~568x320
 			case '1:1':
-				return { width: squareSize, height: squareSize }; // 240x240
+				return { width: squareSize, height: squareSize }; // 320x320
 			case '4:3':
-				return { width: squareSize * (4/3), height: squareSize }; // ~320x240
+				return { width: squareSize * (4/3), height: squareSize }; // ~427x320
 			case '3:4':
-				return { width: squareSize, height: squareSize * (4/3) }; // 240x320
+				return { width: squareSize, height: squareSize * (4/3) }; // 320x427
 			case '9:16':
-				return { width: squareSize, height: squareSize * (16/9) }; // 240x427
+				return { width: squareSize, height: squareSize * (16/9) }; // 320x568
 			case '3:2':
-				return { width: squareSize * (3/2), height: squareSize }; // 360x240
+				return { width: squareSize * (3/2), height: squareSize }; // 480x320
 			case '2:3':
-				return { width: squareSize, height: squareSize * (3/2) }; // 240x360
+				return { width: squareSize, height: squareSize * (3/2) }; // 320x480
 			case '21:9':
-				return { width: squareSize * (21/9), height: squareSize }; // ~560x240
+				return { width: squareSize * (21/9), height: squareSize }; // ~747x320
 			case '9:21':
-				return { width: squareSize, height: squareSize * (21/9) }; // 240x560
+				return { width: squareSize, height: squareSize * (21/9) }; // 320x747
 			default:
 				return { width: squareSize, height: squareSize * (16/9) }; // Default to 9:16
 		}
 	};
 
 	const { width: mediaWidth, height: mediaHeight } = getMediaDimensions();
+
+	// Load actual media dimensions when media URL is available
+	useEffect(() => {
+		if (mediaUrl && !isVideo) {
+			const img = document.createElement('img');
+			img.onload = () => {
+				setActualMediaSize({ width: img.naturalWidth, height: img.naturalHeight });
+			};
+			img.src = mediaUrl;
+		} else if (mediaUrl && isVideo) {
+			const video = document.createElement('video');
+			video.onloadedmetadata = () => {
+				setActualMediaSize({ width: video.videoWidth, height: video.videoHeight });
+			};
+			video.src = mediaUrl;
+		}
+	}, [mediaUrl, isVideo]);
+
+	// Handle video hover play/pause
+	const handleVideoHover = useCallback(() => {
+		if (videoRef.current && isVideo) {
+			setIsHovered(true);
+			videoRef.current.play();
+			setIsPlaying(true);
+		}
+	}, [isVideo]);
+
+	const handleVideoLeave = useCallback(() => {
+		if (videoRef.current && isVideo) {
+			setIsHovered(false);
+			videoRef.current.pause();
+			setIsPlaying(false);
+		}
+	}, [isVideo]);
 
 	// Handle node connection drag and drop for frames
 	const handleConnectionDragOver = (e) => {
@@ -1797,17 +2149,12 @@ const GeneratedFrame = ({ data, id, selected }) => {
 
 	return (
 		<div 
-			className={`bg-transparent group relative z-10 flex flex-col items-center generated-frame-node transition-all ${
+			className={`bg-transparent group relative z-10 flex flex-col items-center generated-frame-node transition-all p-4 ${
 				isConnectionDragOver 
 					? 'ring-2 ring-lime-400/30 bg-lime-500/5' 
 					: ''
-			} ${
-				selected 
-					? 'border border-lime-400' 
-					: 'border-transparent'
 			}`}
 			style={{ 
-				borderWidth: selected ? '1px' : '0px',
 				width: `${mediaWidth}px`,
 				height: `${mediaHeight}px`,
 				transition: 'width 0.3s ease, height 0.3s ease'
@@ -1815,20 +2162,31 @@ const GeneratedFrame = ({ data, id, selected }) => {
 			onDragOver={handleConnectionDragOver}
 			onDragLeave={handleConnectionDragLeave}
 			onDrop={handleConnectionDrop}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
 		>
+			{/* Media type label - right after L line */}
+			{mediaUrl && (
+				<div className="absolute -top-1.5 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+					{isVideo ? 'VIDEO ASSET' : 'IMAGE ASSET'}
+				</div>
+			)}
+			
+			{/* Corner lines - 100px */}
+			{mediaUrl && (
+				<>
+					<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+						<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+					</div>
+					<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+						<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+					</div>
+				</>
+			)}
+			
 			{/* Inner frame */}
 			<div className="relative w-full h-full">
 			{/* Connection handles - hidden until hover, higher z-index */}
-			<Handle 
-				type="target" 
-				position={Position.Left} 
-				className="  " 
-			/>
-			<Handle 
-				type="source" 
-				position={Position.Right} 
-				className="  " 
-			/>
 			
 			{/* Media frame with dynamic aspect ratio */}
 			<div 
@@ -1850,21 +2208,30 @@ const GeneratedFrame = ({ data, id, selected }) => {
 					</div>
 				) : mediaUrl ? (
 					isVideo ? (
-						<video 
-							src={mediaUrl} 
-							alt={prompt || 'Generated video'}
-							className="w-full h-full object-cover rounded-2xl"
-							controls
-							muted
-							autoPlay
-							loop
-						/>
+						<div 
+							className="h-full relative cursor-pointer"
+							onMouseEnter={handleVideoHover}
+							onMouseLeave={handleVideoLeave}
+						>
+							<video 
+								ref={videoRef}
+								src={mediaUrl} 
+								alt={prompt || 'Generated video'}
+								className="w-full h-full object-cover"
+								style={{ borderRadius: '40px', transition: 'opacity 0.3s ease' }}
+								muted
+								loop
+							/>
+						</div>
 					) : (
-						<img 
-							src={mediaUrl}
-							alt={prompt || 'Generated image'}
-							className="w-full h-full object-cover rounded-2xl"
-						/>
+						<div className="h-full relative">
+							<img 
+								src={mediaUrl}
+								alt={prompt || 'Generated image'}
+								className="w-full h-full object-cover"
+								style={{ borderRadius: '40px' }}
+							/>
+						</div>
 					)
 				) : (
 					<div className="w-full h-full flex items-center justify-center bg-neutral-900 text-neutral-500">
@@ -1876,332 +2243,6 @@ const GeneratedFrame = ({ data, id, selected }) => {
 	</div>
 	);
 };
-
-
-
-// Individual Background Selection Node - Choose background for specific slide
-const BackgroundSelectNode = React.memo(({ data, id, onUpdateBackground, onUpdateSlideText }) => {
-	const [selectedBg, setSelectedBg] = useState(data.selectedBackgroundUrl || '');
-	const [slideText, setSlideText] = useState(data.slideText || '');
-	const [activeFilter, setActiveFilter] = useState('backgrounds');
-	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
-	const { user } = useOutletContext() || {};
-	const [content, setContent] = useState([]);
-	const [isLoading, setIsLoading] = useState(true);
-
-	// Handle node connection drag and drop for frames
-	const handleConnectionDragOver = (e) => {
-		if (e.dataTransfer.types.includes('application/reactflow')) {
-			e.preventDefault();
-			e.stopPropagation();
-			setIsConnectionDragOver(true);
-		}
-	};
-
-	const handleConnectionDragLeave = (e) => {
-		e.preventDefault();
-		e.stopPropagation();
-		setIsConnectionDragOver(false);
-	};
-
-	const handleConnectionDrop = (e) => {
-		if (e.dataTransfer.types.includes('application/reactflow')) {
-			e.preventDefault();
-			e.stopPropagation();
-			setIsConnectionDragOver(false);
-		}
-	};
-
-	// Fetch content based on filter
-	useEffect(() => {
-		const fetchContent = async () => {
-			if (!user) return;
-			
-			setIsLoading(true);
-			try {
-				let collectionName = 'backgrounds';
-				let imageField = 'imageUrl';
-				
-				switch(activeFilter) {
-					case 'images':
-						collectionName = 'generations';
-						imageField = 'imageUrl';
-						break;
-					case 'videos':
-						collectionName = 'generations';
-						imageField = 'videoUrl';
-						break;
-					default:
-						collectionName = 'backgrounds';
-						imageField = 'imageUrl';
-				}
-
-				const contentQuery = query(
-					collection(db, 'users', user.uid, collectionName),
-					orderBy('createdAt', 'desc'),
-					limit(6)
-				);
-				const contentSnapshot = await getDocs(contentQuery);
-				const fetchedContent = contentSnapshot.docs.map(doc => ({
-					id: doc.id,
-					imageUrl: doc.data()[imageField],
-					type: activeFilter,
-					...doc.data()
-				})).filter(item => item.imageUrl); // Only items with images
-				
-				setContent(fetchedContent);
-			} catch (error) {
-				console.error('Error fetching content:', error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		fetchContent();
-	}, [user, activeFilter]);
-
-	const handleBackgroundSelect = (backgroundUrl) => {
-		setSelectedBg(backgroundUrl);
-		if (onUpdateBackground) {
-			onUpdateBackground(data.slideIndex, backgroundUrl);
-		}
-	};
-
-	const handleTextChange = (newText) => {
-		setSlideText(newText);
-		if (onUpdateSlideText) {
-			onUpdateSlideText(data.slideIndex, newText);
-		}
-	};
-
-	const filters = [
-		{ id: 'backgrounds', name: 'BG', icon: '🖼️' },
-		{ id: 'images', name: 'IMG', icon: '📸' },
-		{ id: 'videos', name: 'VID', icon: '🎬' }
-	];
-
-	return (
-		<div 
-			className={`bg-transparent border rounded-2xl p-2.5 w-[190px] text-white font-sans relative group transition-all ${
-				isConnectionDragOver 
-					? 'border-lime-400 ring-2 ring-lime-400/30 bg-lime-500/5' 
-					: 'border-neutral-600'
-			}`}
-			onDragOver={handleConnectionDragOver}
-			onDragLeave={handleConnectionDragLeave}
-			onDrop={handleConnectionDrop}
-		>
-			<Handle type="target" position={Position.Right} className="  " />
-			<Handle type="source" position={Position.Bottom} className="  " />
-			
-			{/* Inner frame */}
-			<div className="rounded-xl overflow-hidden relative p-3" style={{ width: '100%', height: '320px' }}>
-				{/* Header */}
-				<div className="flex items-center gap-2 mb-3">
-					<div className="w-3 h-3 bg-lime-500 rounded-full shadow-lg"></div>
-					<span className="text-xs font-bold text-lime-400 tracking-wide">
-						SLIDE {data.slideIndex + 1}
-					</span>
-					<div className="flex-1 h-px bg-gradient-to-r from-lime-500/50 to-transparent"></div>
-				</div>
-
-				{/* Filter Tabs */}
-				<div className="flex gap-1 mb-3">
-					{filters.map((filter) => (
-						<button
-							key={filter.id}
-							onClick={() => setActiveFilter(filter.id)}
-							className={`flex-1 py-1.5 px-1 rounded text-xs font-bold transition-all ${
-								activeFilter === filter.id
-									? 'bg-lime-500 text-black'
-									: 'bg-neutral-700 text-lime-400 hover:bg-neutral-600'
-							}`}
-						>
-							{filter.name}
-						</button>
-					))}
-				</div>
-				
-				{/* Content Grid - 3:4 aspect ratio */}
-				<div 
-					className="h-[160px] overflow-y-auto mb-3"
-					onWheel={(e) => e.stopPropagation()}
-				>
-					{isLoading ? (
-						<div className="flex items-center justify-center h-full">
-							<div className="w-4 h-4 border-2 border-lime-500/30 border-t-lime-500 rounded-full animate-spin"></div>
-						</div>
-					) : (
-						<div className="grid grid-cols-2 gap-1.5">
-							{content.map((item) => (
-								<button
-									key={item.id}
-									onClick={() => handleBackgroundSelect(item.imageUrl)}
-									className={`relative aspect-[3/4] rounded-md overflow-hidden border-2 transition-all ${
-										selectedBg === item.imageUrl 
-											? 'border-lime-500 ring-1 ring-lime-500/30' 
-											: 'border-neutral-600 hover:border-neutral-500'
-									}`}
-								>
-									<img 
-										src={item.imageUrl} 
-										alt={item.name || 'Content'}
-										className="w-full h-full object-cover"
-									/>
-									{selectedBg === item.imageUrl && (
-										<div className="absolute inset-0 bg-lime-500/20 flex items-center justify-center">
-											<div className="w-3 h-3 bg-lime-500 rounded-full flex items-center justify-center">
-												<div className="w-1 h-1 bg-black rounded-full"></div>
-											</div>
-										</div>
-									)}
-								</button>
-							))}
-						</div>
-					)}
-				</div>
-
-				{/* Text Editor */}
-				<div className="space-y-2">
-					<div className="flex items-center gap-2">
-						<div className="w-2 h-2 bg-lime-500 rounded-full"></div>
-						<span className="text-xs font-bold text-lime-400">TEXT</span>
-					</div>
-					<textarea
-						value={slideText}
-						onChange={(e) => handleTextChange(e.target.value)}
-						onMouseDown={(e) => e.stopPropagation()}
-						className="w-full h-[80px] p-2 rounded-lg border border-neutral-600 bg-neutral-700/50 text-white placeholder-neutral-400 focus:border-lime-500 focus:outline-none focus:ring-1 focus:ring-lime-500/30 resize-none transition-all text-xs leading-relaxed"
-						placeholder={`Text for slide ${data.slideIndex + 1}...`}
-					/>
-					<div className="text-xs text-neutral-400 text-right">
-						{slideText.length} chars
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-});
-
-// Background Preview Node - Large 9:16 preview (read-only preview)
-const BackgroundPreviewNode = React.memo(({ data, id, onSaveAll, currentBackgroundUrls, currentSlideTexts }) => {
-	const [activeSlide, setActiveSlide] = useState(0);
-	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
-	
-	// Handle node connection drag and drop for frames
-	const handleConnectionDragOver = (e) => {
-		if (e.dataTransfer.types.includes('application/reactflow')) {
-			e.preventDefault();
-			e.stopPropagation();
-			setIsConnectionDragOver(true);
-		}
-	};
-
-	const handleConnectionDragLeave = (e) => {
-		e.preventDefault();
-		e.stopPropagation();
-		setIsConnectionDragOver(false);
-	};
-
-	const handleConnectionDrop = (e) => {
-		if (e.dataTransfer.types.includes('application/reactflow')) {
-			e.preventDefault();
-			e.stopPropagation();
-			setIsConnectionDragOver(false);
-		}
-	};
-	
-	// Get the current background for active slide
-	const currentBg = currentBackgroundUrls?.[activeSlide] || data.backgroundUrls?.[activeSlide] || data.backgroundUrl || '';
-	
-	// Get the current text for active slide
-	const currentText = currentSlideTexts?.[activeSlide] || data.slideTexts?.[activeSlide] || '';
-
-	return (
-		<div 
-			className={`bg-transparent border rounded-2xl p-2.5 w-[290px] text-white font-sans relative group transition-all ${
-				isConnectionDragOver 
-					? 'border-lime-400 ring-2 ring-lime-400/30 bg-lime-500/5' 
-					: 'border-neutral-600'
-			}`}
-			onDragOver={handleConnectionDragOver}
-			onDragLeave={handleConnectionDragLeave}
-			onDrop={handleConnectionDrop}
-		>
-			<Handle type="target" position={Position.Left} className="  " />
-			<Handle type="source" position={Position.Right} className="  " />
-			
-			{/* Inner frame */}
-			<div className="rounded-xl overflow-hidden relative p-4" style={{ width: '100%', height: '540px' }}>
-				{/* Header */}
-				<div className="flex items-center gap-2 mb-4">
-					<div className="w-3 h-3 bg-lime-500 rounded-full shadow-lg"></div>
-					<span className="text-sm font-bold text-lime-400 tracking-wide">
-						SLIDESHOW PREVIEW
-					</span>
-					<div className="flex-1 h-px bg-gradient-to-r from-lime-500/50 to-transparent"></div>
-				</div>
-
-				{/* Slide Navigation */}
-				<div className="flex gap-1 mb-4">
-					{[0, 1, 2, 3].map((index) => (
-						<button
-							key={index}
-							onClick={() => setActiveSlide(index)}
-							className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all ${
-								activeSlide === index
-									? 'bg-lime-500 text-black'
-									: 'bg-neutral-700 text-lime-400 hover:bg-neutral-600'
-							}`}
-						>
-							{index + 1}
-						</button>
-					))}
-				</div>
-				
-				{/* 9:16 Background Preview */}
-				<div className="relative w-full aspect-[9/16] rounded-lg overflow-hidden mb-4 bg-neutral-800">
-					{currentBg ? (
-						<img 
-							src={currentBg} 
-							alt={`Background ${activeSlide + 1}`}
-							className="w-full h-full object-cover"
-						/>
-					) : (
-						<div className="w-full h-full flex items-center justify-center text-neutral-500">
-							<span className="text-xs">No background selected</span>
-						</div>
-					)}
-					
-					{/* Text Display Overlay (Read-only) */}
-					{currentText && (
-						<div className="absolute inset-0 p-4 flex flex-col justify-center pointer-events-none">
-							<div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-lime-500/30">
-								<p className="text-white text-sm leading-relaxed text-center">
-									{currentText}
-								</p>
-							</div>
-						</div>
-					)}
-				</div>
-
-				{/* Status Info */}
-				<div className="text-xs text-neutral-400 text-center mb-4">
-					Slide {activeSlide + 1} of 4 {currentText && `• ${currentText.length} chars`}
-				</div>
-
-				{/* Save Button */}
-				<button
-					onClick={() => onSaveAll && onSaveAll()}
-					className="w-full bg-lime-500 hover:bg-lime-400 text-black py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-bold transition-all shadow-lg"
-				>
-					<Lightning size={16} weight="bold" />
-					Save All Changes
-				</button>
-			</div>
-		</div>
-	);
-});
 
 
 
@@ -3898,7 +3939,7 @@ const CanvasWorkspace = () => {
 				// White solid edges for generation nodes
 				edgeStyle = {
 					stroke: '#ffffff',
-					strokeWidth: 8,
+					strokeWidth: 1,
 					strokeDasharray: undefined,
 					background: '#ffffff',
 					borderRadius: '1000px 0 0 1000px'
@@ -3906,8 +3947,8 @@ const CanvasWorkspace = () => {
 			} else if (isGeneratedConnection) {
 				// Green dashed edges for generated content
 				edgeStyle = {
-					stroke: '#22c55e',
-					strokeWidth: 12,
+					stroke: '#ffffffff',
+					strokeWidth: 1,
 					strokeDasharray: '5,5',
 					background: '#ffffff',
 					borderRadius: '1000px 0 0 1000px'
@@ -3916,7 +3957,7 @@ const CanvasWorkspace = () => {
 				// Default subtle edges
 				edgeStyle = {
 					stroke: 'rgba(255, 255, 255, 0.4)',
-					strokeWidth: 8,
+					strokeWidth: 1,
 					strokeDasharray: undefined,
 					background: '#ffffff',
 					borderRadius: '1000px 0 0 1000px'
@@ -4148,6 +4189,8 @@ const CanvasWorkspace = () => {
 				selectionOnDrag={!isAnyDropdownOpen && !isInputFocused}
 				panOnDrag={!isAnyDropdownOpen && !isInputFocused}
 				nodesDraggable={!isInputFocused}
+				nodesFocusable={false}
+				selectNodesOnDrag={false}
 				selectionKeyCode={'Shift'}
 				minZoom={0.1}
 				defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -4159,7 +4202,7 @@ const CanvasWorkspace = () => {
 					animated: false,
 					style: {
 						stroke: '#00f5ff',
-						strokeWidth: 4,
+						strokeWidth: 1,
 						strokeLinecap: 'round',
 					},
 					markerEnd: {
@@ -4170,8 +4213,8 @@ const CanvasWorkspace = () => {
 					},
 				}}
 				connectionLineStyle={{
-					stroke: '#8b5cf6',
-					strokeWidth: 4,
+					stroke: '#ffffffff',
+					strokeWidth: 1,
 					strokeLinecap: 'round',
 				}}
 				connectionLineType="simplebezier"
@@ -4191,7 +4234,7 @@ const CanvasWorkspace = () => {
 						</feMerge>
 					</filter>
 				</defs>
-				<Background variant="dots" gap={24} size={1.5} color="#606060" />
+				<Background variant="dots" gap={24} size={1.5} color="#303030" />
 			</ReactFlow>
 
 				{/* Right-click/Double-click menu for creating nodes */}

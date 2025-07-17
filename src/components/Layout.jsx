@@ -66,13 +66,6 @@ const planPriceMap = {
 function Layout() {
   const user = auth.currentUser;
   const navigate = useNavigate();
-  
-  // Redirect to signup if user is not logged in
-  useEffect(() => {
-    if (!user) {
-      navigate('/signup');
-    }
-  }, [user, navigate]);
   const location = useLocation(); // Mevcut konum bilgisini almak için
   const chatInputRef = useRef(null);
   const [isChatInputVisible, setIsChatInputVisible] = useState(false); // State for chat input visibility
@@ -1564,12 +1557,12 @@ function Layout() {
       {user && firestoreUserData && (
         <div 
           onClick={() => setIsBillingModalOpen(true)}
-          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
+          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-900 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
         >
           <img 
-            src="/logonaked-white.png"
+            src="/logonaked.png"
             alt="Lungo AI Logo"
-            className="h-2.5 w-auto opacity-80 transform rotate-90"
+            className="h-2.5 w-auto"
           />
           <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
             {firestoreUserData.general_credits?.toLocaleString() || '0'}

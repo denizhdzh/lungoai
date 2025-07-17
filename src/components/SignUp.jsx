@@ -69,6 +69,9 @@ function SignUp() {
 
   return (
     <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+      {/* Dot Grid Background */}
+      <div className="absolute inset-0 h-full w-full bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
+      
       {/* Animated background grid */}
       <div className="absolute inset-0 z-0">
         <div className="grid-animation"></div>

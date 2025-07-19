@@ -191,6 +191,8 @@ export const generateImage = async ({
   subtype, // New subtype parameter (ugc_character, background, general)
   selectedFrame = null, // Selected frame for style rules
   connectedImages = [], // Array of connected image URLs
+  model = 'google/imagen-4', // AI model to use
+  aspectRatio = '9:16', // Aspect ratio for the image
   // Legacy parameters for backward compatibility
   image_subject, 
   subject_description, 
@@ -233,6 +235,18 @@ export const generateImage = async ({
       originalPrompt: prompt,
       subtype: subtype,
       selectedFrame: selectedFrame,
+      model: model,
+      aspectRatio: aspectRatio,
+      // Add legacy fallback parameters if needed
+      ...(subtype === 'ugc_character' && !subject_description && { 
+        subject_description: prompt || 'person' 
+      }),
+      ...(subtype === 'background' && !scene_description && { 
+        scene_description: prompt || 'background scene' 
+      }),
+      ...(subtype === 'general' && !image_subject && { 
+        image_subject: prompt || 'general image' 
+      }),
     };
 
     console.log('Sending request to `generateImage` with data:', requestData);

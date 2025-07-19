@@ -1169,7 +1169,7 @@ const initialNodes = [];
 	const [subtype, setSubtype] = useState(formData.subtype || 'general');
 	const [selectedFrame, setSelectedFrame] = useState(formData.selectedFrame || null);
 	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? 5 : 3));
-	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
+	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe'));
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
@@ -1181,7 +1181,7 @@ const initialNodes = [];
 			setSubtype(formData.subtype || (data.type === 'image' ? 'general' : 'text_to_video'));
 			setSelectedFrame(formData.selectedFrame || null);
 			setDuration(formData.duration || 3);
-			setModel(formData.model || 'google/imagen-4');
+			setModel(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe'));
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
 	}, [formData.subtype, formData.selectedFrame, formData.duration, formData.model, data.type]);
@@ -1564,19 +1564,107 @@ const initialNodes = [];
 					</div>
 				)}
 
-				<div className="space-y-1 text-sm pt-2">
-					<p className="text-neutral-500 px-2 pb-1">Try to...</p>
-					<div className="w-full text-left flex items-center gap-3 p-2 rounded-lg text-neutral-300">
-						<IconComponent size={16} /> Generate {config?.label || 'Content'}
-					</div>
-					{data.type === 'image' && (
-						<div className="w-full text-left flex items-center gap-3 hover:bg-neutral-700/50 p-2 rounded-lg transition-colors cursor-pointer"
-							onClick={() => fileInputRef.current?.click()}
-						>
-							<Upload size={16} /> Upload an image
+				{/* Compact Generation Controls */}
+				{!isGenerating && (
+					<div className="space-y-2">
+						{/* Model Selection */}
+						<div className="space-y-1">
+							<label className="text-[10px] text-neutral-500 block px-1">AI Model</label>
+							<select
+								value={model}
+								onChange={(e) => setModel(e.target.value)}
+								onFocus={() => onDropdownStateChange?.(true)}
+								onBlur={() => onDropdownStateChange?.(false)}
+								className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+							>
+								{data.type === 'image' ? (
+									<>
+										<option value="lungo-vibe">Lungo Vibe ✨</option>
+										<option value="google/imagen-4">Google Imagen 4</option>
+										<option value="google/imagen-4-ultra">Google Imagen 4 Ultra</option>
+										<option value="black-forest-labs/flux-kontext-pro">Flux Kontext Pro</option>
+										<option value="black-forest-labs/flux-kontext-max">Flux Kontext Max</option>
+										<option value="ideogram-ai/ideogram-v3-quality">Ideogram V3 Quality</option>
+									</>
+								) : (
+									<>
+										<option value="google/veo-3-fast">Google Veo 3 Fast</option>
+										<option value="google/veo-3">Google Veo 3</option>
+										<option value="google/veo-2">Google Veo 2</option>
+										<option value="bytedance/seedance-1-pro">ByteDance SeeDance Pro</option>
+										<option value="kwaivgi/kling-v2.1">KwaiVGI Kling v2.1</option>
+										<option value="minimax/hailuo-02">MiniMax Hailuo 02</option>
+									</>
+								)}
+							</select>
 						</div>
-					)}
-				</div>
+
+						{/* Settings Row */}
+						<div className="flex gap-2">
+							{/* Aspect Ratio */}
+							<div className="flex-1">
+								<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
+								<select
+									value={formData?.aspect_ratio || '9:16'}
+									onChange={(e) => {
+										const currentFormData = formData || {};
+										onUpdateNode(id, { 
+											formData: { ...currentFormData, aspect_ratio: e.target.value }
+										});
+									}}
+									onFocus={() => onDropdownStateChange?.(true)}
+									onBlur={() => onDropdownStateChange?.(false)}
+									className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+								>
+									<option value="1:1">1:1</option>
+									<option value="4:3">4:3</option>
+									<option value="3:4">3:4</option>
+									<option value="16:9">16:9</option>
+									<option value="9:16">9:16</option>
+								</select>
+							</div>
+
+							{/* Duration for videos */}
+							{data.type === 'video' && (
+								<div className="flex-1">
+									<label className="text-[10px] text-neutral-500 block px-1 mb-1">Duration</label>
+									<select
+										value={duration}
+										onChange={(e) => setDuration(parseInt(e.target.value))}
+										onFocus={() => onDropdownStateChange?.(true)}
+										onBlur={() => onDropdownStateChange?.(false)}
+										className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+									>
+										<option value={3}>3s</option>
+										<option value={5}>5s</option>
+										<option value={6}>6s</option>
+										<option value={7}>7s</option>
+										<option value={8}>8s</option>
+										<option value={10}>10s</option>
+									</select>
+								</div>
+							)}
+						</div>
+
+						{/* Frame Selection - Only for Lungo Vibe model */}
+						{data.type === 'image' && model === 'lungo-vibe' && (
+							<div className="space-y-1">
+								<label className="text-[10px] text-neutral-500 block px-1">Style Frame</label>
+								<select
+									value={selectedFrame || 'late_night_lofi'}
+									onChange={(e) => setSelectedFrame(e.target.value)}
+									onFocus={() => onDropdownStateChange?.(true)}
+									onBlur={() => onDropdownStateChange?.(false)}
+									className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+								>
+									<option value="late_night_lofi">Late Night Lo-Fi Vibes</option>
+									<option value="japanese_night_drive">Japanese Night Drive</option>
+								</select>
+							</div>
+						)}
+					</div>
+				)}
+
 
 				{/* Spacer */}
 				<div className="flex-1"></div>
@@ -2660,6 +2748,15 @@ const FloatingGenerationPanel = ({ selectedNodes, onUpdateNode, onGenerate }) =>
 			// Real image models from new configuration
 			return [
 				{ 
+					value: 'lungo-vibe', 
+					label: 'Lungo Vibe ✨', 
+					type: 'image', 
+					subtitle: 'Lungo\'s signature AI model',
+					credits: 80,
+					params: ['prompt', 'selectedFrame'],
+					supportedOptions: ['aspect_ratio', 'selectedFrame']
+				},
+				{ 
 					value: 'black-forest-labs/flux-kontext-max', 
 					label: 'Flux Kontext Max', 
 					type: 'image', 
@@ -2806,7 +2903,7 @@ const FloatingGenerationPanel = ({ selectedNodes, onUpdateNode, onGenerate }) =>
 	const currentAspectRatio = activeNode.data?.formData?.aspect_ratio || activeNode.data?.aspect_ratio || '9:16';
 	const currentSubtype = activeNode.data?.formData?.subtype || activeNode.data?.subtype || (activeNode.type === 'video' ? 'text_to_video' : 'general');
 	const currentModel = activeNode.data?.formData?.model || activeNode.data?.model || 
-		(activeNode.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4');
+		(activeNode.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe');
 	const modelOptions = getModelOptions(activeNode.type, currentSubtype);
 	
 	// Get current selected model details
@@ -2909,340 +3006,74 @@ const FloatingGenerationPanel = ({ selectedNodes, onUpdateNode, onGenerate }) =>
 	};
 
 	return (
-		<div className="fixed top-16 right-4 z-50 w-80 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl">
+		<div className="fixed top-32 right-0 z-50 w-72 bg-neutral-900/98 backdrop-blur-sm border-l border-neutral-700/30 rounded-l-xl shadow-xl">
 			{/* Header */}
-			<div className="px-4 py-3 border-b border-neutral-700/50">
+			<div className="px-3 py-2.5 border-b border-neutral-700/20">
 				<div className="flex items-center justify-between">
-					<h3 className="text-sm font-medium text-neutral-200">Generation Settings</h3>
-					<div className="text-xs text-neutral-400 capitalize">{activeNode.type}</div>
+					<h3 className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">Node Info</h3>
+					<div className="text-xs text-neutral-500 capitalize px-2 py-0.5 bg-neutral-800/50 rounded-md">{activeNode.type}</div>
 				</div>
 			</div>
 
 			{/* Content */}
-			<div className="p-4 space-y-4">
-				{/* Image Type Selection - Only for image nodes */}
-				{activeNode.type === 'image' && (
-					<div className="space-y-2">
-						<label className="text-xs text-neutral-400 block">Image Type</label>
-						<div className="grid grid-cols-3 gap-2">
-							<button
-								onClick={() => {
-									const currentFormData = activeNode.data?.formData || {};
-									onUpdateNode(activeNode.id, { 
-										formData: { ...currentFormData, subtype: 'general', selectedFrame: null }
-									});
-								}}
-								className={`p-2 text-xs rounded-lg border transition-all ${
-									(activeNode.data?.formData?.subtype || 'general') === 'general'
-										? 'bg-lime-500/20 border-lime-500 text-lime-300'
-										: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-								}`}
-							>
-								<div className="font-medium">General</div>
-								<div className="text-[10px] text-neutral-400 mt-0.5">Any image</div>
-							</button>
-							<button
-								onClick={() => {
-									const currentFormData = activeNode.data?.formData || {};
-									onUpdateNode(activeNode.id, { 
-										formData: { ...currentFormData, subtype: 'ugc_character', selectedFrame: null }
-									});
-								}}
-								className={`p-2 text-xs rounded-lg border transition-all ${
-									(activeNode.data?.formData?.subtype || 'general') === 'ugc_character'
-										? 'bg-lime-500/20 border-lime-500 text-lime-300'
-										: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-								}`}
-							>
-								<div className="font-medium">Character</div>
-								<div className="text-[10px] text-neutral-400 mt-0.5">People</div>
-							</button>
-							<button
-								onClick={() => {
-									const currentFormData = activeNode.data?.formData || {};
-									onUpdateNode(activeNode.id, { 
-										formData: { ...currentFormData, subtype: 'background', selectedFrame: null }
-									});
-								}}
-								className={`p-2 text-xs rounded-lg border transition-all ${
-									(activeNode.data?.formData?.subtype || 'general') === 'background'
-										? 'bg-lime-500/20 border-lime-500 text-lime-300'
-										: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-								}`}
-							>
-								<div className="font-medium">Background</div>
-								<div className="text-[10px] text-neutral-400 mt-0.5">Scenes</div>
-							</button>
+			<div className="p-3 space-y-3">
+				{/* Current Settings Display (Read-only) */}
+				<div className="space-y-2.5">
+					{/* Model */}
+					<div className="space-y-1">
+						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Model</label>
+						<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-lime-500/30">
+							{selectedModelDetails?.label || currentModel}
 						</div>
 					</div>
-				)}
 
-				{/* Frame Selection - Only for character and background types */}
-				{activeNode.type === 'image' && (activeNode.data?.formData?.subtype === 'ugc_character' || activeNode.data?.formData?.subtype === 'background') && (
-					<div className="space-y-2">
-						<label className="text-xs text-neutral-400 block">
-							{activeNode.data?.formData?.subtype === 'ugc_character' ? 'Character Frame' : 'Background Frame'}
-						</label>
-						<div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-							{allFrameOptions
-								.filter(frame => frame.type === activeNode.data?.formData?.subtype)
-								.map((frame) => (
-									<button
-										key={frame.id}
-										onClick={() => {
-											const currentFormData = activeNode.data?.formData || {};
-											onUpdateNode(activeNode.id, { 
-												formData: { ...currentFormData, selectedFrame: frame.id }
-											});
-										}}
-										className={`flex items-center gap-3 p-2 text-xs rounded-lg border transition-all text-left ${
-											(activeNode.data?.formData?.selectedFrame) === frame.id
-												? 'bg-lime-500/20 border-lime-500 text-lime-300'
-												: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-										}`}
-									>
-										<img 
-											src={frame.exampleImage} 
-											alt={frame.name}
-											className="w-8 h-8 rounded object-cover flex-shrink-0"
-										/>
-										<div className="min-w-0 flex-1">
-											<div className="font-medium truncate">{frame.name}</div>
-											<div className="text-[10px] text-neutral-400 truncate">{frame.description}</div>
-										</div>
-									</button>
-								))}
+					{/* Aspect Ratio */}
+					<div className="space-y-1">
+						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Aspect</label>
+						<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-blue-500/30">
+							{currentAspectRatio}
 						</div>
 					</div>
-				)}
 
-				{/* Model Selection */}
-				<div className="space-y-2">
-					<label className="text-xs text-neutral-400 block">Model</label>
-					<CustomImageDropdown
-						options={modelOptions.map(model => ({
-							value: model.value,
-							label: model.label,
-							subtitle: `${model.subtitle} • ${model.credits || 0} credits`,
-							type: model.type
-						}))}
-						value={currentModel}
-						onChange={handleModelChange}
-						onDropdownStateChange={(isOpen) => {
-							// This will be handled by the parent component if needed
-						}}
-						placeholder="Select model"
-						className="w-full"
-					/>
+					{/* Duration for videos */}
+					{activeNode.type === 'video' && (
+						<div className="space-y-1">
+							<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Duration</label>
+							<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-purple-500/30">
+								{activeNode.data?.formData?.duration || activeNode.data?.duration || 5}s
+							</div>
+						</div>
+					)}
+
+					{/* Frame Selection - Only for Lungo Vibe */}
+					{activeNode.type === 'image' && currentModel === 'lungo-vibe' && activeNode.data?.formData?.selectedFrame && (
+						<div className="space-y-1">
+							<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Style Frame</label>
+							<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-orange-500/30">
+								{activeNode.data.formData.selectedFrame === 'late_night_lofi' ? 'Late Night Lo-Fi' :
+								 activeNode.data.formData.selectedFrame === 'japanese_night_drive' ? 'Japanese Night Drive' :
+								 activeNode.data.formData.selectedFrame}
+							</div>
+						</div>
+					)}
 				</div>
-
-				{/* Aspect Ratio Grid */}
-				<div className="space-y-2">
-					<label className="text-xs text-neutral-400 block">
-						Aspect Ratio
-						{modelSpecificOptions.aspect_ratio && (
-							<span className="text-neutral-500 ml-1">
-								({modelSpecificOptions.aspect_ratio.length} available)
-							</span>
-						)}
-					</label>
-					<div className="grid grid-cols-3 gap-2">
-						{availableAspectRatios.map((ratio) => (
-							<button
-								key={ratio.value}
-								onClick={() => handleAspectRatioChange(ratio.value)}
-								className={`p-2 text-xs rounded-lg border transition-all ${
-									currentAspectRatio === ratio.value
-										? 'bg-lime-500/20 border-lime-500 text-lime-300'
-										: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-								}`}
-							>
-								<div className="font-medium">{ratio.label}</div>
-								<div className="text-[10px] text-neutral-400 mt-0.5">{ratio.description}</div>
-							</button>
-						))}
-					</div>
-				</div>
-
-				{/* Model-Specific Options */}
-				{selectedModelDetails && (
-					<div className="space-y-3">
-						{/* Negative Prompt for models that support it */}
-						{selectedModelDetails.params?.includes('negative_prompt') && (
-							<div className="space-y-2">
-								<label className="text-xs text-neutral-400 block">Negative Prompt</label>
-								<input
-									type="text"
-									placeholder="What to avoid in the generation..."
-									value={activeNode.data?.formData?.negative_prompt || ''}
-									onChange={(e) => {
-										const currentFormData = activeNode.data?.formData || {};
-										onUpdateNode(activeNode.id, { 
-											formData: { ...currentFormData, negative_prompt: e.target.value }
-										});
-									}}
-									onMouseDown={(e) => e.stopPropagation()}
-									className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-3 py-2 text-xs text-neutral-300 placeholder-neutral-500 focus:outline-none focus:border-neutral-500"
-								/>
-							</div>
-						)}
-
-						{/* Duration for video models */}
-						{modelSpecificOptions.duration && (
-							<div className="space-y-2">
-								<label className="text-xs text-neutral-400 block">Duration (seconds)</label>
-								<div className="flex gap-2">
-									{modelSpecificOptions.duration.map((duration) => (
-										<button
-											key={duration}
-											onClick={() => {
-												const currentFormData = activeNode.data?.formData || {};
-												onUpdateNode(activeNode.id, { 
-													formData: { ...currentFormData, duration }
-												});
-											}}
-											className={`flex-1 p-2 text-xs rounded-lg border transition-all ${
-												(activeNode.data?.formData?.duration || activeNode.data?.duration || 5) === duration
-													? 'bg-lime-500/20 border-lime-500 text-lime-300'
-													: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-											}`}
-										>
-											{duration}s
-										</button>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Resolution */}
-						{modelSpecificOptions.resolution && (
-							<div className="space-y-2">
-								<label className="text-xs text-neutral-400 block">Resolution</label>
-								<div className="flex gap-2">
-									{modelSpecificOptions.resolution.map((res) => (
-										<button
-											key={res}
-											onClick={() => {
-												const currentFormData = activeNode.data?.formData || {};
-												onUpdateNode(activeNode.id, { 
-													formData: { ...currentFormData, resolution: res }
-												});
-											}}
-											className={`flex-1 p-2 text-xs rounded-lg border transition-all ${
-												(activeNode.data?.formData?.resolution || activeNode.data?.resolution) === res
-													? 'bg-lime-500/20 border-lime-500 text-lime-300'
-													: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-											}`}
-										>
-											{res}
-										</button>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Mode */}
-						{modelSpecificOptions.mode && (
-							<div className="space-y-2">
-								<label className="text-xs text-neutral-400 block">Mode</label>
-								<div className="flex gap-2">
-									{modelSpecificOptions.mode.map((mode) => (
-										<button
-											key={mode}
-											onClick={() => {
-												const currentFormData = activeNode.data?.formData || {};
-												onUpdateNode(activeNode.id, { 
-													formData: { ...currentFormData, mode }
-												});
-											}}
-											className={`flex-1 p-2 text-xs rounded-lg border transition-all ${
-												(activeNode.data?.formData?.mode || activeNode.data?.mode || 'standard') === mode
-													? 'bg-lime-500/20 border-lime-500 text-lime-300'
-													: 'bg-neutral-800 border-neutral-600 text-neutral-300 hover:border-neutral-500'
-											}`}
-										>
-											{mode.charAt(0).toUpperCase() + mode.slice(1)}
-										</button>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Toggles */}
-						{selectedModelDetails.supportedOptions?.includes('camera_fixed') && (
-							<div className="space-y-2">
-								<div className="flex items-center justify-between">
-									<label className="text-xs text-neutral-400">Fixed Camera</label>
-									<button
-										onClick={() => {
-											const currentFormData = activeNode.data?.formData || {};
-											const currentValue = currentFormData.camera_fixed !== undefined ? 
-												currentFormData.camera_fixed : false;
-											onUpdateNode(activeNode.id, { 
-												formData: { ...currentFormData, camera_fixed: !currentValue }
-											});
-										}}
-										className={`relative inline-flex w-10 h-5 items-center rounded-full transition-colors duration-200 ${
-											(activeNode.data?.formData?.camera_fixed || false) ? 'bg-lime-500' : 'bg-neutral-700'
-										}`}
-									>
-										<span
-											className={`inline-block w-3 h-3 transform rounded-full bg-white transition-transform duration-200 ${
-												(activeNode.data?.formData?.camera_fixed || false) ? 'translate-x-6' : 'translate-x-1'
-											}`}
-										/>
-									</button>
-								</div>
-							</div>
-						)}
-
-						{selectedModelDetails.supportedOptions?.includes('prompt_optimizer') && (
-							<div className="space-y-2">
-								<div className="flex items-center justify-between">
-									<label className="text-xs text-neutral-400">Optimize Prompt</label>
-									<button
-										onClick={() => {
-											const currentFormData = activeNode.data?.formData || {};
-											const currentValue = currentFormData.prompt_optimizer !== undefined ? 
-												currentFormData.prompt_optimizer : true;
-											onUpdateNode(activeNode.id, { 
-												formData: { ...currentFormData, prompt_optimizer: !currentValue }
-											});
-										}}
-										className={`relative inline-flex w-10 h-5 items-center rounded-full transition-colors duration-200 ${
-											(activeNode.data?.formData?.prompt_optimizer !== false) ? 'bg-lime-500' : 'bg-neutral-700'
-										}`}
-									>
-										<span
-											className={`inline-block w-3 h-3 transform rounded-full bg-white transition-transform duration-200 ${
-												(activeNode.data?.formData?.prompt_optimizer !== false) ? 'translate-x-6' : 'translate-x-1'
-											}`}
-										/>
-									</button>
-								</div>
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* Current Prompt Display */}
 				{(activeNode.data?.formData?.prompt || activeNode.data?.prompt) && (
-					<div className="space-y-2">
-						<label className="text-xs text-neutral-400 block">Current Prompt</label>
-						<div className="bg-neutral-800 border border-neutral-600 rounded-lg p-3 text-xs text-neutral-300 max-h-20 overflow-y-auto">
+					<div className="space-y-1">
+						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Prompt</label>
+						<div className="bg-neutral-800/60 rounded-lg p-2.5 text-xs text-neutral-200 max-h-20 overflow-y-auto border-l-2 border-green-500/30">
 							{activeNode.data?.formData?.prompt || activeNode.data?.prompt}
 						</div>
 					</div>
 				)}
 
-				{/* Generate Button */}
-				<button
-					onClick={handleGenerateClick}
-					disabled={!(activeNode.data?.formData?.prompt || activeNode.data?.prompt)?.trim()}
-					className="w-full bg-lime-500 hover:bg-lime-400 disabled:bg-neutral-700 disabled:text-neutral-500 text-black font-medium py-2.5 px-4 rounded-lg transition-all duration-200 text-sm"
-				>
-					{(activeNode.data?.formData?.prompt || activeNode.data?.prompt)?.trim() ? 'Generate' : 'Enter prompt to generate'}
-				</button>
+				{/* Minimal Info Note */}
+				<div className="mt-4 pt-3 border-t border-neutral-700/20">
+					<div className="text-[10px] text-neutral-500 text-center">
+						Configure settings in node
+					</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -3716,14 +3547,28 @@ const CanvasWorkspace = () => {
 					connectedImagesCount: generationData.connectedImages?.length || 0
 				});
 				
-				result = await generateImage({
-					prompt: generationData.prompt,
-					subtype: generationData.subtype,
-					selectedFrame: generationData.selectedFrame,
-					style: 'photorealistic',
-					quality: 'high',
-					connectedImages: generationData.connectedImages || []
-				});
+				// Handle Lungo Vibe model specially
+				if (generationData.model === 'lungo-vibe') {
+					result = await generateImage({
+						originalPrompt: generationData.prompt,
+						subtype: 'ugc_character',
+						selectedFrame: generationData.selectedFrame || 'late_night_lofi',
+						model: 'google/imagen-4', // Use Imagen 4 behind the scenes
+						style: 'photorealistic',
+						quality: 'high',
+						connectedImages: generationData.connectedImages || []
+					});
+				} else {
+					result = await generateImage({
+						prompt: generationData.prompt,
+						subtype: generationData.subtype,
+						selectedFrame: generationData.selectedFrame,
+						model: generationData.model,
+						style: 'photorealistic',
+						quality: 'high',
+						connectedImages: generationData.connectedImages || []
+					});
+				}
 				console.log('🖼️ Image generation result:', result);
 			} else if (generationData.type === 'video') {
 				console.log('🎬 Calling generateVideo...');
@@ -3797,7 +3642,7 @@ const CanvasWorkspace = () => {
 			});
 			alert(`Generation failed: ${error.message}`);
 		}
-	}, [updateNodeData, reactFlowInstance]);
+	}, [updateNodeData, reactFlowInstance, user]);
 
 	const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {
 		setEdges(eds =>
@@ -3998,9 +3843,9 @@ const CanvasWorkspace = () => {
 
 	// Stable nodeTypes without connected images dependency
 	const nodeTypes = useMemo(() => ({
-		aiFrame: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} />,
-		image: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} />,
-		video: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} />,
+		aiFrame: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
+		image: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
+		video: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
 		imageUpload: (props) => <ImageUpload {...props} onUpdateNode={updateNodeData} />,
 		videoUpload: (props) => <VideoUpload {...props} />,
 		generatedFrame: (props) => <GeneratedFrame {...props} />,

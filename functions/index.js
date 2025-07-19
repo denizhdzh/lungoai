@@ -123,563 +123,52 @@ function getImageSetRulesByFrameId(frameId) {
     
     // Your detailed image rules from imageRules.json
     const frameMapping = {
-        'background': {
-            name: 'Background Scene',
-            rules: {
-                composition_and_perspective: {
-                    camera_type: "Professional DSLR, mirrorless, or high-end camera",
-                    focal_length_mm: "24mm to 85mm equivalent (wide to medium telephoto for versatile backgrounds)",
-                    aperture_range: "f/1.4 - f/8 (variable depth control)",
-                    focus_mode: "Manual or autofocus on key background elements",
-                    framing: "Wide establishing shot or medium environmental shot, showcasing the setting",
-                    orientation: "Horizontal (landscape) or vertical (portrait) based on scene",
-                    camera_position: "Positioned to capture the most compelling view of the environment"
-                },
-                location_and_background: {
-                    setting: "Atmospheric environments: urban streets, nature scenes, architectural spaces, interiors",
-                    background_elements: "Rich environmental details that tell a story or create mood",
-                    background_blur: "Variable - sharp details where needed, subtle blur for depth",
-                    depth_of_field: "Optimized for the scene - deep for landscapes, shallow for focus"
-                },
-                lighting: {
-                    lighting_type: "Natural or ambient lighting that enhances the mood and atmosphere",
-                    white_balance: "Appropriate for the environment and time of day",
-                    exposure_compensation: "Optimized for the scene's dynamic range",
-                    ISO_setting: "Low ISO for maximum quality and detail",
-                    shutter_speed: "Appropriate for the scene - fast for sharp details, slow for motion blur if desired"
-                },
-                mood_and_atmosphere: {
-                    overall_feel: "Cinematic, atmospheric, and visually compelling",
-                    color_palette: "Rich and harmonious colors that enhance the environment",
-                    contrast: "Good contrast to create visual interest and depth"
-                }
-            }
-        },
-        'car_selfie_glow': {
-            name: 'Car Selfie Glow',
-            rules: {
-                composition_and_perspective: {
-                    camera_type: "Smartphone front (selfie) camera, rare cases digital compact or mirrorless with flip screen",
-                    focal_length_mm: "23mm to 28mm equivalent (smartphone front camera standard; slight wide angle)",
-                    aperture_range: "f/2.0 - f/2.4 (typical of modern smartphone front cameras)",
-                    focus_mode: "Autofocus or fixed focus; primary focus on face and upper torso",
-                    framing: "Loose close-up to chest-up framing (selfie). Single subject centered or slightly off-center within the car seat area. Minimal cropping of facial features.",
-                    orientation: "Vertical portrait orientation preferred; occasional casual landscape orientation selfie",
-                    camera_position: "Camera held in hand at arm's length or just above face level; sometimes angled downward for flattering perspective"
-                },
-                location_and_background: {
-                    setting: "Inside a car during daytime. Visible seats, seatbelts, windows, sunroofs, and sometimes dashboard details.",
-                    background_elements: "Car interiors are sharp and distinct: headrests, full or partial windows, sun visors, leather/fabric textures.",
-                    background_blur: "Very minimal; deep depth of field typical of smartphones. Environment and background are in focus.",
-                    depth_of_field: "Very wide (face, hair, and car interior all clearly visible)"
-                },
-                lighting: {
-                    lighting_type: "Natural daylight (direct or indirect sun) entering car from windows or sunroof. May cast clear shadows or bright highlights across face and upper body.",
-                    white_balance: "Auto, calibrated for natural sunlight (approx. 5000-6500K)",
-                    exposure_compensation: "Autoexposure, sometimes with intentional face brightening. Mild highlight clipping in direct sun is acceptable.",
-                    ISO_setting: "50-200 (smartphone base ISO in daylight)",
-                    shutter_speed: "1/100 to 1/2000s, fast enough to capture sharp details even with some movement"
-                },
-                subject_pose_and_expression: {
-                    poses: "Single subject, seated in car seat, relaxed or casually posed. Head slightly tilted, subtle angles for flattering silhouette.",
-                    facial_expression: "Soft smile, neutral face, duck face, or playful pout. Expressions are calm or confident (not overly dramatic).",
-                    gaze_direction: "Directly into the camera or slightly gaze away; classic selfie engagement"
-                },
-                fashion_and_style: {
-                    clothing: "Trendy casual wear—tank tops, sunglasses, puffer jackets, minimal jewelry. Simple, solid colors or subtle patterns.",
-                    accessories: "Sunglasses, earrings, subtle necklaces. Accessories chosen for personal style rather than for statement effect.",
-                    hair: "Smooth, styled or gently tousled. May include small braids, center or side parting, or loose and flowing."
-                }
-            }
-        },
-
-        'empty_highway_fashion': {
-    name: 'Highway Fashion Shoot',
-    rules: {
-        composition_and_perspective: {
-            camera_type: "Full-frame DSLR or mirrorless, or high-end 35mm film SLR (for analog look)",
-            focal_length_mm: "24mm to 35mm (wide angle for dramatic perspective and sense of space)",
-            aperture_range: "f/3.5 - f/5.6 (ensuring subject is sharp, background slightly softened but still readable)",
-            focus_mode: "Single autofocus on subject, with focus tracking if walking shots are included",
-            framing: "Full-body or three-quarters, subject centered or slightly off-center for dynamic composition. Use leading lines of the highway for depth.",
-            orientation: "Horizontal (landscape) preferred to emphasize the road’s expanse; vertical for editorial close-ups",
-            camera_position: "Low angle (waist to knee-level), 3–8 meters from subject for strong foreground and receding lines. Handheld or tripod, depending on desired stability and low-light needs."
-        },
-        location_and_background: {
-            setting: "Deserted highway—visibly empty in both directions, no cars or people. Ideally dawn, sunset, or overcast noon for light quality.",
-            background_elements: "Empty asphalt, distant horizon, road markings (lines, arrows), road signs if present; NO urban clutter, no traffic.",
-            background_blur: "Mild to moderate—background details like distant signage or horizons are visible but not distracting.",
-            depth_of_field: "Moderate; subject crisply in focus, with road texture and vanishing point softly receding."
-        },
-        lighting: {
-            lighting_type: "Natural light—soft golden hour or overcast daylight preferred. Use reflectors for subtle fill on face if necessary.",
-            white_balance: "Daylight (5200K–6000K), slightly cool for crispness or warm for editorial vibe; avoid excessive warmth.",
-            exposure_compensation: "+0.3EV to ensure subject’s features and clothing are detailed, retain sky/horizon highlights.",
-            ISO_setting: "ISO 100–400, keeping grain minimal, allowing high detail in subject and texture in road.",
-            shutter_speed: "1/250s to 1/640s, freezing any subtle movement (walking, fabric flow), avoid motion blur."
-        },
-        subject_pose_and_expression: {
-            poses: "Confident, editorial stances: standing upright, weight shifted, hands in pockets or jacket, slow purposeful walk, strong gait. Singular, statuesque poses to convey attitude.",
-            facial_expression: "Neutral to subtly fierce—a fashion gaze. Minimal smile, controlled expression, slight squint against light or direct, piercing look at camera.",
-            gaze_direction: "Primarily directed at camera; optionally gazing off to horizon for cinematic effect."
-        },
-        fashion_and_style: {
-            clothing: "High-fashion or streetstyle garments—contrasting bold colors or monochrome, tailored coats, statement boots, layered textures. Clean, stylish silhouettes that stand out against the asphalt.",
-            accessories: "Sunglasses, minimalist jewelry, belts or scarves sparingly; statement pieces that do not compete with the subject.",
-            hair: "Styled: windblown, slicked back, or intentionally tousled for cinematic feel. Avoid overly polished looks; natural movement is key."
-        }
-    }
-},
-                 'city_street_style': {
-             name: 'City Street Style',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "Modern smartphone main camera or compact/mirrorless digital camera",
-                     focal_length_mm: "24mm to 35mm equivalent (true-to-life perspective with a slight wide field for urban context)",
-                     aperture_range: "f/1.8 - f/2.8 (smartphone default or prime lens; provides natural depth)",
-                     focus_mode: "Autofocus, always focused on subject (usually full body or half body); no artificial blur",
-                     framing: "Mid-shot (knees up) to full-body; subjects often placed off-center, leaving space for urban background elements. Some shots taken slightly from below for extra attitude.",
-                     orientation: "Vertical or portrait orientation for social sharing and emphasizing outfit. Occasional slight tilt for dynamism.",
-                     camera_position: "Handheld at waist to chest level, 1.5–3 meters from subject; mix of candid and modeled stances."
-                 },
-                 location_and_background: {
-                     setting: "Urban streets, building facades, gas stations, sidewalk corners, crosswalks, storefronts",
-                     background_elements: "Urban architecture, road textures, signage (like STOP), cars, greenery, metal, glass, street furniture. May include street reflections, shop windows, and city props.",
-                     background_blur: "Minimal. Street and city details remain recognizable and part of scene.",
-                     depth_of_field: "Moderate to deep; subject pops, but environment is contextually present."
-                 },
-                 lighting: {
-                     lighting_type: "Natural daylight, usually direct sun or open shade; shadows for depth and realness, no flash",
-                     white_balance: "Auto daylight (5000-6500K), slight warmth from sun or hint of coolness in shadow",
-                     exposure_compensation: "0EV to +0.7EV; aiming for bright, snappy street exposure, moderate dynamic range",
-                     ISO_setting: "ISO 50–200 (daylight, clean look)",
-                     shutter_speed: "1/400s–1/2000s for crisp capture and slight movement"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Candid, leaning, sitting, walking, or interacting with props/signs; often hands in pockets, crossed arms, looking away, slouched, or relaxed",
-                     facial_expression: "Neutral, confident, chill, nonchalant, or 'effortless cool'. Sometimes obscured by sunglasses, hats, or cigarettes.",
-                     gaze_direction: "Looking away from camera, down, or at their phone; rarely direct eye contact"
-                 },
-                 fashion_and_style: {
-                     clothing: "Streetwear, loose fits, statement layers, graphic tees, oversized pants, vests, open shirts, retro sneakers, chains, bold accessories. Genderless or vintage-inspired details encouraged.",
-                     accessories: "Baseball caps, sunglasses, visible jewelry, belts, beanies, cigarettes, drinks, statement socks",
-                     hair: "Natural, slightly messy, under hats/caps, effortless"
-                 }
-             }
-         },
-
-
-      'fish_eye_selfie_urban': {
-  name: 'Urban Fisheye Selfie Drama',
-  rules: {
-    composition_and_perspective: {
-      camera_type: "Professional digital camera or analog body with a genuine circular fisheye lens (8mm–12mm full-frame equivalent) OR action camera (GoPro, etc.) in strict selfie mode. No post-crop or digital emulation – authentic optical barrel distortion only.",
-      focal_length_mm: "Exactly 8–12mm focal length on full-frame sensor, generating extreme barrel distortion; subject's facial features and limbs must expand and warp aggressively towards lens edges.",
-      aperture_range: "Wide open to moderately stopped (f/2.8–f/4), maximizing depth of field; every foreground and background element absolutely tack sharp across frame.",
-      focus_mode: "Manual or reliable autofocus locked at very close range (subject's face/hand almost touching the lens). There must be no blur; both central and edge elements rendered in full clarity.",
-      framing: "Ultra-tight bust or chest-up composition, with face overpoweringly dominating center; one arm stretched out to top/side corner, hand enlarged/distorted by proximity. Strongly forced perspective: face and hand exaggeratedly prominent, corners heavily curved.",
-      orientation: "Portrait (vertical) format is mandatory. Camera must be slightly canted/tilted, imparting dynamic, handheld immediacy. Viewer should viscerally sense the arm extension and aggressive spatial engagement.",
-      camera_position: "Camera at maximum arm's reach, slightly above eye-line, angled down towards subject for confrontational, immersive perspective; lens directly faces subject, but is offset just enough to amplify the distortion."
-    },
-    location_and_background: {
-      setting: "Harsh city exterior: rough concrete, cracked ground, metallic roll-down doors as primary backdrop.",
-      background_elements: "Explosively vivid graffiti in hyper-saturated tones (red, blue, yellow). All metallic and painted textures crisp, with sidewalk grit and cracks visible. Graffiti and urban lines kaleidoscopically warped at frame edges, bending around subject.",
-      background_blur: "None allowed. Optical fisheye guarantees complete edge-to-edge sharpness, with pronounced curvature. No artificial bokeh.",
-      depth_of_field: "Absolute; all planes–hand, face, background–in simultaneous, flawless focus."
-    },
-    lighting: {
-      lighting_type: "Intense, overhead midday sun; extremely hard light, with sculpted, darkest shadows and blown-out highlight zones on skin. Every contour (brow, nose, jaw, lips, hair strands) sharply delineated.",
-      white_balance: "Daylight (5000–6000K). Color profile must maximize separation: skin glows, graffiti hues explode, and the overall palette is cranked to high contrast. Warm bias for skin, but full spectrum in background.",
-      exposure_compensation: "Slightly positive (+0.2EV); highlights permitted to clip just on the face and arm, especially where sunlight hits directly. Shadows remain deep but not underexposed; overall DR is unforgiving.",
-      ISO_setting: "Low (ISO 100–200); ultra-clean, every skin pore or wall imperfection should register crisply.",
-      shutter_speed: "Very fast (1/1000s and above). No motion blur anywhere - subject, accessories, and even dust or ground textures perfectly frozen."
-    },
-    subject_pose_and_expression: {
-      poses: "Subject close enough to lens to exaggerate facial features; head dropped slightly and tilted towards the lens, for a hyper-assertive feel. Arm thrust up into the frame, hand occupying the top-left or top-right corner, fingers splayed/wrist bent to further dramatize proximity distortion.",
-      facial_expression: "Gaze is direct, piercingly intense, lips subtly parted, brow fractionally furrowed. Expression should convey confrontation, self-assurance, even defiance.",
-      gaze_direction: "Subject's eyes must lock laser-like with the lens–audience feels stared down, challenged, drawn in visually and emotionally."
-    },
-    fashion_and_style: {
-      clothing: "Thin, fitted, white tank top (slightly translucent in harsh sun). Jewelry: stacked gold/metal bangles high on forearm, shining in sunlight.",
-      accessories: "Minimal to no makeup, skin shown as is. Hair loose, wild, and voluminous; waves catching and scattering light, some strands casting shadows on face.",
-      hair: "Long, prominent natural curls/waves, sunlit copper/gold highlights vivid against darker roots. Overall look: spontaneous, raw, unfiltered urban energy and authenticity."
-    }
-  }
-},
-
-    'y2k_flash_pop': {
-    name: 'Y2K Flash Pop Street Portrait',
-    rules: {
-        composition_and_perspective: {
-            camera_type: "Authentic early 2000s compact digital (e.g., Canon IXUS/PowerShot, Nikon Coolpix, Sony Cyber-shot) or entry-level DSLR of that era, with visible built-in pop-up flash. Strictly no modern bodies/lens corrections.",
-            focal_length_mm: "38mm to 50mm equivalent (standard to slightly wide; moderate field of view, distinctly NOT ultra-wide); optical zoom at default or 1–2×, never digital.",
-            aperture_range: "f/2.8–f/4.5, as typical for these compact built-in lenses; maintains moderate depth of field and supports sharp flash-lit subject rendering.",
-            focus_mode: "Single shot autofocus, with classic early-2000s margin of error—focus must land on the subject's eyes or upper face, but slight softness or missed focus on surroundings is acceptable and even preferred for authenticity.",
-            framing: "Waist-up (torso-dominant), tight vertical/portrait orientation, subject centered with crowd partially cropped at edges for that snapshot, slightly rushed feel. Minimal empty space; presence is immediate and immersive.",
-            orientation: "Strictly upright/vertical (portrait), hand-held, possibly with subtle camera shake or tilt indicating candid, fast execution amidst crowd.",
-            camera_position: "Lens at or slightly above subject's eye level, camera angled down just slightly, extremely close to subject (within 1–1.5 meters), as if shot rapidly while navigating a dense street scene."
-        },
-        location_and_background: {
-            setting: "Congested city crosswalk or intersection at dusk—scene is unmistakably urban, flooding with pedestrians and city signage.",
-            background_elements: "Dense, blurred crowd in motion; city signage glowing, traffic lights (e.g. noticeably illuminated green circle), reflective windows, storefront facades. Background figures partially streaked with motion blur and flash-shadow interaction.",
-            background_blur: "Distinctive background blur from subject movement and slow sync flash, not optical bokeh. People in background are ghosted, moving, sometimes smeared, yet identifiable in silhouette.",
-            depth_of_field: "Moderate—sharpest focus on main subject's face/shoulders, background detail lost to crowd movement and mild digital noise, NOT lens blur."
-        },
-        lighting: {
-            lighting_type: "On-camera, direct built-in pop-up flash. Flash is harsh, revealing every pore and detail of the subject's illuminated face, with evident overexposed highlights (e.g., on skin or any reflective accessory like cell phone screens). Background remains in moody, natural ambient light with significant contrast between subject and environment.",
-            white_balance: "Auto or default daylight (often with faint blue/green tinge and obvious digital color noise), producing colder highlights and a nostalgic, slightly plastic Y2K skin tone.",
-            exposure_compensation: "Zero (0EV); accept overblown highlights and sharp-edged flash shadows, especially under chin and behind subject. Hotspots on metallic or glass surfaces are explicit and unfiltered.",
-            ISO_setting: "ISO 100–400 typical for compacts; mild visible digital grain or color noise in shaded background areas and on darker clothing. Never waxy-smooth or noise-reduced.",
-            shutter_speed: "1/60s–1/125s with slow-sync flash enabled. Subject is perfectly frozen by flash; crowd movement renders as dynamic blur/ghosts, especially around edges."
-        },
-        subject_pose_and_expression: {
-            poses: "Subject standing upright, almost stationary or just finishing a stride. Shoulders squared, casual posture, hands visible (one often holding a phone reflecting flash). Main figure should punch out from the crowd as a crisp, static focal point.",
-            facial_expression: "Neutral, relaxed, or subtly dreamy; eyes open, gaze soft or just off-camera. Face partially touched by stray hair, with an understated, authentic, slightly glazed expression.",
-            gaze_direction: "Looking softly or blankly just past or into the lens—never forced, always naturalistic and a little aloof. Candid, not theatrical."
-        },
-        fashion_and_style: {
-            clothing: "Strict early-2000s/Y2K: oversized black or dark leather jacket with pronounced shoulder structure; layered with metallic or gray scarf, muted top. All textures (leather, satin/scarf) must be unmistakably crisp under flash.",
-            accessories: "Minimalist but bold: large geometric or metallic earrings (must reflect some flash), visible smartphone with on-screen flash glare, barely-there natural makeup (ivory/frosted highlights allowed).",
-            hair: "Short to shoulder-length, natural texture, parted in the center or off-center. Slightly windblown, a few loose strands crossing face, with both softness and volume highlighted by harsh flash."
-        }
-    }
-},
-
-    'elevator_mirror_selfie': {
-name: 'Elevator Mirror Flex',
-rules: {
-composition_and_perspective: {
-camera_type: "Modern smartphone with high-resolution front or rear camera, used for mirror capture",
-focal_length_mm: "24mm–28mm equivalent (wide smartphone lens, slight barrel distortion at edges possible)",
-aperture_range: "f/1.6–f/2.4 (typical of smartphone main lenses, allows for sharp foreground and some depth)",
-focus_mode: "Auto-focus on mirror image, ensuring subject is in crisp detail with potential for soft background reflections",
-framing: "Three-quarter to full-body portrait, subject centered or slightly off-center, headroom visible, entire body/pose reflected in mirror",
-orientation: "Vertical (portrait orientation), hand-held; shot naturally with arm extended holding phone visible or partly visible",
-camera_position: "Phone held at chest, chin or eye level, angled slightly to avoid flash bounce, self-composed in real-time"
-},
-location_and_background: {
-setting: "Enclosed elevator with metallic or mirrored walls, industrial and minimal vibe",
-background_elements: "Scratched, brushed metal surfaces, visible lines/seams of elevator panels, safety labels/signs, overhead fluorescent or LED lighting",
-background_blur: "Minimal—mirror and metallic background remain sharp, with occasional soft flaring from reflective surfaces",
-depth_of_field: "Wide; everything from subject and mirror to background in focus due to smartphone sensor and environment"
-},
-lighting: {
-lighting_type: "Overhead fluorescent or cool LED lights typical of elevators; creates strong vertical highlights and reflections",
-white_balance: "Cool white (~4000–5000K), neutral to slightly blue/cold tint from metallic surroundings",
-exposure_compensation: "0EV; subject well-lit, possible hotspots on metallic surfaces, shadows under jaw and brows natural",
-ISO_setting: "Automatic, low to moderate ISO for clarity with some digital noise in low-lit elevators",
-shutter_speed: "Fast enough for sharp subject and visible reflections; handheld stability"
-},
-subject_pose_and_expression: {
-poses: "Casual but bold, one leg bent or up on wall/bench, confident posture; one hand holding phone, other adjusting clothing/accessory or posed naturally",
-facial_expression: "Relaxed, focused or cool; often partially obscured by phone, shades or slightly averted gaze",
-gaze_direction: "Looking at phone's screen in the mirror, not always directly at the camera lens"
-},
-fashion_and_style: {
-clothing: "Fashion-forward coordinated set or suit (e.g. matching jacket and pants), elevated streetwear, neutral or monochrome tones",
-accessories: "Chunky shoes or boots, rings, earrings, statement sunglasses, modern phone as functional accessory",
-hair: "Trimmed, sharp, and neatly styled to project confidence and self-awareness"
-}
-}
-},
-
-
-'yum_moment_diaries': {
-    name: 'Yum Moment Diaries',
-    rules: {
-        composition_and_perspective: {
-            camera_type: "Modern top-tier smartphone (iPhone 13 Pro/Pixel 7/Galaxy S series etc.) or high-end compact digital (Sony RX100 etc.), shot *only* with native camera app, utilizing Portrait or Standard Photo mode. Strictly handheld, never tripod.",
-            focal_length_mm: "24mm–28mm equivalent for the majority (standard wide lens; no tele crop, no ultrawide); provides slight natural facial flattering, authentic field-of-view feel for dining context.",
-            aperture_range: "Smartphone-native f/1.8–f/2.4, or compact's f/1.8–f/2.8, to ensure high subject/background separation when possible: crisp food and face, subtle but *never artificial* computational blur.",
-            focus_mode: "High-speed face/eye/smile/subject-detection autofocus. Both face and food (in-hand or being eaten) must be razor sharp. Any background softness comes only from physical or direct digital bokeh, not focus miss.",
-            framing: "Perfectly centered or just off-center for lively candor, with bust-up to mid-waist portrait framing. Food is always clearly visible, never obscured—typically held within 15cm of mouth, hand or chopsticks present, eating gesture *mid-action* (lifting, slurping, prepping for bite, mouth mid-open). No static, awkward or paused poses.",
-            orientation: "Almost always vertical (portrait) format, echoing Instagram/TikTok Reels; occasional true square is permitted if clearly composed for social snapshot (1:1 aspect ratio visible).",
-            camera_position: "Camera leveled precisely with or just above subject's eyes; never too high. Shot across table, arm's length (selfie), or by companion shooting from direct, intimate eating distance. Point of view must communicate shared moment—never distanced, voyeuristic, or posed for perfection."
-        },
-        location_and_background: {
-            setting: "Lively, visually layered real-world dining: neon-lit open-air markets, cozy bistro interiors, warm-lit home tables with visible city view, bustling restaurants, or late-night curbside street food stands. Outdoor shots clearly telegraph night or magic hour ambiance.",
-            background_elements: "Backgrounds must show context: string/fairy lights, plate stacks, glowing street signs, cozy indoor lighting (lamps, candles), visible dusk/city skyline through glass, fellow diners. Visual information is rich, *never staged-empty or generic*.",
-            background_blur: "Soft and organic; shallow DOF from wide aperture, or subtle computational portrait blur typical of premium phone cameras. Depth haze is gentle, never excessive, with face/food always pin-sharp.",
-            depth_of_field: "Moderate—foreground (subject and food) *absolutely sharp*; background softened just enough to ensure intimacy and visual separation while maintaining environmental detail."
-        },
-        lighting: {
-            lighting_type: "100% practical and environmental lighting: table lamps, restaurant pendant bulbs, neon/building signs, string/fairy lights, or bright picture windows. On-camera smartphone flash used *very* subtly for subtle fill *only* at night—never as direct harsh source.",
-            white_balance: "Strict 3000–4000K indoors (soft, golden, natural skin/food tones), 5000–6000K outdoor daylight or high-rise night scenes (neutral, slightly blue city glow). Indoor scenes often exhibit cozy yellow highlight burn.",
-            exposure_compensation: "0EV or +0.3EV. Skin and food may gently clip highlights near practical bulbs or neon but must never look harsh. Natural shadows are preserved, imparting warm, lived-in, appetizing mood.",
-            ISO_setting: "Automatic, typically < ISO 1200 indoors at night or ISO 100–400 daylight/café. Gentle, refined sensor noise/grain in dim settings is embraced for atmosphere, *never strongly denoised or plastic*.",
-            shutter_speed: "1/60s–1/200s, always fast enough to *freeze* eating gestures but permitting extremely slight motion blur on noodles or utensils, reflecting real-life movement."
-        },
-        subject_pose_and_expression: {
-            poses: "Mid-action only: fork twirling, chopsticks to lips, noodles just about to slurp, full bite in progress, taco or sushi poised for taste. Arm and hand position is relaxed, never posed—elbows close to body, shoulders natural.",
-            facial_expression: "Unselfconscious enjoyment or anticipation: closed eyes with savor, lips partly open, cheeks slightly puffed, toothy or closed-mouth smile, or gentle 'eating in progress' focus. Always authentic and candid—no forced grins, staged duckfaces, or exaggerated commercial tropes.",
-            gaze_direction: "Often downward toward food in hand, bowl/plate, or gaze softly off-camera at companions, with only the occasional, spontaneous look toward camera for a captured-in-moment, vibrant, unposed energy."
-        },
-        fashion_and_style: {
-            clothing: "Effortless daily elegance: cozy knits, neutral blouses/shirts, subtle prints, oversized blazers or tailored jackets, casual chic tanks or long-sleeve tops. Main color tones muted, earth-inspired, or naturally patterned—absolutely no flashy logos or mismatched brights.",
-            accessories: "Minimal—simple metallic earrings, delicate chains, *very occasional* sunglasses (on head/outdoors only), subtle AirPods or headphones (for a home, 'winding down' scene only), and everyday rings. Jewelry is never the focus.",
-            hair: "Naturally styled to match the vibe: loose and tousled, tied back for practicality, sometimes accessorized with a subtle clip or bun. Zero hard gel, helmet-hair, or overdone looks—must *read* as fresh, relaxed, and conducive to eating."
-        }
-    }
-},
-
-'selfcare_bliss_aesthetic': {
-    name: 'Selfcare Bliss Aesthetic',
-    rules: {
-        composition_and_perspective: {
-            camera_type: "Smartphone front camera or mirrorless with flip screen; preference for sensors that capture vivid sunlight and skin texture",
-            focal_length_mm: "22mm to 26mm equivalent (slight distortion for beach openness, ideal for wide but flattering facial focus)",
-            aperture_range: "f/1.8 - f/2.2 (shallow depth of field, sunlight diffusion on subject)",
-            focus_mode: "Face-priority autofocus; ensures facial clarity with gentle highlight transitions on hair and background sand dunes",
-            framing: "Medium crop, subject centered or rule-of-thirds aligned; includes upper body or seated pose, balanced to feature environment and person equally",
-            orientation: "Portrait orientation (vertical), slight upward tilt to capture sky and landscape; natural selfie perspective",
-            camera_position: "Handheld or surface-propped; arm's length, ~60–80 cm; angled to capture beachscape layers (sand, sky, props) in parallel with facial glow"
-        },
-        location_and_background: {
-            setting: "Beachside in daylight; open skies, sandy textures, minimal clutter; natural slopes or dunes adding organic structure",
-            background_elements: "Bright skies with scattered clouds, sloping sandbanks, occasional surfboard or towel, natural gradients from sand to sky; soft shadows or none at all",
-            background_blur: "Mild computational blur or default lens falloff; environment still readable but not sharp",
-            depth_of_field: "Moderate; clear subject focus, soft gradient background with subtle sunlight haze for dreamy vibe"
-        },
-        lighting: {
-            lighting_type: "Full-spectrum natural sunlight (late morning to mid-afternoon), ideal for casting warm glow on skin and sand",
-            white_balance: "Auto, nudged toward warm (5200–5800K); golden undertones that enhance skin and hair vibrancy",
-            exposure_compensation: "+0.3EV to +1EV; high-key aesthetic with glowy skin, visible but softened highlights on cheeks and forehead",
-            ISO_setting: "Low ISO 50–200 to retain clarity and preserve sand texture and sky gradients",
-            shutter_speed: "1/250s to 1/800s (freeze subtle movements like hair strands or breezy clothing)"
-        },
-        subject_pose_and_expression: {
-            poses: "Casual and sunkissed; seated, one knee up or cross-legged; leaning slightly, hair swept naturally; hand resting on leg or touching hair",
-            facial_expression: "Subtle half-smile or soft grin, relaxed jawline; expression reads warm, breezy, approachable",
-            gaze_direction: "Mostly toward camera or gently angled; eye contact should feel candid, not posed"
-        },
-        fashion_and_style: {
-            clothing: "Relaxed beachwear: oversized graphic tee (e.g., Polo logo visible), natural shorts or bikini bottom barely peeking; neutral tones or navy for contrast",
-            accessories: "Minimal jewelry like a bead necklace or simple bracelet; no heavy makeup—sun-kissed natural skin, visible freckles welcome",
-            hair: "Wind-ruffled, tousled layers; parted loosely or falling forward; no visible styling product—texture should reflect breeze and humidity"
-        }
-    }
-},
 
          'late_night_lofi': {
              name: 'Late Night Lo-Fi Vibes',
              rules: {
-                 composition_and_perspective: {
-                     camera_type: "35mm film camera with direct flash, or digital compact camera with pop-up/onboard flash",
-                     focal_length_mm: "28mm to 38mm equivalent (slight wide angle, classic point-and-shoot aesthetic)",
-                     aperture_range: "f/2.8 - f/4.0 (fixed or semi-fixed)",
-                     focus_mode: "Autofocus or fixed focus, with a focus point on the subject's face; edge blur or mild softness from flash acceptable",
-                     framing: "Casual waist-up or chest-up, some shots even wider for context (full body or half body). Slightly off-center, spontaneous cropping likely (limbs or objects getting cropped).",
-                     orientation: "Mostly vertical (portrait) or horizontal (landscape), images may include slight tilt or off-axis framing",
-                     camera_position: "Eye-level or slightly above, close range (50-120cm from subject); handheld, point-and-shoot style"
-                 },
-                 location_and_background: {
-                     setting: "Ordinary indoor/nighttime settings—kitchen, laundry, living room, and informal gathering places",
-                     background_elements: "Typical home or shared-space elements (fridge, oven, cabinets, appliances, tables, laundry machines) are clearly visible; natural disorder is left intact",
-                     background_blur: "Minimal; most details in the background captured sharply due to flash and small sensor/fixed aperture",
-                     depth_of_field: "Very wide (everything reasonably sharp—classic compact camera look)"
-                 },
-                 lighting: {
-                     lighting_type: "Direct on-camera flash (harsh, creates sharp-edged shadows and light fall-off); room ambient light is present but dominated by flash",
-                     white_balance: "Auto or flash preset; color temperature 5000-6500K (neutral to slightly cool). Skin tones can appear pale or desaturated under flash.",
-                     exposure_compensation: "0EV; mild occasional overexposure on faces and highlights due to flash is normal",
-                     ISO_setting: "200–400 for film, ISO 100–400 for digital (supports clear details and flash)",
-                     shutter_speed: "1/60 to 1/125s; typical flash sync speeds, prevents motion blur"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Relaxed, casual, sometimes exaggerated or humorous (drinking, eating, showing attitude, playing with food, lounging in odd locations like laundry baskets)",
-                     facial_expression: "Unfiltered, playful, or nonchalant; subjects may be smiling, making faces, pouting, laughing, or displaying irreverent gestures (e.g. flipping the finger)",
-                     gaze_direction: "Facing the camera directly, glancing away, or interacting with someone/something offscreen; engagement with the flash/camera is a key part of the snapshot look"
-                 },
-                 fashion_and_style: {
-                     clothing: "Simple, everyday, casual wear: t-shirts, sweatshirts, pajamas, denim, possibly oversized or relaxed fits",
-                     accessories: "Minimal: earrings, bracelets, or everyday items (food, utensils, soda bottles) used as props",
-                     hair: "Loose, natural, sometimes slightly messy or 'unstyled', in line with the spontaneous, candid vibe"
-                 }
+                 must_have: [
+                     "35mm film camera with direct flash or digital compact camera aesthetic",
+                     "Nighttime or late evening setting with artificial lighting",
+                     "Lo-fi, grainy texture and slightly soft focus",
+                     "Direct flash creating harsh shadows and bright foreground",
+                     "Casual, everyday clothing: t-shirts, sweatshirts, pajamas",
+                     "Indoor settings: bedrooms, living rooms, kitchens",
+                     "Spontaneous, candid poses and expressions",
+                     "Vintage early 2000s camera quality with visible grain"
+                 ],
+                 must_not_have: [
+                     "Professional DSLR quality or modern smartphone clarity",
+                     "Bright daytime lighting or natural outdoor light",
+                     "Formal clothing or overly styled outfits",
+                     "Professional studio lighting or soft ambient lighting",
+                     "High-resolution or pristine image quality",
+                     "Posed or overly artistic compositions",
+                     "Outdoor or professional settings"
+                 ]
              }
          },
-         'forced_perspective_play': {
-             name: 'Forced Perspective Play',
+         
+         'japanese_night_drive': {
+             name: 'Japanese Night Drive',
              rules: {
-                 composition_and_perspective: {
-                     camera_type: "Modern smartphone main camera (wide lens) or digital mirrorless/compact with wide lens",
-                     focal_length_mm: "16mm to 24mm equivalent (ultra-wide to wide angle lens, enables strong forced perspective)",
-                     aperture_range: "f/1.8 - f/2.8 (smartphone wide lens default or compact wide prime)",
-                     focus_mode: "Autofocus, focused on foreground object or hand; background person/subject remains within depth of field due to wide lens",
-                     framing: "Full body or knee-up; subject is placed in background while hand/props/objects (cups, hands, fingers) are held very close to the lens, appearing oversized and prominent. The perspective exaggerates the size difference.",
-                     orientation: "Vertical (portrait) orientation nearly always used for impact on social media feeds; camera faces slightly downward and at angle to create playful sense of scale.",
-                     camera_position: "Handheld at arm's length above/between chest and eye level, or facing downward towards standing or sitting subject. Camera 40–90cm from foreground hand/object, 2–4 meters from subject."
-                 },
-                 location_and_background: {
-                     setting: "Urban or street outdoor (sidewalks, in front of cafes/shops, tiled walls); spacious for depth between hand and subject",
-                     background_elements: "Urban details: tiles, shop windows, signage, bikes, sidewalk cracks, plant pots, etc. Environment largely in focus and unobstructed.",
-                     background_blur: "Minimal; ultra-wide lens and high f-number keeps both hand/object and person sharp. Slight loss of detail in background edges is natural.",
-                     depth_of_field: "Very deep; both foreground and background sharply rendered."
-                 },
-                 lighting: {
-                     lighting_type: "Natural daylight, generally bright and even (open shade or direct sun). Strong, clean daylight required for edge-to-edge sharpness.",
-                     white_balance: "Auto (typically ~5000-6500K), adapted for daylight",
-                     exposure_compensation: "Autoexposure or slight -0.3EV bias to prevent highlights from blowing out on hands/objects",
-                     ISO_setting: "ISO 50–200 (smartphone daylight base); minimal noise",
-                     shutter_speed: "1/200s–1/800s to freeze movement, especially for close-up hands"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Subject stands or sits facing camera, holding objects (cups, drinks) or hands fully extended toward lens; foreground hand(s) or held objects are very large in frame; subject casually posed in background, sometimes interacting with foreground (e.g. looking at drink, reacting to hand gesture, playful expressions)",
-                     facial_expression: "Playful, expressive, or nonchalant—pout, pursed lips, sunglasses, peace signs, or small smiles; not serious or posed",
-                     gaze_direction: "Occasionally looking at the camera, at the hand/object, or away; interactive vibe"
-                 },
-                 fashion_and_style: {
-                     clothing: "Trendy or casual urbanwear: oversized sweaters/jackets, loose jeans/trousers, visible accessories (nails, sunglasses, bags)",
-                     accessories: "Nail art, sunglasses, small jewelry, statement bags/props",
-                     hair: "Loose, styled or naturally flowing; not staged"
-                 }
-             }
-         },
-         'solo_snap_vibe': {
-    name: 'Solo Snap Vibe',
-    rules: {
-        composition_and_perspective: {
-            camera_type: "Front-facing smartphone camera (flagship tier) or digital compact camera with real-time LCD framing",
-            focal_length_mm: "24mm eq. (smartphone wide lens standard), no digital zoom",
-            aperture_range: "f/2.2 – f/2.4, fixed smartphone lens; enough depth for face detail, subtle rolloff behind",
-            focus_mode: "Continuous autofocus with face priority; must maintain micro-sharpness on eyes under natural motion",
-            framing: "Medium-loose close-up; subject fills 60–70% of vertical frame. Head near top third, arms visible, posture relaxed but central",
-            orientation: "Portrait mode only; camera slightly above eyeline, angled down 5–10 degrees to preserve natural chin-to-eye ratio",
-            camera_position: "Arm's-length handheld, resting elbow on thigh or ground if seated; subject-lens distance between 50–65cm precisely"
-        },
-        location_and_background: {
-            setting: "Outdoor natural light setting—beach, dunes, light-toned sand with blue sky overhead. No crowds, open space",
-            background_elements: "Recognizable real-world textures: soft dune gradients, beach towel, distant sky horizon, maybe an object like a kayak but blurred",
-            background_blur: "No artificial portrait blur; use native optical or computational depth (faux-bokeh not allowed)",
-            depth_of_field: "Slight, smartphone-emulated DoF—subject in full focus, background readable but soft-edged"
-        },
-        lighting: {
-            lighting_type: "Diffuse daylight with soft shadows—no direct midday sun. Natural light from sun at high angle, no backlighting or harsh glare",
-            white_balance: "Auto or daylight preset (~5500K), tuned for vivid blues, sand tone accuracy, and neutral skin",
-            exposure_compensation: "+0.3EV to +0.7EV: intentional overexposure on skin to retain warmth and clarity in midtones",
-            ISO_setting: "ISO 35–100 in daylight, must retain shadow detail on face and arms without visible noise",
-            shutter_speed: "1/100s minimum to freeze movement, subject must appear tack-sharp despite any minor hand tremors"
-        },
-        subject_pose_and_expression: {
-            poses: "Seated on sand, one leg bent; natural lean toward camera. Shoulders relaxed, back not rigid. Arm casually touching leg or resting on towel",
-            facial_expression: "Subtle, friendly half-smile; mouth gently closed or slightly parted. No forced grin or model gaze—must feel like a candid moment",
-            gaze_direction: "Directly into camera lens or slightly off to the side as if distracted by something nearby; no fixed stare"
-        },
-        fashion_and_style: {
-            clothing: "Dark navy graphic tee (e.g., Ralph Lauren logo), soft cotton texture. No stylized outfit—basic, everyday wear",
-            accessories: "Simple bead necklace and pearl stud earrings; minimal makeup, skin glow from lighting not cosmetics",
-            hair: "Natural blonde tones, parted center or off-center; wind-touched texture with flyaways visible, no heavy smoothing or product"
-        }
-    }
-},
-         'warm_moments': {
-             name: 'Warm Moments',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "35mm film camera, digital point-and-shoot, or smartphone front/rear camera",
-                     focal_length_mm: "28mm to 38mm equivalent (wide to slightly standard angle)",
-                     aperture_range: "f/2.8 - f/4.5 for casual depth of field",
-                     focus_mode: "Autofocus or manual, focusing on the couple's faces; minor front/rear blur or softness acceptable",
-                     framing: "Mid-shot to tight crop (waist-up or closer), both subjects comfortably within frame, at least partial face visibility for each subject",
-                     orientation: "Vertical (portrait) or slightly off-vertical handheld, unpolished",
-                     camera_position: "Eye-level or slightly above, distance 40-80cm from subjects, often handheld by one of the couple or captured via a mirror"
-                 },
-                 location_and_background: {
-                     setting: "Interior everyday settings: bathroom, car, casual store, or simple domestic room",
-                     background_elements: "Recognizable real-life details (mirrors, towels, shelves, doors, car seats) left undisturbed",
-                     background_blur: "Minimal to moderate, consistent with ~28-38mm at f/2.8-f/4.5 on crop/APS-C/full-frame; clear enough to recognize environment",
-                     depth_of_field: "Moderately wide; both subjects and background visible, not fully isolated"
-                 },
-                 lighting: {
-                     lighting_type: "Soft ambient interior lighting or on-camera flash typical for point-and-shoots/film; no studio light",
-                     white_balance: "Auto white balance, slightly warm — color temp 3500-4200K",
-                     exposure_compensation: "0EV to +1EV; not underexposed, accept mild flash hotspots",
-                     ISO_setting: "400-800 for digital, color-negative or ISO 400-800 film emulation for analog/lo-fi vibe",
-                     shutter_speed: "1/30 to 1/100s — sufficient to prevent major motion blur, but slight shake/blur is authentic"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Casual, natural, unposed; includes hugging, cheek kissing, teeth brushing, or playful expressions; captured in the middle of candid interaction",
-                     facial_expression: "Smiling, laughing, squinting or relaxed; genuine and non-posed",
-                     gaze_direction: "Looking at the camera, at each other, or playfully away"
-                 },
-                 fashion_and_style: {
-                     clothing: "Contemporary casual; sweatshirts, T-shirts, hoodies, striped or solid colors, minimal branding",
-                     accessories: "Large retro sunglasses, everyday objects (toothbrush, point-and-shoot camera), simple jewelry",
-                     hair: "Unstyled or loosely styled; natural-looking without significant product"
-                 }
-             }
-         },
-         'urban_motion_girl': {
-             name: 'Urban Motion Girl',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "Mirrorless or DSLR with standard to slight wide lens; high-end smartphones with Pro/RAW mode",
-                     focal_length_mm: "28mm to 35mm equivalent (wide for context, minimal distortion)",
-                     aperture_range: "f/2.2 - f/4 (moderate depth, subject sharp, background defined)",
-                     focus_mode: "Autofocus with face/eye detection on subject, single-shot or continuous for walking scenes",
-                     framing: "Full-body or thigh-up framing; subject centered or slightly off-center with significant urban street in background. Headroom left above subject for air and context",
-                     orientation: "Vertical (portrait preferred), camera held at thigh to chest level",
-                     camera_position: "Standing 3–5 meters away (enough for environmental context and full figure); shot at or just below eye level"
-                 },
-                 location_and_background: {
-                     setting: "City crosswalks, busy streets, urban intersections or lanes; crosswalk stripes, signage, curbs, blurred vehicles, city wall textures",
-                     background_elements: "Active street scenes, moving cars or scooters (blurred with slower shutter), traffic signs, street trees, painted lines; urban details visible and prominent",
-                     background_blur: "Static background is sharp; motion blur deliberately added to moving cars or people for sense of bustle. No portrait-mode bokeh.",
-                     depth_of_field: "Medium-deep; subject clearly distinguished, but not isolated—city life recognizable"
-                 },
-                 lighting: {
-                     lighting_type: "Natural daylight, open shade or overcast preferred; may include hard sunlight but without harsh shadow on face",
-                     white_balance: "Auto or Daylight (5000–6000K); realistic skin tones and cool/true street colors",
-                     exposure_compensation: "0EV to +0.7EV; balanced to retain ambient detail and subject clarity",
-                     ISO_setting: "ISO 100–400 (day/overcast); no visible noise",
-                     shutter_speed: "1/40s to 1/160s—fast for sharp walking/freeze, or slow (1/20s–1/80s) for purposeful motion blur of background vehicles"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Standing confidently or walking with purposeful stride; arms natural (at side, holding bag); straight-on or 3/4 angle to camera",
-                     facial_expression: "Serious, thoughtful or lightly confident; not exaggerated or artificially joyful",
-                     gaze_direction: "Looking forward, slightly past the camera, into the street context"
-                 },
-                 fashion_and_style: {
-                     clothing: "Iconic street fashion: oversized jersey or sweater, pleated mini or school skirt, unique socks, statement sneakers, subtle or playful layering",
-                     accessories: "Headbands, layered necklaces, fashion-forward glasses, casual backpacks/shoulder bags",
-                     hair: "Voluminous, braids, ponytails, or naturally free-flowing—styled to move naturally in wind"
-                 }
-             }
-         },
-         '90s_vintage_buddy': {
-             name: '90s Vintage Buddy Vibes',
-             rules: {
-                 composition_and_perspective: {
-                     camera_type: "Point-and-shoot 35mm film camera, disposable camera, or authentic digital compact with '90s CCD sensor",
-                     focal_length_mm: "32mm to 38mm equivalent (classic compact film focal range, uncompressed perspective)",
-                     aperture_range: "f/2.8 - f/4.5 (fixed on most vintage point-and-shoots)",
-                     focus_mode: "Single autofocus or fixed focus typical of film compacts; minor blur, soft edges from missed focus are authentic and allowed",
-                     framing: "Bust-up to half-body framing, both single and paired/couple compositions. Candid angles, eye-level or slightly above, often with a 'snapshot' imprecise crop (head/arms partly cut off).",
-                     orientation: "Horizontal (landscape) or vertical (portrait), preferably handheld and spontaneous",
-                     camera_position: "Handheld, short distance (50-120cm), possibly selfie arm's length or shot by a third person. No tripod/stabilizer."
-                 },
-                 location_and_background: {
-                     setting: "Indoor rooms (apartments, bedrooms, kitchens, restaurants, casual nightlife, or student dorms), soft tungsten lighting, or simple outdoor with flash",
-                     background_elements: "Unstaged: furniture, curtains, wall art, frames, plates/food, neon or signage, window blinds, objects scattered naturally",
-                     background_blur: "Minimal; most background details readable, except for natural film softness",
-                     depth_of_field: "Wide; most of the frame is in focus due to small sensors and wide lens"
-                 },
-                 lighting: {
-                     lighting_type: "Direct on-camera flash (harsh, distinctive), or overhead tungsten/ambient room light. No professional lighting.",
-                     white_balance: "Tungsten-balanced or auto, with light yellow or green tinge typical of daylight film indoors (~3500–4200K)",
-                     exposure_compensation: "0EV; overexposed highlights and flash hotspots accepted, strong flash reflections on skin common",
-                     ISO_setting: "ISO 200 to 800 (common consumer film speeds); visible grain at ISO 400+ is authentic and desirable",
-                     shutter_speed: "1/40s to 1/100s—enough for handshake or subject motion to blur slightly, especially in low light"
-                 },
-                 subject_pose_and_expression: {
-                     poses: "Natural, candid, relaxed, playful or goofy (e.g. sticking tongue out, exaggerated expressions, playful gestures, arm draped, shared food); close friendships or couple intimacy",
-                     facial_expression: "Genuine, fun, slightly dorky or offbeat (winking, squinting, pulling faces, poking fun); never staged or fashion serious",
-                     gaze_direction: "Looking at camera or at each other; direct and casual"
-                 },
-                 fashion_and_style: {
-                     clothing: "Casual: leather jackets, denim, oversized shirts/sweaters, sport or varsity jackets, simple tees—primary colors, iconic 90s cuts and details",
-                     accessories: "Minimal jewelry, subtle necklaces, hair clips or bands, 90s layering, little visible branding",
-                     hair: "Natural, air-dried, loose, minimal product—center or side parting common"
-                 }
+                 must_have: [
+                     "Focus on Japanese cars",
+                     "Vibrant color filters (especially yellow and blue tones)",
+                     "Nighttime setting with artificial lighting",
+                     "Urban street backdrop with neon signs and store signs in Japanese/Kanji",
+                     "Streetwear style clothing with edgy, casual vibe",
+                     "Vehicles with sporty, customized designs",
+                     "Elements that emphasize an energetic, youthful vibe"
+                 ],
+                 must_not_have: [
+                     "Non-Japanese cars",
+                     "Bright, daytime lighting",
+                     "Minimal or natural lighting without neon or artificial effects",
+                     "Relaxed or formal clothing styles",
+                     "Rural or non-urban backgrounds",
+                     "Classic or vintage cars that don't align with the sporty, customized aesthetic"
+                 ]
              }
          }
     };
@@ -726,33 +215,19 @@ INSTRUCTIONS:
 4. Make it sound natural and specific, not like a technical manual
 5. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
 
-STYLE RULES TO INCORPORATE:
+CRITICAL STYLE RULES - THESE ARE ABSOLUTE AND NON-NEGOTIABLE:
 
-Camera & Composition:
-- Camera: ${rules.composition_and_perspective?.camera_type}
-- Focal length: ${rules.composition_and_perspective?.focal_length_mm}
-- Framing: ${rules.composition_and_perspective?.framing}
-- Position: ${rules.composition_and_perspective?.camera_position}
+MUST HAVE (These elements are absolutely required and cannot be changed or ignored):
+${rules.must_have?.map(rule => `- ${rule}`).join('\n')}
 
-Setting & Environment:
-- Location: ${rules.location_and_background?.setting}
-- Background: ${rules.location_and_background?.background_elements}
-- Depth: ${rules.location_and_background?.depth_of_field}
+MUST NOT HAVE (These elements are absolutely forbidden and impossible to include):
+${rules.must_not_have?.map(rule => `- ${rule}`).join('\n')}
 
-Lighting:
-- Type: ${rules.lighting?.lighting_type}
-- White balance: ${rules.lighting?.white_balance}
-- Exposure: ${rules.lighting?.exposure_compensation}
-
-Pose & Expression:
-- Poses: ${rules.subject_pose_and_expression?.poses}
-- Expression: ${rules.subject_pose_and_expression?.facial_expression}
-- Gaze: ${rules.subject_pose_and_expression?.gaze_direction}
-
-Fashion & Style:
-- Clothing: ${rules.fashion_and_style?.clothing}
-- Accessories: ${rules.fashion_and_style?.accessories}
-- Hair: ${rules.fashion_and_style?.hair}
+IMPORTANT ENFORCEMENT RULES:
+- The MUST HAVE and MUST NOT HAVE rules are ABSOLUTE and cannot be modified, softened, or ignored
+- If the user's original prompt conflicts with these rules, prioritize the MUST HAVE/MUST NOT HAVE requirements
+- If the user asks for something that violates the MUST NOT HAVE rules, completely ignore that request
+- These rules override any conflicting instructions from the user's prompt
 
 General UGC Aesthetic Rules:
 - Color palette: ${generalRules.color_palette}
@@ -822,29 +297,19 @@ INSTRUCTIONS:
 5. Focus on creating a compelling background/environment scene
 6. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
 
-STYLE RULES TO INCORPORATE:
+CRITICAL STYLE RULES - THESE ARE ABSOLUTE AND NON-NEGOTIABLE:
 
-Camera & Composition:
-- Camera: ${rules.composition_and_perspective?.camera_type}
-- Focal length: ${rules.composition_and_perspective?.focal_length_mm}
-- Framing: ${rules.composition_and_perspective?.framing}
-- Position: ${rules.composition_and_perspective?.camera_position}
+MUST HAVE (These elements are absolutely required and cannot be changed or ignored):
+${rules.must_have?.map(rule => `- ${rule}`).join('\n')}
 
-Setting & Environment:
-- Location: ${rules.location_and_background?.setting}
-- Background: ${rules.location_and_background?.background_elements}
-- Depth: ${rules.location_and_background?.depth_of_field}
+MUST NOT HAVE (These elements are absolutely forbidden and impossible to include):
+${rules.must_not_have?.map(rule => `- ${rule}`).join('\n')}
 
-Lighting & Atmosphere:
-- Type: ${rules.lighting?.lighting_type}
-- White balance: ${rules.lighting?.white_balance}
-- Exposure: ${rules.lighting?.exposure_compensation}
-- ISO: ${rules.lighting?.ISO_setting}
-
-Mood & Atmosphere:
-- Overall feel: ${rules.mood_and_atmosphere?.overall_feel}
-- Color palette: ${rules.mood_and_atmosphere?.color_palette}
-- Contrast: ${rules.mood_and_atmosphere?.contrast}
+IMPORTANT ENFORCEMENT RULES:
+- The MUST HAVE and MUST NOT HAVE rules are ABSOLUTE and cannot be modified, softened, or ignored
+- If the user's original prompt conflicts with these rules, prioritize the MUST HAVE/MUST NOT HAVE requirements
+- If the user asks for something that violates the MUST NOT HAVE rules, completely ignore that request
+- These rules override any conflicting instructions from the user's prompt
 
 Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original scene`;
 

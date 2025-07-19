@@ -3,29 +3,28 @@ import { auth, db } from '../firebase'; // Import db
 import { useOutletContext } from 'react-router-dom';
 import { getFunctions, httpsCallable } from "firebase/functions"; // Import functions SDK
 // Keep only necessary icons + add Sun/Moon
-import { ArrowRight, Sparkle, FileText, Lightning, Question, ChartLine, BookmarkSimple, Plugs, Gear, ImageSquare, FilmSlate, Lightbulb, BookOpen, Fire, ChatText, Translate, Calendar, Info, Sun, Moon, DownloadSimple, Compass, User, ArrowSquareOut, CircleNotch, CalendarBlank, X as CloseIcon, ArrowLeft, Trash, UserPlus, PlusSquare, Slideshow, Play, Pause, Pencil, Check } from '@phosphor-icons/react'; 
+import { ArrowRight, Sparkle, FileText, Lightning, Question, ChartLine, BookmarkSimple, Plugs, Gear, ImageSquare, FilmSlate, Lightbulb, BookOpen, Fire, ChatText, Translate, Calendar, Info, Sun, Moon, DownloadSimple, Compass, User, ArrowSquareOut, CircleNotch, CalendarBlank, X as CloseIcon, ArrowLeft, Trash, UserPlus, PlusSquare, Play, Pause, Pencil, Check, Heart } from '@phosphor-icons/react'; 
 // Keep only necessary Firestore functions
 import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc } from "@firebase/firestore"; // Added doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc
-import JSZip from 'jszip'; // <-- Import JSZip
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- NEW: Plan Credit Limits ---
 const planCreditLimits = {
   // Basic Plan
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 15, videos: 10, slideshows: 30 }, // Monthly
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 15, videos: 10, slideshows: 30 }, // Yearly
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 15, videos: 10 }, // Monthly
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 15, videos: 10 }, // Yearly
   // Pro Plan
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { images: 50, videos: 40, slideshows: 100 }, // Monthly
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": { images: 50, videos: 40, slideshows: 100 }, // Yearly
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { images: 50, videos: 40 }, // Monthly
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": { images: 50, videos: 40 }, // Yearly
   // Business Plan
-  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 120, videos: 90, slideshows: 250 }, // Monthly
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 120, videos: 90, slideshows: 250 } // Yearly
+  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 120, videos: 90 }, // Monthly
+  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 120, videos: 90 } // Yearly
 
 };
 // --- End Plan Credit Limits ---
 
 // --- NEW: Default values for users with no active plan ---
-const defaultCreditValues = { images: 0, videos: 0, slideshows: 0 };
+const defaultCreditValues = { images: 0, videos: 0 };
 // --- End Default Values ---
 
 // --- Helper for Friendly Generation Type ---
@@ -34,7 +33,6 @@ const getFriendlyGenerationType = (commandCode) => {
     case 101: return 'TikTok Video';
     case 201: return 'Background Image';
     case 202: return 'Custom Image';
-    case 301: return 'Slideshow';
     case 401: return 'Edited Image';
     // Add more cases if other commands generate visual output shown here
     default: return 'Generated Content'; // Fallback
@@ -48,8 +46,7 @@ const isGenerationActive = (item) => {
   // Client-side statuses indicating active generation before polling or for direct calls
   const activeClientManagedStatuses = [
     'generating_direct',        // For direct image generation (e.g., commands 202, 203)
-    'generating_slideshow',     // For slideshow generation (e.g., command 301)
-    'generating',               // Generic status for image/slideshow from commandHandler
+    'generating',               // Generic status for image from commandHandler
     'image_generation_initiated', // For video, initial client status before first poll
   ];
 
@@ -71,11 +68,6 @@ const isGenerationActive = (item) => {
   if (item.type === 'video' && activePolledVideoStatuses.includes(item.status)) {
     return true;
   }
-  
-  // Add other types if they have specific polled active statuses, e.g.:
-  // if (item.type === 'slideshow' && item.status === 'slideshow_processing_step_1') {
-  //   return true;
-  // }
 
   return false;
 };
@@ -184,59 +176,7 @@ function usePercentageAnimation(targetValue, duration = 800) {
 const handleGenerationDownload = async (generation) => {
   if (!generation) return;
 
-  if (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0) {
-    // --- Slideshow ZIP Download Logic ---
-    console.log(`Initiating ZIP download for slideshow: ${generation.id} using processedImageUrls`);
-    const zip = new JSZip();
-    try {
-      // Fetch all images as blobs
-      const imageFetchPromises = generation.processedImageUrls.map(async (url, index) => {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} for image ${index + 1}`);
-            const blob = await response.blob();
-            // Try to determine a better filename/extension from blob type
-            let extension = 'png'; 
-            if (blob.type && blob.type.startsWith('image/')) {
-               extension = blob.type.split('/')[1] || 'png';
-            }
-            return { blob, filename: `slide_${index + 1}.${extension}` };
-        } catch(fetchError) {
-            console.error(`Error fetching image ${index+1} (${url}) for zip:`, fetchError);
-            throw fetchError; // Re-throw to fail Promise.all if one image fails
-        }
-      });
-
-      const imageDatas = await Promise.all(imageFetchPromises);
-
-      // Add images to zip
-      imageDatas.forEach(imageData => {
-          zip.file(imageData.filename, imageData.blob);
-          console.log(`Added ${imageData.filename} to zip.`);
-      });
-
-      // Generate zip file blob
-      console.log('Generating zip file...');
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-      console.log(`Zip file generated (Size: ${zipBlob.size} bytes).`);
-
-      // Trigger download
-      const zipUrl = URL.createObjectURL(zipBlob);
-      const link = document.createElement('a');
-      link.href = zipUrl;
-      link.download = `slideshow-${generation.id}.zip`; 
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(zipUrl), 100); 
-      console.log(`Zip download triggered for ${link.download}`);
-
-    } catch (error) {
-      console.error("Error creating or downloading ZIP file for slideshow:", error);
-      window.alert("Error creating ZIP for slideshow. Please try again.");
-    }
-
-  } else if (generation.type === 'image' || generation.type === 'video') {
+  if (generation.type === 'image' || generation.type === 'video') {
     // --- Single Image/Video Download Logic (Existing) ---
     const urlToDownload = generation.type === 'video' ? generation.videoUrl : generation.imageUrl;
     if (!urlToDownload) {
@@ -274,175 +214,6 @@ const handleGenerationDownload = async (generation) => {
 };
 // --- End Updated Standalone Download Helper ---
 
-// --- NEW: Slideshow Editor Component ---
-function SlideshowEditor({ slideshow, onClose, isDarkMode, backgrounds, onSave }) {
-  const [editedSlideTexts, setEditedSlideTexts] = useState(slideshow?.slideTexts || []);
-  const [selectedBackgroundUrl, setSelectedBackgroundUrl] = useState(slideshow?.selectedBackgroundUrl || '');
-  const [textColor, setTextColor] = useState(slideshow?.textColor || 'white');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleTextChange = (index, newText) => {
-    const updated = [...editedSlideTexts];
-    updated[index] = newText;
-    setEditedSlideTexts(updated);
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave({
-        slideTexts: editedSlideTexts,
-        selectedBackgroundUrl,
-        textColor
-      });
-      onClose();
-    } catch (error) {
-      console.error('Error saving slideshow:', error);
-      alert('Error saving slideshow changes');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className={`max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl ${
-        isDarkMode ? 'bg-neutral-900 border border-neutral-700' : 'bg-white border border-stone-200'
-      }`}>
-        {/* Header */}
-        <div className={`p-6 border-b ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
-          <div className="flex justify-between items-center">
-            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
-              Edit Slideshow
-            </h2>
-            <button 
-              onClick={onClose}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-stone-100'
-              }`}
-            >
-              <CloseIcon size={20} className={isDarkMode ? 'text-stone-400' : 'text-stone-600'} />
-            </button>
-          </div>
-        </div>
-
-        {/* Background Selection */}
-        <div className={`p-6 border-b ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
-          <h3 className={`text-lg font-medium mb-4 ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
-            Background
-          </h3>
-          <div className="grid grid-cols-4 gap-3">
-            {backgrounds?.map((bg) => (
-              <button
-                key={bg.id}
-                onClick={() => setSelectedBackgroundUrl(bg.imageUrl)}
-                className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all ${
-                  selectedBackgroundUrl === bg.imageUrl 
-                    ? 'border-blue-500 ring-2 ring-blue-500/30' 
-                    : 'border-stone-200 dark:border-neutral-700 hover:border-stone-300'
-                }`}
-              >
-                <img 
-                  src={bg.imageUrl} 
-                  alt={bg.name}
-                  className="w-full h-full object-cover"
-                />
-                {selectedBackgroundUrl === bg.imageUrl && (
-                  <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                    <Check size={20} className="text-blue-600" weight="bold" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Node-based Slide Editor */}
-        <div className="p-6">
-          <h3 className={`text-lg font-medium mb-6 ${isDarkMode ? 'text-white' : 'text-stone-900'}`}>
-            Slide Content
-          </h3>
-          
-          <div className="relative max-w-md mx-auto">
-            {/* Vertical Connection Line */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-stone-300 dark:bg-neutral-600 transform -translate-x-0.5" />
-            
-            {editedSlideTexts.map((text, index) => (
-              <div key={index} className="relative mb-8 last:mb-0">
-                {/* Connection Point */}
-                <div className="absolute left-1/2 -top-2 w-3 h-3 bg-blue-500 rounded-full transform -translate-x-1/2 border-2 border-white dark:border-neutral-900" />
-                
-                {/* Node */}
-                <div className={`relative ml-8 p-4 rounded-lg border-2 border-dashed transition-all ${
-                  isDarkMode ? 'border-neutral-600 bg-neutral-800' : 'border-stone-300 bg-stone-50'
-                }`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                    <span className={`text-sm font-medium ${isDarkMode ? 'text-stone-300' : 'text-stone-600'}`}>
-                      Slide {index + 1}
-                    </span>
-                  </div>
-                  
-                  <textarea
-                    value={text}
-                    onChange={(e) => handleTextChange(index, e.target.value)}
-                    className={`w-full p-3 rounded-lg border resize-none transition-colors ${
-                      isDarkMode 
-                        ? 'bg-neutral-700 border-neutral-600 text-white placeholder-neutral-400 focus:border-blue-500' 
-                        : 'bg-white border-stone-300 text-stone-900 placeholder-stone-500 focus:border-blue-500'
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
-                    placeholder={`Enter text for slide ${index + 1}...`}
-                    rows={3}
-                  />
-                </div>
-
-                {/* Bottom Connection Point */}
-                {index < editedSlideTexts.length - 1 && (
-                  <div className="absolute left-1/2 -bottom-2 w-3 h-3 bg-stone-400 dark:bg-neutral-500 rounded-full transform -translate-x-1/2 border-2 border-white dark:border-neutral-900" />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer with Actions */}
-        <div className={`p-6 border-t ${isDarkMode ? 'border-neutral-700' : 'border-stone-200'}`}>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className={`px-4 py-2 rounded-lg border transition-colors ${
-                isDarkMode 
-                  ? 'border-neutral-600 text-neutral-300 hover:bg-neutral-800' 
-                  : 'border-stone-300 text-stone-700 hover:bg-stone-50'
-              } disabled:opacity-50`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <>
-                  <CircleNotch size={16} className="animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check size={16} />
-                  Save Changes
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-// --- End Slideshow Editor Component ---
 
 // --- NEW: Comprehensive Edit Popup Component ---
 function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit, onShowSuccessNotification, creators, backgrounds, onAssetSaved, onGenerationUpdated, onGenerationDeleted }) {
@@ -1921,8 +1692,9 @@ function VideoPreview({ generation, className = "" }) {
   );
 }
 
-function GenerationCard({ generation, onClick, creators, backgrounds, onEditSlideshow }) { // Added onEditSlideshow prop
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+function GenerationCard({ generation, onClick, creators, backgrounds, onToggleFavorite }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(1);
 
   // --- NEW: Check if already saved as Creator or Background and get their names ---
   const existingCreator = useMemo(() => {
@@ -2022,41 +1794,6 @@ function GenerationCard({ generation, onClick, creators, backgrounds, onEditSlid
       }
     }
     
-    if (generation.type === 'slideshow') {
-      // ALWAYS show custom preview with selected background and first slide text
-      if (generation.selectedBackgroundUrl && generation.slideTexts && generation.slideTexts.length > 0) {
-        // Determine effective text color, defaulting to 'white'
-        const effectiveTextColor = generation.textColor || 'white';
-        return (
-          <div className="relative w-full h-full">
-            <img
-              src={generation.selectedBackgroundUrl}
-              alt="Slideshow background"
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-start p-4"> {/* Changed to justify-start for left align */}
-              <p 
-                className={`text-sm md:text-base font-bold text-left ${effectiveTextColor === 'white' ? 'text-white' : 'text-black'}`}
-                style={{ 
-                  textShadow: effectiveTextColor === 'white' 
-                    ? '0 1px 2px rgba(0,0,0,0.8)' 
-                    : '0 1px 2px rgba(255,255,255,0.8)'
-                }}
-              >
-                {generation.slideTexts[0]}
-              </p>
-            </div>
-          </div>
-        );
-      } else {
-        // Fallback if essential slideshow data is missing for the preview
-        return (
-          <div className="w-full h-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
-            <Slideshow size={32} className="text-stone-400 dark:text-stone-500" />
-          </div>
-        );
-      }
-    }
     
     // Fallback
     return (
@@ -2073,56 +1810,107 @@ function GenerationCard({ generation, onClick, creators, backgrounds, onEditSlid
   const selectedTextColor = generation.textColor || 'white';
 
 
+  // Get the main image URL for Pinterest-style display
+  const getMainImageUrl = () => {
+    if (generation.type === 'image' && generation.imageUrl) {
+      return generation.imageUrl;
+    }
+    if (generation.type === 'video' && generation.initialImageUrl) {
+      return generation.initialImageUrl;
+    }
+    if (generation.type === 'video' && generation.imageUrl) {
+      return generation.imageUrl;
+    }
+    return null;
+  };
+
+  const imageUrl = getMainImageUrl();
+  
+  // Handle image load to calculate aspect ratio
+  const handleImageLoad = (e) => {
+    const img = e.target;
+    setAspectRatio(img.naturalHeight / img.naturalWidth);
+    setImageLoaded(true);
+  };
+
+  const handleToggleFavorite = (e) => {
+    e.stopPropagation();
+    onToggleFavorite && onToggleFavorite(generation.id, !generation.isFavorite);
+  };
+
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      whileHover={{ scale: 1.01 }}
-      transition={{ 
-        duration: 0.4, 
-        ease: "easeOut",
-        scale: { type: "spring", stiffness: 400, damping: 25 }
-      }}
-      className="relative rounded-lg overflow-hidden group cursor-pointer"
-      style={{ paddingTop: '177.77%' }} // 9:16 ratio
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="group cursor-pointer"
       onClick={onClick}
     >
-      {/* Background Image Area */} 
-      <div className="absolute inset-0 w-full h-full overflow-hidden">
-        {getPreviewContent()}
+      <div className="relative rounded-xl overflow-hidden bg-white dark:bg-neutral-800 shadow-sm hover:shadow-md transition-all duration-200">
+        {imageUrl ? (
+          <div className="relative">
+            <img 
+              src={imageUrl} 
+              alt={generation.prompt || 'Generated content'} 
+              className="w-full h-auto rounded-[5px] object-cover"
+              onLoad={handleImageLoad}
+            />
+            
+            {/* Video play button overlay */}
+            {generation.type === 'video' && (
+              <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
+                  <Play size={20} className="text-black ml-0.5" weight="fill" />
+                </div>
+              </div>
+            )}
+            
+            {/* Video hook text overlay */}
+            {generation.type === 'video' && generation.hookText && (
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                <p className="text-white text-sm font-medium line-clamp-2">
+                  {generation.hookText}
+                </p>
+              </div>
+            )}
+            
+            {/* Action buttons overlay */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <div className="flex gap-1">
+                {/* Favorite button */}
+                <button
+                  onClick={handleToggleFavorite}
+                  className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-1.5 transition-all duration-200 hover:scale-110"
+                  title={generation.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Heart 
+                    size={14} 
+                    className={generation.isFavorite ? "text-red-500" : "text-stone-600"}
+                    weight={generation.isFavorite ? "fill" : "regular"} 
+                  />
+                </button>
+                
+                {/* Download button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGenerationDownload(generation);
+                  }}
+                  className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-1.5 transition-all duration-200 hover:scale-110"
+                  title="Download"
+                >
+                  <DownloadSimple size={14} className="text-stone-600" weight="bold" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full aspect-square bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+            <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
+          </div>
+        )}
+        
       </div>
-      
-      {/* Hover Overlay with Action Buttons */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-end justify-center p-3 opacity-0 group-hover:opacity-100">
-        <div className="flex gap-2">
-          {/* Download Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleGenerationDownload(generation);
-            }}
-            className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-2 transition-all duration-200 hover:scale-110"
-            title="Download"
-          >
-            <DownloadSimple size={16} className="text-stone-800" weight="bold" />
-          </button>
-          
-          {/* Edit Button - Only for slideshows */}
-          {generation.type === 'slideshow' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditSlideshow && onEditSlideshow(generation);
-              }}
-              className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-2 transition-all duration-200 hover:scale-110"
-              title="Edit Slideshow"
-            >
-              <Pencil size={16} className="text-stone-800" weight="bold" />
-            </button>
-          )}
-        </div>
-      </div>
-
     </motion.div>
   );
 }
@@ -2134,8 +1922,6 @@ function Dashboard() {
   const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedGeneration, setSelectedGeneration] = useState(null);
-  const [isEditingSlideshow, setIsEditingSlideshow] = useState(false);
-  const [selectedSlideshowForEdit, setSelectedSlideshowForEdit] = useState(null);
 
   const {
     dashboardRefreshKey,
@@ -2187,6 +1973,30 @@ function Dashboard() {
     setIsSuccessModalOpen(false);
   };
 
+  const handleToggleFavorite = async (generationId, isFavorite) => {
+    if (!user) return;
+    
+    try {
+      // Update Firestore
+      const generationRef = doc(db, 'users', user.uid, 'generations', generationId);
+      await updateDoc(generationRef, {
+        isFavorite: isFavorite
+      });
+      
+      // Update local state
+      setGenerations(prevGenerations =>
+        prevGenerations.map(gen =>
+          gen.id === generationId ? { ...gen, isFavorite } : gen
+        )
+      );
+      
+      showSuccessNotification(isFavorite ? 'Added to favorites' : 'Removed from favorites');
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      showSuccessNotification('Error updating favorite');
+    }
+  };
+
   useEffect(() => {
     if (!user) {
       setIsLoadingGenerations(false);
@@ -2218,15 +2028,15 @@ function Dashboard() {
             const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
             return { id: docSnapshot.id, ...data, timestamp };
           });
-        } else if (activeFilter === 'slideshow') {
-          const slideshowQuery = query(
+        } else if (activeFilter === 'favorites') {
+          const favoritesQuery = query(
             generationsColRef, 
-            where('type', '==', 'slideshow'), 
+            where('isFavorite', '==', true), 
             orderBy('timestamp', 'desc'), 
             limit(fetchLimit)
           );
-          const slideshowSnapshot = await getDocs(slideshowQuery);
-          processedGenerations = slideshowSnapshot.docs.map(docSnapshot => {
+          const favoritesSnapshot = await getDocs(favoritesQuery);
+          processedGenerations = favoritesSnapshot.docs.map(docSnapshot => {
             const data = docSnapshot.data();
             const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
             return { id: docSnapshot.id, ...data, timestamp };
@@ -2264,8 +2074,8 @@ function Dashboard() {
   useEffect(() => {
     const itemToPoll = generatingItem;
     const shouldPollItem = itemToPoll && contextUser &&
-      (itemToPoll.type === 'image' || itemToPoll.type === 'slideshow') &&
-      (itemToPoll.status === 'generating_direct' || itemToPoll.status === 'generating_slideshow' || itemToPoll.status === 'generating_firestore') &&
+      (itemToPoll.type === 'image') &&
+      (itemToPoll.status === 'generating_direct' || itemToPoll.status === 'generating_firestore') &&
       itemToPoll.firestoreDocId;
 
     if (shouldPollItem && imagePollingIntervalId === null) {
@@ -2281,7 +2091,6 @@ function Dashboard() {
             const data = docSnap.data();
             let isReady = false;
             if (itemToPoll.type === 'image' && data.imageUrl) isReady = true;
-            else if (itemToPoll.type === 'slideshow' && data.processedImageUrls && data.processedImageUrls.length > 0 && data.processedImageUrls.every(url => typeof url === 'string' && url.startsWith('http'))) isReady = true;
             
             if (isReady) {
               clearInterval(intervalId);
@@ -2327,16 +2136,16 @@ function Dashboard() {
           const data = docSnapshot.data();
           return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
         });
-      } else if (activeFilter === 'slideshow') {
-        const slideshowQuery = query(
+      } else if (activeFilter === 'favorites') {
+        const favoritesQuery = query(
           generationsColRef,
-          where('type', '==', 'slideshow'),
+          where('isFavorite', '==', true),
           orderBy('timestamp', 'desc'),
           startAfter(lastTimestampForPagination),
           limit(fetchLimit)
         );
-        const slideshowSnapshot = await getDocs(slideshowQuery);
-        newGenerations = slideshowSnapshot.docs.map(docSnapshot => {
+        const favoritesSnapshot = await getDocs(favoritesQuery);
+        newGenerations = favoritesSnapshot.docs.map(docSnapshot => {
           const data = docSnapshot.data();
           return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
         });
@@ -2417,38 +2226,6 @@ function Dashboard() {
     }
   };
 
-  const handleEditSlideshow = (generation) => {
-    setSelectedSlideshowForEdit(generation);
-    setIsEditingSlideshow(true);
-  };
-
-  const handleCloseSlideshowEditor = () => {
-    setIsEditingSlideshow(false);
-    setSelectedSlideshowForEdit(null);
-  };
-
-  const handleSaveSlideshowChanges = async (changes) => {
-    if (!user || !selectedSlideshowForEdit) return;
-    
-    try {
-      const functions = getFunctions();
-      const regenerateSlideshow = httpsCallable(functions, 'regenerateSlideshow');
-      
-      await regenerateSlideshow({
-        userId: user.uid,
-        slideshowId: selectedSlideshowForEdit.id,
-        slideTexts: changes.slideTexts,
-        selectedBackgroundUrl: changes.selectedBackgroundUrl,
-        textColor: changes.textColor
-      });
-      
-      showSuccessNotification('Slideshow changes saved! Regenerating...');
-      refreshDashboardGenerations();
-    } catch (error) {
-      console.error('Error saving slideshow changes:', error);
-      throw error; // Re-throw to let the SlideshowEditor handle the error display
-    }
-  };
 
   // Since we now filter at fetch level, displayed generations are just the generations
   const displayedGenerations = generations;
@@ -2482,14 +2259,14 @@ function Dashboard() {
                   Images
                 </button>
                 <button 
-                  onClick={() => setActiveFilter('slideshow')}
+                  onClick={() => setActiveFilter('favorites')}
                   className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
-                    activeFilter === 'slideshow'
+                    activeFilter === 'favorites'
                       ? 'text-stone-900 dark:text-stone-100 opacity-100'
                       : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
                   }`}
                 >
-                  Slideshows
+                  Favorites
             </button>
         </div>
       </div>
@@ -2511,16 +2288,17 @@ function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4">
                   {displayedGenerations.map((gen) => (
-                    <GenerationCard 
-                      key={gen.id} 
-                      generation={gen} 
-                      onClick={() => setSelectedGeneration(gen)}
-                      creators={creators} // Pass creators
-                      backgrounds={backgrounds} // Pass backgrounds
-                      onEditSlideshow={handleEditSlideshow} // Pass edit handler
-                    />
+                    <div key={gen.id} className="break-inside-avoid">
+                      <GenerationCard 
+                        generation={gen} 
+                        onClick={() => setSelectedGeneration(gen)}
+                        creators={creators} // Pass creators
+                        backgrounds={backgrounds} // Pass backgrounds
+                        onToggleFavorite={handleToggleFavorite}
+                      />
+                    </div>
                   ))}
                 </div>
                 {hasMore && (
@@ -2602,16 +2380,6 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Slideshow Editor */}
-      {isEditingSlideshow && selectedSlideshowForEdit && (
-        <SlideshowEditor
-          slideshow={selectedSlideshowForEdit}
-          onClose={handleCloseSlideshowEditor}
-          isDarkMode={isDarkMode}
-          backgrounds={backgrounds}
-          onSave={handleSaveSlideshowChanges}
-        />
-      )}
 
       {/* Edit Popup */}
       {selectedGeneration && (

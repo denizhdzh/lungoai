@@ -208,7 +208,7 @@ const NodeWrapper = ({
 					fontWeight: 'bold',
 					color: 'white',
 					left: '-19px',
-					opacity: showHandles ? 1 : 0,
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -230,7 +230,7 @@ const NodeWrapper = ({
 					fontWeight: 'bold',
 					color: 'white',
 					right: '-19px',
-					opacity: showHandles ? 1 : 0,
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -1172,7 +1172,24 @@ const initialNodes = [];
 	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe'));
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
+	const [showFramePopup, setShowFramePopup] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
+
+	// Available frames with preview images
+	const availableFrames = [
+		{
+			id: 'late_night_lofi',
+			name: 'Late Night Lo-Fi Vibes',
+			description: 'Lo-fi aesthetic with indoor settings',
+			previewImage: 'https://images.unsplash.com/photo-1493514789931-586cb221d7a7?w=400&h=225&fit=crop&crop=center'
+		},
+		{
+			id: 'japanese_night_drive',
+			name: 'Japanese Night Drive',
+			description: 'Urban night scenes with neon vibes',
+			previewImage: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=400&h=225&fit=crop&crop=center'
+		}
+	];
 
 	// This effect syncs the component's internal state with props from the parent canvas.
 	// It's crucial for when data is loaded or updated externally, preventing "stale state".
@@ -1575,7 +1592,7 @@ const initialNodes = [];
 								onChange={(e) => setModel(e.target.value)}
 								onFocus={() => onDropdownStateChange?.(true)}
 								onBlur={() => onDropdownStateChange?.(false)}
-								className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+								className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 							>
 								{data.type === 'image' ? (
 									<>
@@ -1614,7 +1631,7 @@ const initialNodes = [];
 									}}
 									onFocus={() => onDropdownStateChange?.(true)}
 									onBlur={() => onDropdownStateChange?.(false)}
-									className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 								>
 									<option value="1:1">1:1</option>
 									<option value="4:3">4:3</option>
@@ -1633,7 +1650,7 @@ const initialNodes = [];
 										onChange={(e) => setDuration(parseInt(e.target.value))}
 										onFocus={() => onDropdownStateChange?.(true)}
 										onBlur={() => onDropdownStateChange?.(false)}
-										className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 									>
 										<option value={3}>3s</option>
 										<option value={5}>5s</option>
@@ -1650,16 +1667,35 @@ const initialNodes = [];
 						{data.type === 'image' && model === 'lungo-vibe' && (
 							<div className="space-y-1">
 								<label className="text-[10px] text-neutral-500 block px-1">Style Frame</label>
-								<select
-									value={selectedFrame || 'late_night_lofi'}
-									onChange={(e) => setSelectedFrame(e.target.value)}
+								<button
+									onClick={() => setShowFramePopup(true)}
 									onFocus={() => onDropdownStateChange?.(true)}
 									onBlur={() => onDropdownStateChange?.(false)}
-									className="w-full bg-neutral-800 border border-neutral-600 rounded-lg px-2 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-neutral-500"
+									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl p-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all hover:bg-neutral-800"
 								>
-									<option value="late_night_lofi">Late Night Lo-Fi Vibes</option>
-									<option value="japanese_night_drive">Japanese Night Drive</option>
-								</select>
+									{(() => {
+										const currentFrameData = availableFrames.find(f => f.id === (selectedFrame || 'late_night_lofi'));
+										return (
+											<div className="flex items-center gap-3">
+												<div 
+													className="w-12 h-7 bg-neutral-700 rounded-lg overflow-hidden flex-shrink-0"
+													style={{
+														backgroundImage: currentFrameData ? `url(${currentFrameData.previewImage})` : 'none',
+														backgroundSize: 'cover',
+														backgroundPosition: 'center'
+													}}
+												/>
+												<div className="text-left flex-1">
+													<div className="font-medium">{currentFrameData?.name || 'Select Frame'}</div>
+													<div className="text-[10px] text-neutral-400 mt-0.5">{currentFrameData?.description}</div>
+												</div>
+												<div className="text-neutral-400">
+													<CaretDown size={12} />
+												</div>
+											</div>
+										);
+									})()}
+								</button>
 							</div>
 						)}
 					</div>

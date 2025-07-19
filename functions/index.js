@@ -182,18 +182,31 @@ function getImageSetRulesByFrameId(frameId) {
 
 function getGeneralRulesForUGC() {
     return {
-        color_palette: "Natural, muted tones dominate. Soft pastels, beige, cream, olive, muted blue used for both backgrounds and clothing. Only minimal pops of color for accessories (e.g. sunglasses, hairclips). Never use neon or highly saturated colors as main focus.",
-        skin_tones: "True-to-life, realistic.",
-        white_balance: "Neutral or slightly warm. No unnatural color casts.",
-        contrast: "Moderate to low. Details must be visible in both shadows and highlights. No harsh lights or exaggerated contrast.",
-        lighting: "Soft, ambient, diffuse. Use daylight, window light, or indirect interior lighting. No heavy flash or dramatic shadows. Natural daylight, gentle household bulbs, sometimes neon, but never theatrical lighting.",
-        camera: "Casual digital (compact camera or smartphone look). No high-end DSLR or cinematic sharpness. Slight grain in low light is acceptable. Everything in frame must be sharp and in focus - no background blur allowed. Never extreme bokeh or any depth of field effects.",
-        composition: "Subject is often centered or slightly off. Allow natural cropping (edges cut, not fully within frame). Frame fills with subject, avoid excessive negative space. Eye-level or slightly above. Mix of close-up and full-body shots. Occasional dynamic tilt, but should always feel candid.",
-        background: "Authentic urban streets, cafes, rooms, elevators, cars, natural locations. Visual information is present but never cluttered. Background must be completely sharp and in focus - no blur allowed whatsoever. Everything in the scene should be crisp and clear.",
-        style_and_pose: "Candid, relaxed, never overly staged. Subjects may look directly at camera or away. Authentic and natural, not 'model-like'. Sitting, leaning, casual movements preferred. Genuine, cool, relaxed moods. Expressions can be pensive, neutral, slightly playful—never exaggerated smiling or forced.",
-        clothing: "Modern, trendy, urban streetwear, relaxed chic. Layers, oversized fits, minimal or subtle logos. Accessories include sunglasses, rings, hair clips. No retro, formal or costume styles.",
-        post_processing: "Light, natural edits only. No heavy filters. Natural grain allowed. No obvious retouch, skin smoothing, or artificial effects. No studio look, glamour retouch, over-brightened skin, high dynamic range, cartoonish colors or contrasts.",
-        overall_aesthetic: "Effortlessly cool, youthful, documentary-inspired, modern and realistic. Always avoid commercial, stylized, or studio portrait vibe."
+        color_palette: "Images MUST use only natural, rich, and vivid color tones. Clothing base colors MUST be beige, cream, tan, olive, muted blue, navy, charcoal, washed denim, off-white, grey, or black—these colors MUST look punchy, deep, and lively. Clothing MAY include a single, small pop of bold color (e.g. red, yellow, green) in accessories ONLY. Neon tones, overly saturated colors, flat or washed-out colors MUST NEVER appear anywhere in the image. The overall color mood MUST be crisp and balanced, NEVER faded, NEVER pale, NEVER with color shifts.",
+        
+        clothing_colors: "Wardrobe colors MUST follow the above palette STRICTLY. Main pieces (tops, bottoms, jackets) MUST use only muted or deep primary tones. Bright accents are ALLOWED only as shoes, glasses, bags, or jewelry—and MUST NOT dominate the outfit.",
+        
+        skin_tones: "Skin tones MUST ALWAYS be true-to-life, healthy, and vibrant. Skin MUST NEVER be washed out, desaturated, pastel, flat, or over-edited. Skin details MUST remain visible and realistic, regardless of lighting.",
+        
+        white_balance: "White balance MUST ALWAYS be neutral or slightly warm. There MUST NOT be any artificial coldness, blue tones, or color casts. Clothes and skin colors MUST look exactly as they would in real, neutral daylight. NO tinted or colored lighting is allowed.",
+        
+        contrast: "Contrast MUST ALWAYS be strong and clear, with crisp edges and bold separation between dark and light areas. LOW contrast, haze, faded images, or clipped blacks/highlights are NEVER allowed.",
+        
+        lighting: "Lighting MUST be bright, even, and natural. The ENTIRE photo MUST be perfectly and uniformly lit—NO part of the scene can be dark, shadowy, or unevenly exposed. Studio flashes, colored lights, artificial low-light, or visible lighting rigs are STRICTLY FORBIDDEN.",
+        
+        camera: "Photo MUST be shot with a modern digital camera or a smartphone of high caliber. The ENTIRE image—foreground AND background—MUST be 100% sharp and in focus. ANY blur, bokeh, motion blur, depth blur, soft focus, or out-of-focus area is FORBIDDEN and NOT ALLOWED under ANY condition.",
+        
+        composition: "Subject MUST be visible and clearly the focus, but must share the frame naturally with the background/environment. Cropping MUST be tight and intentional, with subject filling much of the image. Minimal negative space. Overly wide or empty compositions are NOT ALLOWED. Dynamic angles are ONLY allowed if the subject is fully visible and not distorted. No abstract, artsy, or experimental framing.",
+        
+        background: "Background MUST be a real, context-rich, urban or upscale setting: cafes, streets, stores, beaches, cars, apartments, elevators. The background MUST be 100% sharp and in perfect focus AT ALL TIMES—NO bokeh, NO blur, NO fake depth. Every background object MUST be clearly recognizable and contribute to the authentic vibe. Cluttered, dirty, or generic backgrounds are NOT allowed.",
+        
+        style_and_pose: "Poses MUST be relaxed, candid, and effortless. Acting, fake expressions, exaggerated smiles, or fashion-model postures are NOT allowed. Activities MUST look real and spontaneous—eating, walking, sitting, skateboarding, shopping, using a phone, etc. Outfits and accessories MUST be visible and the main part of the visual story.",
+        
+        clothing: "ALL clothing MUST be modern, upscale, Gen Z streetwear or relaxed chic from the following brands ONLY: Adidas, Nike, Tom Ford, Nude Project, Jacquemus, Casablanca, Balenciaga, Off-White, AMI Paris, Axel Arigato, Acne Studios, Maison Kitsuné, Palm Angels, Aimé Leon Dore, Stussy, Kenzo, Dior, Louis Vuitton, Burberry, Prada, Hermès, Fear of God, Moncler, The Kooples, Sandro, Comme des Garçons, Loewe. Outfits MUST consist of oversized fits, premium joggers, loose denim, branded sweatshirts, statement tees, knits, bombers, and sportswear. NO vintage, retro, Y2K, boho, costume, fast fashion, or formalwear is allowed.",
+        
+        post_processing: "Editing MUST be minimal and ONLY for very slight vibrancy or clarity. NO heavy filters, face retouch, smoothing, HDR, or artistic effects are EVER permitted. Skin texture MUST NEVER be airbrushed. NOTHING in the image may look studio-edited or manipulated.",
+        
+        overall_aesthetic: "Photo MUST look urban, rich, modern, and high-energy, reflecting real life and real youth. Studio/campaign/commercial, heavily staged or fake images are NEVER accepted. Vibe MUST ALWAYS be documentary, premium, and aspirational."
     };
 }
 

@@ -17,6 +17,7 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
 import { motion } from 'framer-motion';
 import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
+import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -48,6 +49,9 @@ function AppRouter() {
   const [userDataFetched, setUserDataFetched] = useState(false); // Track fetch status
   const [logoAnimationComplete, setLogoAnimationComplete] = useState(false); // Track logo animation
   const navigate = useNavigate(); // Initialize navigate hook
+  
+  // Canvas preload hook
+  const { canvasData, preloadForCurrentUser } = useCanvasPreload();
 
   // Fallback: Force animation complete after 4 seconds
   useEffect(() => {
@@ -69,11 +73,16 @@ function AppRouter() {
       if (currentUser) {
           try {
               console.log(`[AppRouter Auth] User ${currentUser.uid} logged in. Fetching Firestore data...`);
-              const userDocRef = doc(db, "users", currentUser.uid);
-              const docSnap = await getDoc(userDocRef);
-              if (docSnap.exists()) {
-                  setUserData(docSnap.data());
-                  console.log("[AppRouter Auth] User data fetched:", docSnap.data());
+              
+              // Start canvas preload and user data fetch in parallel
+              const [userDocSnap, _] = await Promise.all([
+                getDoc(doc(db, "users", currentUser.uid)),
+                preloadForCurrentUser() // Preload canvas in background
+              ]);
+              
+              if (userDocSnap.exists()) {
+                  setUserData(userDocSnap.data());
+                  console.log("[AppRouter Auth] User data fetched:", userDocSnap.data());
               } else {
                   // Handle case where user exists in Auth but not Firestore 
                   console.warn("[AppRouter Auth] User document not found in Firestore for UID:", currentUser.uid);
@@ -179,7 +188,7 @@ function AppRouter() {
         <Route path="pricing" element={<PricingSection id="pricing" />} />
         <Route path="aiguide" element={<CommandInfo />} />
         <Route path="admin" element={<Admin />} />
-        <Route path="studio" element={<CanvasWorkspace />} />
+        <Route path="studio" element={<CanvasWorkspace preloadedCanvasData={canvasData} />} />
       </Route>
 
       {/* --- REMOVE STANDALONE STUDIO ROUTE --- */}

@@ -84,8 +84,8 @@ import {
 } from '@phosphor-icons/react';
 import { generateImage, generateVideo, checkApiKey, GENERATION_TYPES, IMAGE_STYLES, QUALITY_OPTIONS } from '../services/ai';
 import { useOutletContext } from 'react-router-dom';
-import { db, functions } from '../firebase';
-import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, limit } from 'firebase/firestore';
+import { db, functions, auth } from '../firebase';
+import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, limit, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import CanvasTutorial from '../components/CanvasTutorial';
 import CustomDropdown from '../components/CustomDropdown';
@@ -196,46 +196,53 @@ const NodeWrapper = ({
 				type="target" 
 				position={Position.Left} 
 				style={{
-					width: '32px',
-					height: '32px',
+					width: '36px',
+					height: '72px',
 					background: 'black',
-					border: '3px solid white',
-					borderRadius: '50%',
+					border: 'none',
+					outline: 'none',
 					display: 'flex',
 					alignItems: 'center',
 					justifyContent: 'center',
-					fontSize: '18px',
-					fontWeight: 'bold',
 					color: 'white',
-					left: '-19px',
-					opacity: 1,
+					left: '-18px',
+					opacity: showHandles ? 1 : 0,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
-				<Asterisk size={16} weight="bold" />
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
 			</Handle>
 			<Handle 
 				type="source" 
 				position={Position.Right} 
 				style={{
-					width: '32px',
-					height: '32px',
+					width: '36px',
+					height: '72px',
 					background: 'black',
-					border: '3px solid white',
-					borderRadius: '50%',
+					border: 'none',
+					outline: 'none',
 					display: 'flex',
 					alignItems: 'center',
 					justifyContent: 'center',
-					fontSize: '18px',
-					fontWeight: 'bold',
 					color: 'white',
-					right: '-19px',
-					opacity: 1,
+					right: '-18px',
+					opacity: showHandles ? 1 : 0,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
-				<Asterisk size={16} weight="bold" />
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
 			</Handle>
+
 		</div>
 	);
 };
@@ -1524,6 +1531,58 @@ const initialNodes = [];
 
 			{/* Inner frame */}
 			<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
+
+			{/* Handles */}
+			<Handle 
+				type="target" 
+				position={Position.Left} 
+				style={{
+					width: '36px',
+					height: '72px',
+					background: 'black',
+					border: 'none',
+					outline: 'none',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					color: 'white',
+					left: '-18px',
+					opacity: showHandles ? 1 : 0,
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
+			</Handle>
+			<Handle 
+				type="source" 
+				position={Position.Right} 
+				style={{
+					width: '36px',
+					height: '72px',
+					background: 'black',
+					border: 'none',
+					outline: 'none',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					color: 'white',
+					right: '-18px',
+					opacity: showHandles ? 1 : 0,
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
+			</Handle>
 				{/* Node content */}
 				<div className="p-4 space-y-3 h-full flex flex-col">
 				{/* Header */}
@@ -1915,6 +1974,52 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 						/>
 					</div>
 				</div>
+
+				{/* Handles */}
+				<Handle 
+					type="target" 
+					position={Position.Left} 
+					style={{
+						width: '32px',
+						height: '32px',
+						background: 'black',
+						border: '3px solid white',
+						borderRadius: '50%',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						fontSize: '18px',
+						fontWeight: 'bold',
+						color: 'white',
+						left: '-19px',
+						opacity: 1,
+						transition: 'opacity 0.2s ease'
+					}}
+				>
+					<Asterisk size={16} weight="bold" />
+				</Handle>
+				<Handle 
+					type="source" 
+					position={Position.Right} 
+					style={{
+						width: '32px',
+						height: '32px',
+						background: 'black',
+						border: '1px solid white',
+						borderRadius: '50%',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						fontSize: '18px',
+						fontWeight: 'bold',
+						color: 'white',
+						right: '-19px',
+						opacity: 1,
+						transition: 'opacity 0.2s ease'
+					}}
+				>
+					<Asterisk size={16} weight="bold" />
+				</Handle>
 			</div>
 		);
 	}
@@ -1959,6 +2064,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 					<span className="text-sm font-medium">Upload Video</span>
 					<span className="text-xs mt-1">Click or drag here</span>
 				</div>
+
 			</div>
 	);
 });
@@ -2106,6 +2212,7 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 						className="hidden"
 					/>
 				</div>
+
 			</div>
 		);
 	}
@@ -2363,6 +2470,7 @@ const GeneratedFrame = ({ data, id, selected }) => {
 					</div>
 				)}
 			</div>
+
 		</div>
 	</div>
 	);
@@ -3115,7 +3223,7 @@ const FloatingGenerationPanel = ({ selectedNodes, onUpdateNode, onGenerate }) =>
 	);
 };
 
-const CanvasWorkspace = () => {
+const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	const { user, setCanvasStatus, generatingItem, commandQueue, isDarkMode } = useOutletContext() || {};
 	const [nodes, setNodes] = useState(initialNodes);
 	const [edges, setEdges] = useState([]);
@@ -3348,50 +3456,97 @@ const CanvasWorkspace = () => {
 		setDraggedNodeId(null);
 	}, [reactFlowInstance]);
 
+	// Load canvas from Firestore
+	const loadCanvasFromFirestore = useCallback(async () => {
+		try {
+			const user = auth.currentUser;
+			if (!user) {
+				console.warn('User not authenticated, cannot load from Firestore');
+				return null;
+			}
+
+			const canvasRef = doc(db, 'canvases', user.uid);
+			const canvasSnap = await getDoc(canvasRef);
+			
+			if (canvasSnap.exists()) {
+				const data = canvasSnap.data();
+				return {
+					nodes: data.nodes || [],
+					edges: data.edges || [],
+					timestamp: data.timestamp || data.updatedAt?.toMillis() || Date.now()
+				};
+			}
+			
+			return null;
+		} catch (error) {
+			console.error('Failed to load canvas from Firestore:', error);
+			return null;
+		}
+	}, []);
+
 	// Load saved canvas state on mount
 	useEffect(() => {
-		try {
-			const savedState = localStorage.getItem('lungoai-canvas-state');
-			if (savedState) {
-				const { nodes: savedNodes, edges: savedEdges, timestamp } = JSON.parse(savedState);
+		const loadCanvas = async () => {
+			try {
+				// Use preloaded data if available, otherwise load from Firestore
+				const savedState = preloadedCanvasData || await loadCanvasFromFirestore();
 				
-				// Only load if saved within last 24 hours
-				const dayAgo = Date.now() - (24 * 60 * 60 * 1000);
-				if (timestamp > dayAgo) {
-					// Migration logic for nodes from older versions
-					const migratedNodes = savedNodes.map(node => {
-						const migratedNode = { ...node };
-						// 1. Ensure every node has a `position` object.
-						if (!migratedNode.position || typeof migratedNode.position.x !== 'number') {
-							migratedNode.position = { x: 0, y: 0 };
-						}
-						// 2. Ensure `aiFrame` nodes have `data.position` for positioning generated children.
-						if (migratedNode.type === 'aiFrame') {
-							if (!migratedNode.data) migratedNode.data = {};
-							if (!migratedNode.data.position) {
-								migratedNode.data.position = migratedNode.position;
-							}
-						}
-						return migratedNode;
-					});
-
-					setNodes(migratedNodes);
-					setEdges(savedEdges);
-					const savedTime = new Date(timestamp);
-					setLastSaved(savedTime);
+				if (preloadedCanvasData) {
+					console.log('✅ Using preloaded canvas data');
+				}
+				
+				if (savedState) {
+					const { nodes: savedNodes, edges: savedEdges, timestamp } = savedState;
 					
-					// Initialize canvas status
+					// Always load saved canvas data (no expiration)
+					if (true) {
+						// Migration logic for nodes from older versions
+						const migratedNodes = savedNodes.map(node => {
+							const migratedNode = { ...node };
+							// 1. Ensure every node has a `position` object.
+							if (!migratedNode.position || typeof migratedNode.position.x !== 'number') {
+								migratedNode.position = { x: 0, y: 0 };
+							}
+							// 2. Ensure `aiFrame` nodes have `data.position` for positioning generated children.
+							if (migratedNode.type === 'aiFrame') {
+								if (!migratedNode.data) migratedNode.data = {};
+								if (!migratedNode.data.position) {
+									migratedNode.data.position = migratedNode.position;
+								}
+							}
+							return migratedNode;
+						});
+
+						setNodes(migratedNodes);
+						setEdges(savedEdges);
+						const savedTime = new Date(timestamp);
+						setLastSaved(savedTime);
+						
+						// Initialize canvas status
+						if (setCanvasStatus) {
+							setCanvasStatus({
+								isAutoSaving: false,
+								lastSaved: savedTime,
+								nodeCount: migratedNodes.length,
+								edgeCount: savedEdges.length
+							});
+						}
+					}
+				} else {
+					// No saved state, initialize with empty status
 					if (setCanvasStatus) {
 						setCanvasStatus({
 							isAutoSaving: false,
-							lastSaved: savedTime,
-							nodeCount: migratedNodes.length,
-							edgeCount: savedEdges.length
+							lastSaved: null,
+							nodeCount: 0,
+							edgeCount: 0
 						});
 					}
 				}
-			} else {
-				// No saved state, initialize with empty status
+			} catch (error) {
+				console.warn('Failed to load or migrate canvas state:', error);
+				
+				// Initialize with empty status on error
 				if (setCanvasStatus) {
 					setCanvasStatus({
 						isAutoSaving: false,
@@ -3401,21 +3556,10 @@ const CanvasWorkspace = () => {
 					});
 				}
 			}
-		} catch (error) {
-			console.warn('Failed to load or migrate canvas state:', error);
-			localStorage.removeItem('lungoai-canvas-state'); // Clear corrupted state
-			
-			// Initialize with empty status on error
-			if (setCanvasStatus) {
-				setCanvasStatus({
-					isAutoSaving: false,
-					lastSaved: null,
-					nodeCount: 0,
-					edgeCount: 0
-				});
-			}
-		}
-	}, [setCanvasStatus]);
+		};
+
+		loadCanvas();
+	}, [setCanvasStatus, loadCanvasFromFirestore, preloadedCanvasData]);
 
 	// Helper function to safely serialize nodes and edges
 	const createSerializableState = (nodes, edges) => {
@@ -3453,6 +3597,33 @@ const CanvasWorkspace = () => {
 		};
 	};
 
+	// Save canvas to Firestore
+	const saveCanvasToFirestore = useCallback(async (canvasNodes, canvasEdges) => {
+		try {
+			const user = auth.currentUser;
+			if (!user) {
+				console.warn('⚠️ User not authenticated, cannot save to Firestore');
+				return false;
+			}
+
+			console.log('💾 Saving to Firestore for user:', user.uid);
+			const stateToSave = createSerializableState(canvasNodes, canvasEdges);
+			const canvasRef = doc(db, 'canvases', user.uid);
+			
+			await setDoc(canvasRef, {
+				...stateToSave,
+				userId: user.uid,
+				updatedAt: new Date()
+			}, { merge: true });
+
+			console.log('✅ Canvas saved to Firestore successfully');
+			return true;
+		} catch (error) {
+			console.error('❌ Failed to save canvas to Firestore:', error);
+			return false;
+		}
+	}, []);
+
 	// Auto-save canvas state
 	useEffect(() => {
 		// Don't save empty canvas or during initial load
@@ -3470,11 +3641,13 @@ const CanvasWorkspace = () => {
 		
 		setIsAutoSaving(true);
 		
-		const saveTimeout = setTimeout(() => {
+		const saveTimeout = setTimeout(async () => {
 			try {
 				const stateToSave = createSerializableState(nodes, edges);
 				
-				localStorage.setItem('lungoai-canvas-state', JSON.stringify(stateToSave));
+				// Save to Firestore only
+				await saveCanvasToFirestore(nodes, edges);
+				
 				const now = new Date();
 				setLastSaved(now);
 				
@@ -3517,21 +3690,38 @@ const CanvasWorkspace = () => {
 				}));
 			}
 		};
-	}, [nodes, edges, setCanvasStatus]);
+	}, [nodes, edges, setCanvasStatus, saveCanvasToFirestore]);
 
 	// Clear canvas function
-	const clearCanvas = useCallback(() => {
+	const clearCanvas = useCallback(async () => {
+		try {
 			setNodes([]);
 			setEdges([]);
-			localStorage.removeItem('lungoai-canvas-state');
 			setLastSaved(null);
-		if (setCanvasStatus) {
-			setCanvasStatus({
-				isAutoSaving: false,
-				lastSaved: null,
-				nodeCount: 0,
-				edgeCount: 0
-			});
+			
+			// Also clear from Firestore
+			const user = auth.currentUser;
+			if (user) {
+				const canvasRef = doc(db, 'canvases', user.uid);
+				await setDoc(canvasRef, {
+					nodes: [],
+					edges: [],
+					timestamp: Date.now(),
+					userId: user.uid,
+					updatedAt: new Date()
+				});
+			}
+			
+			if (setCanvasStatus) {
+				setCanvasStatus({
+					isAutoSaving: false,
+					lastSaved: null,
+					nodeCount: 0,
+					edgeCount: 0
+				});
+			}
+		} catch (error) {
+			console.warn('Failed to clear canvas from Firestore:', error);
 		}
 	}, [setCanvasStatus]);
 

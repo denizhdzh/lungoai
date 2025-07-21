@@ -27,7 +27,7 @@ import {
   PenNib, Timer, Package, Gauge, 
   Slideshow as SlideshowIcon, // Aliased
   Check, Calendar,
-  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple, Gear
+  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple, GearSix
 } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion'; // Import framer-motion
 import { commandDefinitions } from '../command'; 
@@ -1276,11 +1276,11 @@ function Layout() {
                 onClick={() => navigate(isCanvasPage ? '/' : '/studio')}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                   isCanvasPage 
-                    ? 'text-lime-500 hover:text-lime-400' 
+                    ? 'text-white hover:text-white' 
                     : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                 }`}
               >
-                <Sparkle size={16} className={isCanvasPage ? 'text-lime-500' : ''} />
+                <Sparkle size={16} className={isCanvasPage ? 'text-white' : ''} />
                 <span className="flex items-center gap-1">
                   Creation Mode
                   <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-md font-semibold ${
@@ -1375,7 +1375,7 @@ function Layout() {
                   className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
                   aria-label="Settings"
                 >
-                  <Gear size={20} />
+                  <GearSix size={20} />
                 </motion.button>
                 {/* Tooltip */}
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">

@@ -553,7 +553,14 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         logger.info(`[generateImage User: ${userId}] Preparing to call Replicate API. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
 
         // Determine model and prepare input
-        const selectedModel = data.model || 'google/imagen-4'; // Default to Imagen 4
+        let selectedModel = data.model || 'google/imagen-4'; // Default to Imagen 4
+        
+        // If Lungo Vibe is selected, use Ideogram V3 Quality instead
+        if (selectedModel === 'lungo-vibe') {
+            selectedModel = 'ideogram-ai/ideogram-v3-quality';
+            logger.info(`[generateImage User: ${userId}] Lungo Vibe detected, switching to Ideogram V3 Quality`);
+        }
+        
         let modelInput;
         let modelName;
 
@@ -1697,7 +1704,8 @@ function getImageCredits(model) {
         'black-forest-labs/flux-kontext-pro': 1,
         'google/imagen-4': 1,
         'google/imagen-4-ultra': 2,
-        'ideogram-ai/ideogram-v3-quality': 3
+        'ideogram-ai/ideogram-v3-quality': 3,
+        'lungo-vibe': 3  // Lungo Vibe uses Ideogram V3, so same credits
     };
     
     return baseCredits[model] || 1; // Default to Imagen-4 credits

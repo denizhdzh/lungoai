@@ -180,10 +180,10 @@ const NodeWrapper = ({
 
 			{/* Corner lines */}
 			<div className="absolute top-2 left-2 w-8 h-8 pointer-events-none z-10">
-				<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-xl"></div>
+				<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-xl ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 			</div>
 			<div className="absolute bottom-2 right-2 w-8 h-8 pointer-events-none z-10">
-				<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-xl"></div>
+				<div className={`w-full h-full border-b-2 border-r-2 rounded-br-xl ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 			</div>
 
 			{/* Inner frame */}
@@ -192,6 +192,7 @@ const NodeWrapper = ({
 			</div>
 
 			{/* Handles */}
+			{/* Target Handle */}
 			<Handle 
 				type="target" 
 				position={Position.Left} 
@@ -217,6 +218,8 @@ const NodeWrapper = ({
 					backgroundColor: 'white'
 				}}></div>
 			</Handle>
+			
+			{/* Source Handle */}
 			<Handle 
 				type="source" 
 				position={Position.Right} 
@@ -1518,10 +1521,10 @@ const initialNodes = [];
 		>
 			{/* Corner lines */}
 			<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
-				<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[40px]"></div>
+				<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 			</div>
 			<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
-				<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[40px]"></div>
+				<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 			</div>
 
 			{/* Media type label */}
@@ -1533,6 +1536,7 @@ const initialNodes = [];
 			<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
 
 			{/* Handles */}
+			{/* Target Handle */}
 			<Handle 
 				type="target" 
 				position={Position.Left} 
@@ -1558,6 +1562,8 @@ const initialNodes = [];
 					backgroundColor: 'white'
 				}}></div>
 			</Handle>
+			
+			{/* Source Handle */}
 			<Handle 
 				type="source" 
 				position={Position.Right} 
@@ -1946,7 +1952,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 			>
 				{/* Corner lines - 100px */}
 				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+					<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 				
 				{/* Media type label - right after L line */}
@@ -1954,7 +1960,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 					VIDEO UPLOAD
 				</div>
 				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+					<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 
 				<div className="h-full relative">
@@ -2045,7 +2051,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 			>
 				{/* Corner lines - 100px */}
 				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+					<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 				
 				{/* Media type label - right after L line */}
@@ -2053,7 +2059,7 @@ const VideoUpload = React.memo(({ data, selected, id }) => {
 					VIDEO UPLOAD
 				</div>
 				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+					<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 
 				<div 
@@ -2167,7 +2173,7 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 				className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
 					selected ? 'ring-10 ring-lime-400/30' : ''
 				} ${
-					isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''
+					isConnectionDragOver ? 'ring-100 ring-lime-400/30 bg-lime-500/5' : ''
 				}`}
 				style={{ 
 					width: imageWidth,
@@ -2178,32 +2184,197 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 				onDragLeave={handleConnectionDragLeave}
 				onDrop={handleConnectionDrop}
 			>
-				{/* Corner lines - 100px */}
+				{/* Corner lines - AIFrame style */}
 				<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+					<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 				
-				{/* Media type label - right after L line */}
-				<div className="absolute -top-1.5 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+				{/* Media type label */}
+				<div className="absolute -top-2 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
 					IMAGE UPLOAD
 				</div>
 				<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
-					<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+					<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 				</div>
 
-				<div className="h-full relative">
-					<img 
-						src={imageUrl} 
-						alt="Uploaded" 
-						className="w-full h-full object-cover"
-						style={{ borderRadius: '40px' }}
-					/>
-					<button
-						onClick={() => fileInputRef.current?.click()}
-						className="absolute top-4 right-4 w-10 h-10 bg-black/70 text-white rounded-full flex items-center justify-center hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-all"
-					>
-						<ArrowsClockwise size={16} />
-					</button>
+				{/* Handles */}
+				{/* Target Handle */}
+				<Handle 
+					type="target" 
+					position={Position.Left} 
+					style={{
+						width: '36px',
+						height: '72px',
+						background: 'black',
+						border: 'none',
+						outline: 'none',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						color: 'white',
+						left: '-18px',
+						opacity: 1, // Always visible for upload nodes
+						transition: 'opacity 0.2s ease'
+					}}
+				>
+					<div style={{
+						width: '4px',
+						height: '4px',
+						borderRadius: '50%',
+						backgroundColor: 'white'
+					}}></div>
+				</Handle>
+				
+				{/* Source Handle */}
+				<Handle 
+					type="source" 
+					position={Position.Right} 
+					style={{
+						width: '36px',
+						height: '72px',
+						background: 'black',
+						border: 'none',
+						outline: 'none',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						color: 'white',
+						right: '-18px',
+						opacity: 1, // Always visible for upload nodes
+						transition: 'opacity 0.2s ease'
+					}}
+				>
+					<div style={{
+						width: '4px',
+						height: '4px',
+						borderRadius: '50%',
+						backgroundColor: 'white'
+					}}></div>
+				</Handle>
+
+				{/* Inner frame */}
+				<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
+					<div className="h-full relative">
+						<img 
+							src={imageUrl} 
+							alt="Uploaded" 
+							className="w-full h-full object-cover"
+							style={{ borderRadius: '30px' }}
+						/>
+						<button
+							onClick={() => fileInputRef.current?.click()}
+							className="absolute top-4 right-4 w-10 h-10 bg-black/70 text-white rounded-full flex items-center justify-center hover:bg-black/90 opacity-0 group-hover:opacity-100 transition-all"
+						>
+							<ArrowsClockwise size={16} />
+						</button>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="image/*"
+							onChange={(e) => handleImageUpload(e.target.files[0])}
+							className="hidden"
+						/>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	// Upload state
+	return (
+		<div 
+			className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 cursor-pointer ${
+				selected ? 'ring-10 ring-lime-400/30' : ''
+			} ${
+				isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''
+			}`}
+			style={{ 
+				width: imageWidth,
+				height: imageHeight,
+				transition: 'width 0.3s ease, height 0.3s ease'
+			}}
+			onDragOver={handleConnectionDragOver}
+			onDragLeave={handleConnectionDragLeave}
+			onDrop={handleConnectionDrop}
+		>
+			{/* Corner lines - AIFrame style */}
+			<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
+				<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
+			</div>
+			
+			{/* Media type label */}
+			<div className="absolute -top-2 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
+				IMAGE UPLOAD
+			</div>
+			<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
+				<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[40px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
+			</div>
+
+			{/* Handles */}
+			{/* Target Handle */}
+			<Handle 
+				type="target" 
+				position={Position.Left} 
+				style={{
+					width: '36px',
+					height: '72px',
+					background: 'black',
+					border: 'none',
+					outline: 'none',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					color: 'white',
+					left: '-18px',
+					opacity: 1, // Always visible for upload nodes
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
+			</Handle>
+			
+			{/* Source Handle */}
+			<Handle 
+				type="source" 
+				position={Position.Right} 
+				style={{
+					width: '36px',
+					height: '72px',
+					background: 'black',
+					border: 'none',
+					outline: 'none',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					color: 'white',
+					right: '-18px',
+					opacity: 1, // Always visible for upload nodes
+					transition: 'opacity 0.2s ease'
+				}}
+			>
+				<div style={{
+					width: '4px',
+					height: '4px',
+					borderRadius: '50%',
+					backgroundColor: 'white'
+				}}></div>
+			</Handle>
+
+			{/* Inner frame */}
+			<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
+				<div 
+					className="flex flex-col items-center justify-center h-full text-neutral-400 hover:bg-neutral-700/50 transition-colors"
+					style={{ borderRadius: '30px' }}
+					onClick={() => fileInputRef.current?.click()}
+				>
+					<Upload size={32} className="mb-2" />
+					<span className="text-sm font-medium">Upload Image</span>
+					<span className="text-xs mt-1">Click or drag here</span>
 					<input
 						ref={fileInputRef}
 						type="file"
@@ -2212,39 +2383,8 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 						className="hidden"
 					/>
 				</div>
-
 			</div>
-		);
-	}
-
-	// Upload state
-	return (
-		<NodeWrapper 
-			selected={selected} 
-			width={imageWidth} 
-			height={imageHeight}
-			nodeType="IMAGE UPLOAD"
-			onDragOver={handleConnectionDragOver}
-			onDragLeave={handleConnectionDragLeave}
-			onDrop={handleConnectionDrop}
-			className={`cursor-pointer ${isConnectionDragOver ? 'ring-2 ring-lime-400/30 bg-lime-500/5' : ''}`}
-		>
-			<div 
-				className="flex flex-col items-center justify-center h-full text-neutral-400 hover:bg-neutral-700/50 rounded-xl transition-colors"
-				onClick={() => fileInputRef.current?.click()}
-			>
-				<Upload size={32} className="mb-2" />
-				<span className="text-sm font-medium">Upload Image</span>
-				<span className="text-xs mt-1">Click or drag here</span>
-				<input
-					ref={fileInputRef}
-					type="file"
-					accept="image/*"
-					onChange={(e) => handleImageUpload(e.target.files[0])}
-					className="hidden"
-				/>
-			</div>
-		</NodeWrapper>
+		</div>
 	);
 });
 
@@ -2407,10 +2547,10 @@ const GeneratedFrame = ({ data, id, selected }) => {
 			{mediaUrl && (
 				<>
 					<div className="absolute top-0 left-0 w-12 h-12 pointer-events-none z-10">
-						<div className="w-full h-full border-t-2 border-l-2 border-neutral-500 rounded-tl-[60px]"></div>
+						<div className={`w-full h-full border-t-2 border-l-2 rounded-tl-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 					</div>
 					<div className="absolute bottom-0 right-0 w-12 h-12 pointer-events-none z-10">
-						<div className="w-full h-full border-b-2 border-r-2 border-neutral-500 rounded-br-[60px]"></div>
+						<div className={`w-full h-full border-b-2 border-r-2 rounded-br-[60px] ${selected ? 'border-lime-400' : 'border-neutral-500'}`}></div>
 					</div>
 				</>
 			)}
@@ -3606,8 +3746,36 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 				return false;
 			}
 
-			console.log('💾 Saving to Firestore for user:', user.uid);
-			const stateToSave = createSerializableState(canvasNodes, canvasEdges);
+			console.log('💾 Saving to Firestore for user:', user.uid, 'Nodes:', canvasNodes.length, 'Edges:', canvasEdges.length);
+			
+			// Create serializable state inline to avoid dependency issues
+			const cleanNodes = canvasNodes.map(node => {
+				const cleanedNode = { ...node };
+				
+				if (cleanedNode.data) {
+					const cleanedData = { ...cleanedNode.data };
+					
+					// Remove undefined and non-serializable data
+					Object.keys(cleanedData).forEach(key => {
+						if (cleanedData[key] === undefined || 
+							key === 'videoRef' || 
+							key === 'audioRef') {
+							delete cleanedData[key];
+						}
+					});
+					
+					cleanedNode.data = cleanedData;
+				}
+				
+				return cleanedNode;
+			});
+			
+			const stateToSave = {
+				nodes: cleanNodes,
+				edges: canvasEdges,
+				timestamp: Date.now()
+			};
+			
 			const canvasRef = doc(db, 'canvases', user.uid);
 			
 			await setDoc(canvasRef, {
@@ -3643,13 +3811,18 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		
 		const saveTimeout = setTimeout(async () => {
 			try {
-				const stateToSave = createSerializableState(nodes, edges);
+				console.log('🔄 Starting save process...', nodes.length, 'nodes,', edges.length, 'edges');
 				
 				// Save to Firestore only
-				await saveCanvasToFirestore(nodes, edges);
+				const saveSuccess = await saveCanvasToFirestore(nodes, edges);
 				
-				const now = new Date();
-				setLastSaved(now);
+				if (saveSuccess) {
+					const now = new Date();
+					setLastSaved(now);
+					console.log('✅ Save completed successfully at:', now.toLocaleTimeString());
+				} else {
+					console.error('❌ Save failed');
+				}
 				
 				// Send completed status to Layout
 				if (setCanvasStatus) {

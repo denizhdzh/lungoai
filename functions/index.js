@@ -34,15 +34,15 @@ const VERTEX_AI_LOCATION = 'us-central1';
 const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
-  // Basic Plan ($9)
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 100 }, // Monthly Basic
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 100 }, // Yearly Basic
-  // Pro Plan ($29)
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 600 }, // Monthly Pro
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 600 }, // Yearly Pro
-  // Business Plan ($49)
-  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 900 }, // Monthly Business
-  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 900 }  // Yearly Business
+  // Starter Plan ($14)
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 200 }, // Monthly Starter
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 200 }, // Yearly Starter
+  // Creator Plan ($30)
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { general_credits: 500 }, // Monthly Creator
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { general_credits: 500 }, // Yearly Creator
+  // Pro Plan ($150)
+  "price_1RMqHgDf8kAOBAT3m6kthIND": { general_credits: 3000 }, // Monthly Pro
+  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { general_credits: 3000 }  // Yearly Pro
 };
 // --- End Plan Credit Allocations ---
 

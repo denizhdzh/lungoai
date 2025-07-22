@@ -9,12 +9,12 @@ const createOneTimeCheckoutSession = httpsCallable(functions, 'createOneTimeChec
 
 // --- Plan Price Map (Copied from Dashboard.jsx for displaying active plan name) ---
 const planPriceMap = {
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": "Basic (Monthly)",
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": "Basic (Yearly)",
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": "Pro (Monthly)",
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": "Pro (Yearly)",
-  "price_1RY4JdDf8kAOBAT3AWlBbEx3": "Business (Monthly)",
-  "price_1RY4JuDf8kAOBAT3lrADc9fO": "Business (Yearly)",
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": "Starter (Monthly)",
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": "Starter (Yearly)",
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": "Creator (Monthly)",
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": "Creator (Yearly)",
+  "price_1RMqHgDf8kAOBAT3m6kthIND": "Pro (Monthly)",
+  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": "Pro (Yearly)",
 };
 // --- End Plan Price Map ---
 
@@ -22,34 +22,46 @@ const planPriceMap = {
 const creditPackages = [
   {
     id: 200,
+    name: 'Small',
     credits: 200,
     price: 20.00,
-    originalPrice: 26.00,
-    savings: 23,
+    subscriberPrice: 16.00,
+    originalPrice: 20.00,
+    unitPrice: 0.10,
+    subscriberUnitPrice: 0.08,
     popular: false
   },
   {
-    id: 600,
-    credits: 600,
-    price: 54.00,
-    originalPrice: 70.00,
-    savings: 23,
+    id: 500,
+    name: 'Medium',
+    credits: 500,
+    price: 45.00,
+    subscriberPrice: 35.00,
+    originalPrice: 45.00,
+    unitPrice: 0.09,
+    subscriberUnitPrice: 0.07,
     popular: true
   },
   {
     id: 1000,
+    name: 'Large',
     credits: 1000,
     price: 80.00,
-    originalPrice: 104.00,
-    savings: 23,
+    subscriberPrice: 60.00,
+    originalPrice: 80.00,
+    unitPrice: 0.08,
+    subscriberUnitPrice: 0.06,
     popular: false
   },
   {
-    id: 1800,
-    credits: 1800,
-    price: 126.00,
-    originalPrice: 164.00,
-    savings: 23,
+    id: 2000,
+    name: 'Ultimate',
+    credits: 2000,
+    price: 140.00,
+    subscriberPrice: 100.00,
+    originalPrice: 140.00,
+    unitPrice: 0.07,
+    subscriberUnitPrice: 0.05,
     popular: false
   }
 ];
@@ -58,16 +70,17 @@ const creditPackages = [
 // --- Plan Data with Stripe Price IDs ---
 const plans = [
   {
-    id: 'basic',
-    name: 'Basic Plan',
-    monthlyPrice: 29.00,
-    yearlyMonthlyPrice: Math.round(29.00 * 10 / 12),
-    monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX",
-    yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6",
-    credits: 2500,
+    id: 'starter',
+    name: 'Starter',
+    monthlyPrice: 14.00,
+    yearlyMonthlyPrice: Math.round(14.00 * 10 / 12),
+    monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6", // Update with new Stripe price ID
+    credits: 200,
+    unitPrice: 0.07,
     features: [
       'AI UGC Video Generation',
-      'AI Image Generation (High Quality)',
+      'AI Image Generation (High Quality)', 
       'Slideshow Content Generation',
       'AI-Powered Scripts + Visuals',
       'Watermark-Free Downloads',
@@ -77,39 +90,45 @@ const plans = [
     mostPopular: false,
   },
   {
-    id: 'pro',
-    name: 'Pro plan',
-    monthlyPrice: 59.00,
-    yearlyMonthlyPrice: Math.round(590 / 12),
-    monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM",
-    yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq",
-    credits: 10000,
+    id: 'creator',
+    name: 'Creator',
+    monthlyPrice: 30.00,
+    yearlyMonthlyPrice: Math.round(30.00 * 10 / 12),
+    monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq", // Update with new Stripe price ID
+    credits: 500,
+    unitPrice: 0.06,
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)',
       'Slideshow Content Generation',
       'AI-Powered Scripts + Visuals',
       'Watermark-Free Downloads',
-      'E-mail Support',
+      'Priority Support',
+      'Advanced Templates',
     ],
     buttonText: 'Get Started',
     mostPopular: true,
   },
   {
-    id: 'business',
-    name: 'Business plan',
-    monthlyPrice: 119.00,
-    yearlyMonthlyPrice: Math.round(1190 / 12),
-    monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND",
-    yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho",
-    credits: 30000,
+    id: 'pro',
+    name: 'Pro',
+    monthlyPrice: 150.00,
+    yearlyMonthlyPrice: Math.round(150.00 * 10 / 12),
+    monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho", // Update with new Stripe price ID
+    credits: 3000,
+    unitPrice: 0.05,
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)',
-      'Slideshow Content Generation',
+      'Slideshow Content Generation', 
       'AI-Powered Scripts + Visuals',
       'Watermark-Free Downloads',
-      'E-mail Support',
+      'Priority Support',
+      'Advanced Templates',
+      'API Access',
+      'White-label Options',
     ],
     buttonText: 'Get Started',
     mostPopular: false,
@@ -447,20 +466,36 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 </div>
                 
                 <div className="space-y-1">
-                  <div className="text-2xl font-bold text-stone-900 dark:text-white">
-                    ${pkg.price.toFixed(2)}
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-sm text-stone-400 dark:text-stone-500 line-through">
-                      ${pkg.originalPrice.toFixed(2)}
-                    </span>
-                    <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
-                      -{pkg.savings}%
-                    </span>
-                  </div>
-                  <div className="text-xs text-stone-500 dark:text-stone-400">
-                    ${(pkg.price / pkg.credits * 100).toFixed(1)}¢ per credit
-                  </div>
+                  {hasActiveOverallSubscription ? (
+                    <>
+                      <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">
+                        ${pkg.subscriberPrice.toFixed(2)}
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-sm text-stone-400 dark:text-stone-500 line-through">
+                          ${pkg.price.toFixed(2)}
+                        </span>
+                        <span className="text-xs bg-lime-100 dark:bg-lime-900/30 text-lime-700 dark:text-lime-300 px-2 py-0.5 rounded">
+                          Subscriber Discount
+                        </span>
+                      </div>
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        ${(pkg.subscriberUnitPrice * 100).toFixed(1)}¢ per credit
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-stone-900 dark:text-white">
+                        ${pkg.price.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        ${(pkg.unitPrice * 100).toFixed(1)}¢ per credit
+                      </div>
+                      <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
+                        Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               

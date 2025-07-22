@@ -10,15 +10,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // --- NEW: Plan Credit Limits ---
 const planCreditLimits = {
-  // Basic Plan
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 15, videos: 10 }, // Monthly
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 15, videos: 10 }, // Yearly
-  // Pro Plan
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { images: 50, videos: 40 }, // Monthly
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": { images: 50, videos: 40 }, // Yearly
-  // Business Plan
-  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 120, videos: 90 }, // Monthly
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 120, videos: 90 } // Yearly
+  // Starter Plan ($14 - 200 credits)
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 40, videos: 20 }, // Monthly
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 40, videos: 20 }, // Yearly
+  // Creator Plan ($30 - 500 credits)
+  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { images: 100, videos: 50 }, // Monthly
+  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { images: 100, videos: 50 }, // Yearly
+  // Pro Plan ($150 - 3000 credits)
+  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 600, videos: 300 }, // Monthly
+  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 600, videos: 300 } // Yearly
 
 };
 // --- End Plan Credit Limits ---

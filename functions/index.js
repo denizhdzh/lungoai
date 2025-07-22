@@ -35,14 +35,14 @@ const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
   // Basic Plan ($9)
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 50 }, // Monthly Basic
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 50 }, // Yearly Basic
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 100 }, // Monthly Basic
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 100 }, // Yearly Basic
   // Pro Plan ($29)
-  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 300 }, // Monthly Pro
-  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 300 }, // Yearly Pro
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 600 }, // Monthly Pro
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 600 }, // Yearly Pro
   // Business Plan ($49)
-  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 600 }, // Monthly Business
-  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 600 }  // Yearly Business
+  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 900 }, // Monthly Business
+  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 900 }  // Yearly Business
 };
 // --- End Plan Credit Allocations ---
 
@@ -508,26 +508,31 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         } else {
             // Fallback to original prompt generation logic
             if (commandCode === 202) {
-                logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Calling generateDetailedUgcPrompt...`);
-                if (!data.subject_description) {
-                    logger.error(`[generateImage User: ${userId}] Missing subject_description for command 202.`);
-                    throw new HttpsError('invalid-argument', "Please provide a description for the subject of the UGC image.");
+                logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Using enhancePromptWithRules...`);
+                logger.info(`[generateImage User: ${userId}] Data received:`, {
+                    originalPrompt: data.originalPrompt,
+                    prompt: data.prompt,
+                    subtype: data.subtype,
+                    selectedFrame: data.selectedFrame
+                });
+                
+                if (!data.originalPrompt && !data.prompt && !data.subject_description) {
+                    logger.error(`[generateImage User: ${userId}] Missing originalPrompt/prompt or subject_description for command 202.`);
+                    throw new HttpsError('invalid-argument', "Please provide a prompt or description for the UGC image.");
                 }
-                const promptResult = await generateDetailedUgcPrompt({
-                    subject_description: data.subject_description,
-                    clothing: data.clothing_description,
-                    setting: data.setting_description,
-                    style: data.image_style,
-                    age: data.age,
-                    gender: data.gender
-                }, openai);
-                logger.info(`[generateImage User: ${userId}] generateDetailedUgcPrompt returned. promptResult is null: ${promptResult === null}`);
-                if (!promptResult || !promptResult.detailedPrompt) {
-                    logger.error(`[generateImage User: ${userId}] generateDetailedUgcPrompt failed to return a detailed prompt. Result:`, promptResult);
-                    throw new HttpsError('internal', 'Failed to generate detailed prompt for UGC image.');
+                
+                // Use the new enhancement flow if we have the required data
+                const promptToEnhance = data.originalPrompt || data.prompt;
+                if (promptToEnhance && data.subtype && data.selectedFrame) {
+                    logger.info(`[generateImage User: ${userId}] Enhancing prompt: "${promptToEnhance}" with subtype: ${data.subtype}, frame: ${data.selectedFrame}`);
+                    finalPromptToUse = await enhancePromptWithRules(promptToEnhance, data.subtype, data.selectedFrame, openai);
+                } else {
+                    // Fallback to basic prompt if enhancement data is missing
+                    logger.info(`[generateImage User: ${userId}] Missing enhancement data, using basic prompt. originalPrompt: ${!!data.originalPrompt}, prompt: ${!!data.prompt}, subtype: ${data.subtype}, selectedFrame: ${data.selectedFrame}`);
+                    finalPromptToUse = promptToEnhance || data.subject_description;
                 }
-                finalPromptToUse = promptResult.detailedPrompt;
-                detectedGender = promptResult.subjectTerm;
+                
+                logger.info(`[generateImage User: ${userId}] Enhanced prompt generated. Length: ${finalPromptToUse?.length}`);
                 imageStyle = imageStyle || 'ultra-realistic photograph, UGC style';
                 logger.info(`[generateImage User: ${userId}] Detailed prompt generated for command 202. Length: ${finalPromptToUse?.length}`);
             } else if (commandCode === 201) {
@@ -748,7 +753,7 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
             logger.error(`[generateImage User: ${userId}] Replicate Error:`, error);
             throw new HttpsError('internal', `Replicate Error: ${error.message}`);
         }
-        throw new HttpsError('internal', `Failed to generate image with ${modelName || 'Replicate'}: ${error.message}`);
+        throw new HttpsError('internal', `Failed to generate image with ${selectedModel || 'Replicate'}: ${error.message}`);
     }
 });
 
@@ -1710,3 +1715,74 @@ function getImageCredits(model) {
     
     return baseCredits[model] || 1; // Default to Imagen-4 credits
 }
+
+// --- NEW: Function to Create One-Time Credit Purchase Session ---
+exports.createOneTimeCheckoutSession = onCall(async (request) => {
+  const { creditPackage, userId, userEmail } = request.data;
+  
+  // Credit packages with tiered pricing: decreasing cost per 100 credits
+  const creditPackages = {
+    200: { credits: 200, price: 2000 }, // $20.00 for 200 credits (in cents) - $10 per 100
+    600: { credits: 600, price: 5400 }, // $54.00 for 600 credits (in cents) - $9 per 100  
+    1000: { credits: 1000, price: 8000 }, // $80.00 for 1000 credits (in cents) - $8 per 100
+    1800: { credits: 1800, price: 12600 } // $126.00 for 1800 credits (in cents) - $7 per 100
+  };
+
+  if (!creditPackages[creditPackage]) {
+    throw new HttpsError('invalid-argument', 'Invalid credit package selected.');
+  }
+
+  const selectedPackage = creditPackages[creditPackage];
+  let stripe;
+  
+  try {
+    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    let stripeCustomerId = userDoc.data()?.stripeCustomerId;
+
+    // Create Stripe customer if not exists
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: userEmail,
+        metadata: { firebaseUID: userId }
+      });
+      stripeCustomerId = customer.id;
+      await userRef.set({ stripeCustomerId: stripeCustomerId }, { merge: true });
+      logger.info(`Created Stripe customer ${stripeCustomerId} for Firebase user ${userId}`);
+    }
+
+    // Create one-time payment session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment', // One-time payment instead of subscription
+      customer: stripeCustomerId,
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${selectedPackage.credits} Credits`,
+            description: `Purchase ${selectedPackage.credits} credits for your Lungo AI account`
+          },
+          unit_amount: selectedPackage.price // Price in cents
+        },
+        quantity: 1
+      }],
+      metadata: {
+        purchaseType: 'one_time_credits',
+        userId: userId,
+        creditQuantity: selectedPackage.credits.toString()
+      },
+      success_url: process.env.STRIPE_SUCCESS_URL,
+      cancel_url: process.env.STRIPE_CANCEL_URL,
+    });
+
+    logger.info(`Created one-time credit checkout session ${session.id} for user ${userId}: ${selectedPackage.credits} credits for $${(selectedPackage.price / 100).toFixed(2)}`);
+    
+    return { sessionId: session.id };
+    
+  } catch (error) {
+    logger.error(`Error creating one-time credit checkout session for user ${userId}:`, error);
+    throw new HttpsError('internal', `Failed to create credit purchase session: ${error.message}`);
+  }
+});

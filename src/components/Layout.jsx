@@ -1556,7 +1556,7 @@ function Layout() {
       {/* --- Fixed Credit Display (Moved from Dashboard) --- */}
       {user && firestoreUserData && (
         <div 
-          onClick={() => setIsBillingModalOpen(true)}
+          onClick={() => setIsPricingModalOpen(true)}
           className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-900 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
         >
           <img 
@@ -1743,31 +1743,29 @@ function Layout() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[100] bg-white dark:bg-neutral-950"
             onClick={() => setIsPricingModalOpen(false)} // Close on backdrop click
           >
-            {/* Backdrop with 0 fill opacity, but still catching clicks */}
-            <div className="absolute inset-0 bg-neutral-900/5 dark:bg-white/5 backdrop-blur-xl" /> 
+            {/* Close button for the pricing modal itself */}
+            <button 
+              onClick={() => setIsPricingModalOpen(false)}
+              className="fixed top-6 right-6 z-20 p-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-full text-stone-800 dark:text-stone-200 transition-colors shadow-lg"
+              aria-label="Close pricing plans"
+            >
+              <X size={24} />
+            </button>
             
-            {/* Modal Content Wrapper for Sizing and Positioning */}
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="relative w-full max-w-4xl bg-transparent rounded-2xl shadow-2xl overflow-hidden"
+            {/* Full Page Content */}
+            <div 
+              className="h-full w-full overflow-y-auto"
               onClick={(e) => e.stopPropagation()} // Prevent close on content click
             >
-                {/* Close button for the pricing modal itself */}
-                <button 
-                  onClick={() => setIsPricingModalOpen(false)}
-                  className="absolute top-4 right-4 z-10 p-2 bg-white/20 dark:bg-neutral-900/20 hover:bg-white/40 dark:hover:bg-neutral-900/40 backdrop-blur-sm rounded-full text-stone-800 dark:text-stone-200 transition-colors"
-                  aria-label="Close pricing plans"
-                >
-                  <X size={20} />
-                </button>
-                <PricingSection id="pricing-modal" subscriptionData={firestoreUserData} user={user} />
-            </motion.div>
+              <div className="min-h-full flex items-center justify-center py-20 px-6">
+                <div className="w-full max-w-6xl">
+                  <PricingSection id="pricing-modal" subscriptionData={firestoreUserData} user={user} />
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -5,6 +5,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 // Get Firebase Functions instance
 const functions = getFunctions();
 const createStripeCheckoutSession = httpsCallable(functions, 'createStripeCheckoutSession');
+const createOneTimeCheckoutSession = httpsCallable(functions, 'createOneTimeCheckoutSession');
 
 // --- Plan Price Map (Copied from Dashboard.jsx for displaying active plan name) ---
 const planPriceMap = {
@@ -16,6 +17,43 @@ const planPriceMap = {
   "price_1RY4JuDf8kAOBAT3lrADc9fO": "Business (Yearly)",
 };
 // --- End Plan Price Map ---
+
+// --- Credit Packages for One-Time Purchases ---
+const creditPackages = [
+  {
+    id: 200,
+    credits: 200,
+    price: 20.00,
+    originalPrice: 26.00,
+    savings: 23,
+    popular: false
+  },
+  {
+    id: 600,
+    credits: 600,
+    price: 54.00,
+    originalPrice: 70.00,
+    savings: 23,
+    popular: true
+  },
+  {
+    id: 1000,
+    credits: 1000,
+    price: 80.00,
+    originalPrice: 104.00,
+    savings: 23,
+    popular: false
+  },
+  {
+    id: 1800,
+    credits: 1800,
+    price: 126.00,
+    originalPrice: 164.00,
+    savings: 23,
+    popular: false
+  }
+];
+// --- End Credit Packages ---
 
 // --- Plan Data with Stripe Price IDs ---
 const plans = [
@@ -186,6 +224,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(null);
   const [checkoutError, setCheckoutError] = useState(null);
+  const [pricingMode, setPricingMode] = useState('subscription'); // 'subscription' or 'credits'
 
   // Determine active subscription details from props
   const isActiveSubscription = (planPriceId) => {
@@ -201,6 +240,59 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
     subscriptionData && 
     subscriptionData.subscriptionStatus && 
     ['active', 'trialing'].includes(subscriptionData.subscriptionStatus.toLowerCase());
+
+  const handleCreditPurchase = async (creditPackage) => {
+    setIsLoadingCheckout(`credit-${creditPackage}`);
+    setCheckoutError(null);
+
+    try {
+      if (!user || !user.uid || !user.email) {
+        console.error("User data is missing for checkout.");
+        setCheckoutError("User information is missing. Please try logging in again.");
+        setIsLoadingCheckout(null);
+        return;
+      }
+
+      const result = await createOneTimeCheckoutSession({ 
+        creditPackage: creditPackage,
+        userId: user.uid,
+        userEmail: user.email
+      });
+
+      const sessionId = result.data.sessionId;
+      if (!sessionId) {
+        throw new Error('Session ID not received from server.');
+      }
+      
+      console.log(`Received Stripe session ID: ${sessionId}. Redirecting to Checkout...`);
+      
+      // Dynamically import Stripe only when needed
+      const { loadStripe } = await import('@stripe/stripe-js');
+      const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+      const stripe = await stripePromise;
+      
+      if (!stripe) {
+        throw new Error('Stripe.js failed to load.');
+      }
+
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+
+      if (error) {
+        console.error('Stripe redirectToCheckout error:', error);
+        setCheckoutError(error.message || 'Failed to redirect to payment.');
+        setIsLoadingCheckout(null);
+      }
+
+    } catch (error) {
+      console.error('Error during credit purchase:', error);
+      if (error.code && error.message) {
+        setCheckoutError(`Error: ${error.message} (Code: ${error.code})`);
+      } else {
+        setCheckoutError(error.message || 'An unexpected error occurred. Please try again.');
+      }
+      setIsLoadingCheckout(null);
+    }
+  };
 
   const handleCheckout = async (planId, cycle) => {
     const plan = plans.find(p => p.id === planId);
@@ -322,174 +414,277 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
     }
   };
 
-  if (hasActiveOverallSubscription) {
-    return (
-      <div id={id} className="w-full">
-        <div className="px-6 lg:px-0">
-          <div className="py-10 px-6 rounded-xl text-left">
-            <h3 className="text-xl font-semibold text-stone-900 dark:text-white mb-2">
-              You Have an Active Subscription
-            </h3>
-            <p className="text-stone-600 dark:text-stone-300 mb-1">
-              You are currently subscribed to the <strong className="text-stone-800 dark:text-stone-100">{planPriceMap[subscriptionData.stripePriceId] || 'Selected Plan'}</strong>.
-            </p>
+  // Credit packages component for reuse
+  const renderCreditPackages = () => (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      {creditPackages.map((pkg, index) => {
+        const isLoadingThisPackage = isLoadingCheckout === `credit-${pkg.id}`;
+        
+        return (
+          <div
+            key={pkg.id}
+            className={`relative rounded-xl p-6 border ${
+              pkg.popular 
+                ? 'border-lime-300 dark:border-lime-600 bg-lime-50/50 dark:bg-lime-900/10' 
+                : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-neutral-900'
+            } hover:border-stone-300 dark:hover:border-stone-700 transition-colors shadow-sm hover:shadow`}
+          >
+            {pkg.popular && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="bg-lime-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                  Most Popular
+                </span>
+              </div>
+            )}
+            
+            <div className="text-center">
+              <div className="mb-4">
+                <div className="text-3xl font-bold text-stone-900 dark:text-white mb-1">
+                  {pkg.credits.toLocaleString()}
+                </div>
+                <div className="text-sm text-stone-500 dark:text-stone-400 mb-3">
+                  Credits
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="text-2xl font-bold text-stone-900 dark:text-white">
+                    ${pkg.price.toFixed(2)}
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-sm text-stone-400 dark:text-stone-500 line-through">
+                      ${pkg.originalPrice.toFixed(2)}
+                    </span>
+                    <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
+                      -{pkg.savings}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-stone-500 dark:text-stone-400">
+                    ${(pkg.price / pkg.credits * 100).toFixed(1)}¢ per credit
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => handleCreditPurchase(pkg.id)}
+                disabled={isLoadingThisPackage || isLoadingCheckout}
+                className={`w-full flex items-center justify-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  isLoadingThisPackage
+                    ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
+                    : pkg.popular 
+                      ? 'bg-lime-500 hover:bg-lime-600 text-white shadow-lg hover:shadow-xl' 
+                      : 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-stone-200'
+                } ${
+                  isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              >
+                {isLoadingThisPackage ? (
+                  <>
+                    <CircleNotch size={16} className="animate-spin mr-2" /> 
+                    Processing...
+                  </>
+                ) : (
+                  'Purchase Credits'
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
-    );
-  }
+        );
+      })}
+    </div>
+  );
 
   return (
     <div id={id} className="w-full"> 
       <div className="px-6 lg:px-0"> 
-        {/* REMOVED HEADER BLOCK
-        <div className="text-left">
-          <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
-              Plans & Pricing
-            </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-            <span className="text-sm text-stone-500 dark:text-stone-400">
-              Choose a plan that's right for you
-            </span>
-          </div>
-          
-          <p className="mb-8 text-base text-stone-600 dark:text-stone-400 max-w-2xl">
-            All plans include core features like content generation, TikTok format support, and scheduling.
-             Annual billing gives you 4 months free.
+        {/* Header */}
+        <div className="text-left mb-10">
+          <h3 className="text-2xl font-bold text-stone-900 dark:text-white mb-2">
+            Choose Your Plan
+          </h3>
+          <p className="text-stone-600 dark:text-stone-300 mb-6">
+            {hasActiveOverallSubscription 
+              ? `You're subscribed to ${planPriceMap[subscriptionData.stripePriceId] || 'Selected Plan'}. Buy extra credits or upgrade your plan.`
+              : 'Select a subscription plan or buy credits as you need them.'
+            }
           </p>
-        </div> 
-        */}
+        </div>
 
-        {/* Billing Cycle Toggle */}
-        <div className="mb-10 flex items-center justify-between">
+        {/* Pricing Mode Toggle */}
+        <div className="mb-10 flex items-center justify-center">
           <div className="inline-flex rounded-lg p-0.5 bg-neutral-50 dark:bg-neutral-900 border border-stone-200 dark:border-stone-800">
             <button 
-              className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
-                billingCycle === 'monthly' 
+              className={`relative inline-flex items-center rounded-md px-6 py-2 text-sm font-medium transition-all duration-200 ${
+                pricingMode === 'subscription' 
                   ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
                   : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
               }`}
-              onClick={() => setBillingCycle('monthly')}
+              onClick={() => setPricingMode('subscription')}
             >
-              Monthly
+              Monthly Plans
             </button>
             <button 
-              className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
-                billingCycle === 'yearly' 
+              className={`relative inline-flex items-center rounded-md px-6 py-2 text-sm font-medium transition-all duration-200 ${
+                pricingMode === 'credits' 
                   ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
                   : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
               }`}
-              onClick={() => setBillingCycle('yearly')}
+              onClick={() => setPricingMode('credits')}
             >
-              Yearly 
-              <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">2 months free</span>
+              One-Time Credits
+              <span className="ml-2 text-xs bg-lime-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                Better Value
+              </span>
             </button>
           </div>
         </div>
 
         {checkoutError && (
-             <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 rounded-md text-sm text-red-700 dark:text-red-300">
-                 {checkoutError}
-             </div>
-         )}
+          <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 rounded-md text-sm text-red-700 dark:text-red-300">
+            {checkoutError}
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {plans.map((plan, index) => {
-            const displayPrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyMonthlyPrice;
-            const currentPriceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
-            const isLoadingThisButton = isLoadingCheckout === (plan.id + '-' + billingCycle);
-            const isCurrentPlan = isActiveSubscription(currentPriceId);
-
-            return (
-              <div
-                key={`${plan.id}-${billingCycle}`}
-                className={`relative rounded-xl p-6 border ${
-                  plan.mostPopular 
-                    ? 'border-stone-800 dark:border-white' 
-                    : 'border-stone-200 dark:border-stone-800'
-                } hover:border-stone-300 dark:hover:border-stone-700 transition-colors bg-white dark:bg-neutral-900 shadow-sm hover:shadow`}
-              >
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-stone-900 dark:text-white">{plan.name}</h3>
-                    {plan.mostPopular && (
-                      <span className="relative overflow-hidden inline-flex items-center rounded-full bg-neutral-800/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-semibold leading-5 text-stone-800 dark:text-white
-                                     before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/40 dark:before:via-white/20 before:to-transparent">
-                        Popular
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col">
-                    <div className="flex items-baseline gap-2">
-                      <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
-                    </div>
-                    <span className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-2">
-                      {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
-                    </span>
-                    <AnimatedCredits credits={plan.credits} duration={800 + index * 100} key={billingCycle + '-credits'} />
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => handleCheckout(plan.id, billingCycle)}
-                  disabled={isCurrentPlan || isLoadingThisButton || isLoadingCheckout}
-                  className={`w-full flex items-center justify-center px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow ${
-                    isCurrentPlan
-                      ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-500 dark:text-stone-400 cursor-default'
-                      : isLoadingThisButton
-                        ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
-                        : plan.mostPopular 
-                          ? 'bg-neutral-800 dark:bg-white text-white dark:text-stone-800 hover:bg-neutral-800 dark:hover:bg-neutral-200' 
-                          : 'bg-white dark:bg-neutral-900 text-stone-800 dark:text-white ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
-                  } ${
-                    isLoadingCheckout && !isLoadingThisButton && !isCurrentPlan ? 'opacity-60 cursor-not-allowed' : ''
+        {/* Subscription Plans */}
+        {pricingMode === 'subscription' && (
+          <>
+            {/* Billing Cycle Toggle for subscriptions */}
+            <div className="mb-8 flex items-center justify-center">
+              <div className="inline-flex rounded-lg p-0.5 bg-neutral-50 dark:bg-neutral-900 border border-stone-200 dark:border-stone-800">
+                <button 
+                  className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+                    billingCycle === 'monthly' 
+                      ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
+                      : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
                   }`}
+                  onClick={() => setBillingCycle('monthly')}
                 >
-                  {isCurrentPlan ? (
-                     <>Current Plan</>
-                  ) : isLoadingThisButton ? (
-                    <>
-                      <CircleNotch size={16} className="animate-spin mr-2" /> Processing...
-                    </>
-                  ) : (
-                    <>{plan.buttonText}</>
-                  )}
+                  Monthly
                 </button>
-                
-                <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-8 mb-3">Features</p>
-                <ul role="list" className="space-y-2.5 text-xs leading-6 text-stone-600 dark:text-stone-300">
-                  {plan.features.map((feature, idx) => {
-                    let baseFeature = feature;
-                    let suffix = null;
-                    const soonMatch = feature.match(/\((very soon|soon)\)$/i);
-                    
-                    if (soonMatch) {
-                        suffix = soonMatch[0];
-                        baseFeature = feature.replace(suffix, '').trim();
-                    }
-                    
-                    return (
-                      <li key={idx} className="flex gap-x-2.5 items-start">
-                        <CheckCircle className="h-4 w-4 flex-none text-stone-400 dark:text-stone-500 mt-0.5" weight="fill" aria-hidden="true" />
-                        <span className="text-stone-600 dark:text-stone-300">
-                            {baseFeature}
-                            {suffix && <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">{suffix}</span>}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <button 
+                  className={`relative inline-flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+                    billingCycle === 'yearly' 
+                      ? 'bg-white dark:bg-neutral-800 text-stone-900 dark:text-white shadow-sm' 
+                      : 'bg-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
+                  }`}
+                  onClick={() => setBillingCycle('yearly')}
+                >
+                  Yearly 
+                  <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">2 months free</span>
+                </button>
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-        <div className="mt-10 text-left text-xs space-y-2 text-stone-500 dark:text-stone-500 border-t border-stone-100 dark:border-stone-800 pt-5">
-          <p className="flex items-center gap-x-1">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {plans.map((plan, index) => {
+                const displayPrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyMonthlyPrice;
+                const currentPriceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
+                const isLoadingThisButton = isLoadingCheckout === (plan.id + '-' + billingCycle);
+                const isCurrentPlan = isActiveSubscription(currentPriceId);
+
+                return (
+                  <div
+                    key={`${plan.id}-${billingCycle}`}
+                    className={`relative rounded-xl p-6 border ${
+                      plan.mostPopular 
+                        ? 'border-stone-800 dark:border-white' 
+                        : 'border-stone-200 dark:border-stone-800'
+                    } hover:border-stone-300 dark:hover:border-stone-700 transition-colors bg-white dark:bg-neutral-900 shadow-sm hover:shadow`}
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold text-stone-900 dark:text-white">{plan.name}</h3>
+                        {plan.mostPopular && (
+                          <span className="relative overflow-hidden inline-flex items-center rounded-full bg-neutral-800/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-semibold leading-5 text-stone-800 dark:text-white
+                                         before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/40 dark:before:via-white/20 before:to-transparent">
+                            Popular
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col">
+                        <div className="flex items-baseline gap-2">
+                          <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
+                        </div>
+                        <span className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-2">
+                          {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
+                        </span>
+                        <AnimatedCredits credits={plan.credits} duration={800 + index * 100} key={billingCycle + '-credits'} />
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => handleCheckout(plan.id, billingCycle)}
+                      disabled={isCurrentPlan || isLoadingThisButton || isLoadingCheckout}
+                      className={`w-full flex items-center justify-center px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow ${
+                        isCurrentPlan
+                          ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-500 dark:text-stone-400 cursor-default'
+                          : isLoadingThisButton
+                            ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
+                            : plan.mostPopular 
+                              ? 'bg-neutral-800 dark:bg-white text-white dark:text-stone-800 hover:bg-neutral-800 dark:hover:bg-neutral-200' 
+                              : 'bg-white dark:bg-neutral-900 text-stone-800 dark:text-white ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                      } ${
+                        isLoadingCheckout && !isLoadingThisButton && !isCurrentPlan ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {isCurrentPlan ? (
+                         <>Current Plan</>
+                      ) : isLoadingThisButton ? (
+                        <>
+                          <CircleNotch size={16} className="animate-spin mr-2" /> Processing...
+                        </>
+                      ) : (
+                        <>{plan.buttonText}</>
+                      )}
+                    </button>
+                    
+                    <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-8 mb-3">Features</p>
+                    <ul role="list" className="space-y-2.5 text-xs leading-6 text-stone-600 dark:text-stone-300">
+                      {plan.features.map((feature, idx) => {
+                        let baseFeature = feature;
+                        let suffix = null;
+                        const soonMatch = feature.match(/\((very soon|soon)\)$/i);
+                        
+                        if (soonMatch) {
+                            suffix = soonMatch[0];
+                            baseFeature = feature.replace(suffix, '').trim();
+                        }
+                        
+                        return (
+                          <li key={idx} className="flex gap-x-2.5 items-start">
+                            <CheckCircle className="h-4 w-4 flex-none text-stone-400 dark:text-stone-500 mt-0.5" weight="fill" aria-hidden="true" />
+                            <span className="text-stone-600 dark:text-stone-300">
+                                {baseFeature}
+                                {suffix && <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">{suffix}</span>}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Credit Packages */}
+        {pricingMode === 'credits' && (
+          <>
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-lime-100 dark:bg-lime-900/30 text-lime-800 dark:text-lime-200 text-sm font-medium">
+                <span className="w-2 h-2 bg-lime-500 rounded-full mr-2"></span>
+                Tiered pricing • Buy more, save more
+              </div>
+            </div>
+            {renderCreditPackages()}
+          </>
+        )}
+
+        <div className="mt-10 text-center text-xs space-y-2 text-stone-500 dark:text-stone-500 border-t border-stone-100 dark:border-stone-800 pt-6">
+          <p className="flex items-center justify-center gap-x-1">
             <Lock size={12} className="text-stone-400 dark:text-stone-600" aria-hidden="true" />
-            Payments secured with industry-standard encryption
+            {pricingMode === 'credits' ? 'Credits never expire' : 'Cancel anytime'} • Payments secured with industry-standard encryption
           </p>
         </div>
       </div>

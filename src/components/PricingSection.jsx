@@ -468,19 +468,14 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 <div className="space-y-1">
                   {hasActiveOverallSubscription ? (
                     <>
-                      <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">
+                      <div className="text-2xl font-bold text-stone-900 dark:text-white">
                         ${pkg.subscriberPrice.toFixed(2)}
-                      </div>
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-sm text-stone-400 dark:text-stone-500 line-through">
-                          ${pkg.price.toFixed(2)}
-                        </span>
-                        <span className="text-xs bg-lime-100 dark:bg-lime-900/30 text-lime-700 dark:text-lime-300 px-2 py-0.5 rounded">
-                          Subscriber Discount
-                        </span>
                       </div>
                       <div className="text-xs text-stone-500 dark:text-stone-400">
                         ${(pkg.subscriberUnitPrice * 100).toFixed(1)}¢ per credit
+                      </div>
+                      <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
+                        Subscriber pricing active
                       </div>
                     </>
                   ) : (

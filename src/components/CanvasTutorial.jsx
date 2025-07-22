@@ -120,20 +120,14 @@ const CanvasTutorial = ({ user, isOpen, onClose, onOpenTutorial }) => {
 		if (onOpenTutorial) onOpenTutorial();
 	};
 
+
 	const currentStepData = tutorialSteps[currentStep];
 	const isVisible = showTutorial || isOpen;
 
 	if (!isVisible) {
-		return (
-			<button
-				onClick={openTutorial}
-				className="fixed bottom-4 right-4 z-40 w-10 h-10 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-neutral-400 hover:text-white transition-all duration-200 shadow-lg"
-				title="Open Canvas Tutorial"
-			>
-				<Info size={16} />
-			</button>
-		);
+		return null;
 	}
+
 
 	return createPortal(
 		<div className="fixed bottom-4 left-4 right-4 z-[9999]">

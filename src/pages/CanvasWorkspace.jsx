@@ -79,13 +79,16 @@ import {
 	FilmSlate,
 	User,
 	X,
+	ClockCounterClockwise,
 	ListNumbers,
 	ArrowsClockwise,
+	UploadSimple,
+	Bug,
 } from '@phosphor-icons/react';
 import { generateImage, generateVideo, checkApiKey, GENERATION_TYPES, IMAGE_STYLES, QUALITY_OPTIONS } from '../services/ai';
 import { useOutletContext } from 'react-router-dom';
 import { db, functions, auth } from '../firebase';
-import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, limit, updateDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs, limit, updateDoc, addDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import CanvasTutorial from '../components/CanvasTutorial';
 import CustomDropdown from '../components/CustomDropdown';
@@ -533,182 +536,55 @@ const generationConfig = {
 	image: {
 		label: 'AI Image',
 		icon: Image,
-		subtypes: {
-			// Background first (moved to top)
-			background: {
-				label: 'Background Scene',
-				icon: Rectangle,
-				subtitle: 'Generate atmospheric background environments',
-				commandCode: 201,
-				models: {
-					'black-forest-labs/flux-kontext-max': {
-						label: 'Flux Kontext Max',
-						icon: Lightning,
-						subtitle: 'High quality image generation',
-						credits: 2,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'black-forest-labs/flux-kontext-pro': {
-						label: 'Flux Kontext Pro',
-						icon: Lightning,
-						subtitle: 'Professional image generation',
-						credits: 1,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'google/imagen-4': {
-						label: 'Google Imagen 4',
-						icon: Lightning,
-						subtitle: 'Google\'s latest image AI',
-						credits: 1,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'google/imagen-4-ultra': {
-						label: 'Google Imagen 4 Ultra',
-						icon: Sparkle,
-						subtitle: 'Ultra high quality images',
-						credits: 2,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'ideogram-ai/ideogram-v3-quality': {
-						label: 'Ideogram V3 Quality',
-						icon: Image,
-						subtitle: 'Quality focused generation',
-						credits: 3,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					}
+		models: {
+			'black-forest-labs/flux-kontext-max': {
+				label: 'Flux Kontext Max',
+				icon: Lightning,
+				subtitle: 'High quality image generation',
+				credits: 2,
+				params: ['prompt', 'image'],
+				options: {
+					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
 				}
 			},
-			// UGC Character with frame selection
-			ugc_character: {
-				label: 'UGC Character',
-				icon: Smiley,
-				subtitle: 'Generate realistic person images with style frames',
-				commandCode: 202,
-				models: {
-					'black-forest-labs/flux-kontext-max': {
-						label: 'Flux Kontext Max',
-						icon: Lightning,
-						subtitle: 'High quality image generation',
-						credits: 2,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'black-forest-labs/flux-kontext-pro': {
-						label: 'Flux Kontext Pro',
-						icon: Lightning,
-						subtitle: 'Professional image generation',
-						credits: 1,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'google/imagen-4': {
-						label: 'Google Imagen 4',
-						icon: Lightning,
-						subtitle: 'Google\'s latest image AI',
-						credits: 1,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'google/imagen-4-ultra': {
-						label: 'Google Imagen 4 Ultra',
-						icon: Sparkle,
-						subtitle: 'Ultra high quality images',
-						credits: 2,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'ideogram-ai/ideogram-v3-quality': {
-						label: 'Ideogram V3 Quality',
-						icon: Image,
-						subtitle: 'Quality focused generation',
-						credits: 3,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					}
+			'black-forest-labs/flux-kontext-pro': {
+				label: 'Flux Kontext Pro',
+				icon: Lightning,
+				subtitle: 'Professional image generation',
+				credits: 1,
+				params: ['prompt', 'image'],
+				options: {
+					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
 				}
 			},
-			// General image
-			general: {
-				label: 'General Image',
+			'google/imagen-4': {
+				label: 'Google Imagen 4',
+				icon: Lightning,
+				subtitle: 'Google\'s latest image AI',
+				credits: 1,
+				params: ['prompt'],
+				options: {
+					aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
+				}
+			},
+			'google/imagen-4-ultra': {
+				label: 'Google Imagen 4 Ultra',
+				icon: Sparkle,
+				subtitle: 'Ultra high quality images',
+				credits: 2,
+				params: ['prompt'],
+				options: {
+					aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
+				}
+			},
+			'ideogram-ai/ideogram-v3-quality': {
+				label: 'Ideogram V3 Quality',
 				icon: Image,
-				subtitle: 'Generate any type of image',
-				commandCode: 203,
-				models: {
-					'black-forest-labs/flux-kontext-max': {
-						label: 'Flux Kontext Max',
-						icon: Lightning,
-						subtitle: 'High quality image generation',
-						credits: 2,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'black-forest-labs/flux-kontext-pro': {
-						label: 'Flux Kontext Pro',
-						icon: Lightning,
-						subtitle: 'Professional image generation',
-						credits: 1,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					},
-					'google/imagen-4': {
-						label: 'Google Imagen 4',
-						icon: Lightning,
-						subtitle: 'Google\'s latest image AI',
-						credits: 1,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'google/imagen-4-ultra': {
-						label: 'Google Imagen 4 Ultra',
-						icon: Sparkle,
-						subtitle: 'Ultra high quality images',
-						credits: 2,
-						params: ['prompt'],
-						options: {
-							aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-						}
-					},
-					'ideogram-ai/ideogram-v3-quality': {
-						label: 'Ideogram V3 Quality',
-						icon: Image,
-						subtitle: 'Quality focused generation',
-						credits: 3,
-						params: ['prompt', 'image'],
-						options: {
-							aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-						}
-					}
+				subtitle: 'Quality focused generation',
+				credits: 3,
+				params: ['prompt', 'image'],
+				options: {
+					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
 				}
 			}
 		}
@@ -716,168 +592,65 @@ const generationConfig = {
 	video: {
 		label: 'AI Video',
 		icon: VideoCamera,
-		subtypes: {
-			image_to_video: {
-				label: 'Image to Video',
-				icon: Play,
-				subtitle: 'Animate an image',
-				models: {
-					'google/veo-3-fast': { 
-						label: 'Google Veo 3 Fast', 
-						icon: Lightning, 
-						subtitle: 'Fast video generation', 
-						credits: 60,
-						params: ['prompt', 'negative_prompt'],
-						options: {
-							duration: [3, 5],
-							aspect_ratio: ['9:16', '16:9', '1:1']
-						}
-					},
-					'google/veo-3': { 
-						label: 'Google Veo 3', 
-						icon: Lightning, 
-						subtitle: 'Google\'s latest video AI', 
-						credits: 100,
-						params: ['prompt', 'negative_prompt'],
-						options: {
-							duration: [3, 5],
-							aspect_ratio: ['9:16', '16:9', '1:1']
-						}
-					},
-					'google/veo-2': { 
-						label: 'Google Veo 2', 
-						icon: Lightning, 
-						subtitle: '10 credits per second', 
-						credits: 'dynamic',
-						params: ['image_input', 'aspect_ratio', 'duration'],
-						options: {
-							aspect_ratio: ['9:16', '16:9'],
-							duration: [5, 6, 7, 8]
-						}
-					},
-					'bytedance/seedance-1-pro': { 
-						label: 'ByteDance SeeDance Pro', 
-						icon: Sparkle, 
-						subtitle: '1-3 credits per second', 
-						credits: 2,
-						params: ['prompt', 'image', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
-						options: {
-							duration: [5, 10],
-							resolution: ['480p', '1080p'],
-							aspect_ratio: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '9:21'],
-							camera_fixed: [true, false]
-						}
-					},
-					'kwaivgi/kling-v2.1': { 
-						label: 'KwaiVGI Kling v2.1', 
-						icon: VideoCamera, 
-						subtitle: '1-2 credits per second', 
-						credits: 60,
-						params: ['prompt', 'negative_prompt', 'start_image', 'mode', 'duration'],
-						options: {
-							mode: ['standard', 'pro'],
-							duration: [5, 10]
-						}
-					},
-					'minimax/hailuo-02': { 
-						label: 'MiniMax Hailuo 02', 
-						icon: Play, 
-						subtitle: '1-2 credits per second', 
-						credits: 'dynamic',
-						params: ['prompt', 'first_frame_image', 'duration', 'resolution', 'prompt_optimizer'],
-						options: {
-							duration: [6, 10],
-							resolution: ['768p', '1080p'],
-							prompt_optimizer: [true, false]
-						}
-					}
+		models: {
+			'google/veo-3-fast': { 
+				label: 'Google Veo 3 Fast', 
+				icon: Lightning, 
+				subtitle: 'Fast video generation', 
+				credits: 60,
+				params: ['prompt', 'negative_prompt', 'image'],
+				options: {
+					duration: [3, 5],
+					aspect_ratio: ['9:16', '16:9', '1:1']
 				}
 			},
-			text_to_video: {
-				label: 'Text to Video',
-				icon: PencilSimple,
-				subtitle: 'From a prompt',
-				models: {
-					'google/veo-3-fast': { 
-						label: 'Google Veo 3 Fast', 
-						icon: Lightning, 
-						subtitle: 'Fast video generation', 
-						credits: 60,
-						params: ['prompt', 'negative_prompt'],
-						options: {
-							duration: [3, 5],
-							aspect_ratio: ['9:16', '16:9', '1:1']
-						}
-					},
-					'google/veo-3': { 
-						label: 'Google Veo 3', 
-						icon: Lightning, 
-						subtitle: 'Google\'s latest video AI', 
-						credits: 100,
-						params: ['prompt', 'negative_prompt'],
-						options: {
-							duration: [3, 5],
-							aspect_ratio: ['9:16', '16:9', '1:1']
-						}
-					},
-					'google/veo-2': { 
-						label: 'Google Veo 2', 
-						icon: Lightning, 
-						subtitle: '10 credits per second', 
-						credits: 'dynamic',
-						params: ['aspect_ratio', 'duration'],
-						options: {
-							aspect_ratio: ['9:16', '16:9'],
-							duration: [5, 6, 7, 8]
-						}
-					},
-					'bytedance/seedance-1-pro': { 
-						label: 'ByteDance SeeDance Pro', 
-						icon: Sparkle, 
-						subtitle: '1-3 credits per second', 
-						credits: 2,
-						params: ['prompt', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
-						options: {
-							duration: [5, 10],
-							resolution: ['480p', '1080p'],
-							aspect_ratio: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '9:21'],
-							camera_fixed: [true, false]
-						}
-					},
-					'kwaivgi/kling-v2.1': { 
-						label: 'KwaiVGI Kling v2.1', 
-						icon: VideoCamera, 
-						subtitle: '1-2 credits per second', 
-						credits: 60,
-						params: ['prompt', 'negative_prompt', 'mode', 'duration'],
-						options: {
-							mode: ['standard', 'pro'],
-							duration: [5, 10]
-						}
-					},
-					'minimax/hailuo-02': { 
-						label: 'MiniMax Hailuo 02', 
-						icon: Play, 
-						subtitle: '1-2 credits per second', 
-						credits: 'dynamic',
-						params: ['prompt', 'duration', 'resolution', 'prompt_optimizer'],
-						options: {
-							duration: [6, 10],
-							resolution: ['768p', '1080p'],
-							prompt_optimizer: [true, false]
-						}
-					}
+			'google/veo-3': { 
+				label: 'Google Veo 3', 
+				icon: Lightning, 
+				subtitle: 'Google\'s latest video AI', 
+				credits: 100,
+				params: ['prompt', 'negative_prompt', 'image'],
+				options: {
+					duration: [3, 5],
+					aspect_ratio: ['9:16', '16:9', '1:1']
+				}
+			},
+			'bytedance/seedance-1-pro': { 
+				label: 'ByteDance SeeDance Pro', 
+				icon: Sparkle, 
+				subtitle: '1-3 credits per second', 
+				credits: 2,
+				params: ['prompt', 'image', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
+				options: {
+					duration: [5, 10],
+					resolution: ['480p', '1080p'],
+					aspect_ratio: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '9:21'],
+					camera_fixed: [true, false]
+				}
+			},
+			'kwaivgi/kling-v2.1': { 
+				label: 'KwaiVGI Kling v2.1', 
+				icon: VideoCamera, 
+				subtitle: '1-2 credits per second', 
+				credits: 60,
+				params: ['prompt', 'negative_prompt', 'start_image', 'mode', 'duration'],
+				options: {
+					mode: ['standard', 'pro'],
+					duration: [5, 10]
+				}
+			},
+			'minimax/hailuo-02': { 
+				label: 'MiniMax Hailuo 02', 
+				icon: Play, 
+				subtitle: '1-2 credits per second', 
+				credits: 'dynamic',
+				params: ['prompt', 'first_frame_image', 'duration', 'resolution', 'prompt_optimizer'],
+				options: {
+					duration: [6, 10],
+					resolution: ['768p', '1080p'],
+					prompt_optimizer: [true, false]
 				}
 			}
-		},
-		options: {
-			duration: [
-				{ value: 5, label: '5s', icon: Play, subtitle: 'Short', credits: 0 },
-				{ value: 6, label: '6s', icon: Play, subtitle: 'Medium', credits: 25 },
-				{ value: 7, label: '7s', icon: Play, subtitle: 'Medium+', credits: 50 },
-				{ value: 8, label: '8s', icon: Play, subtitle: 'Long', credits: 75 },
-				{ value: 10, label: '10s', icon: Play, subtitle: 'Extended', credits: 100 },
-			]
 		}
 	}
 };
@@ -1176,13 +949,10 @@ const initialNodes = [];
 
 	// Local state for form fields
 	const [prompt, setPrompt] = useState(formData.prompt || '');
-	const [subtype, setSubtype] = useState(formData.subtype || 'general');
-	const [selectedFrame, setSelectedFrame] = useState(formData.selectedFrame || null);
 	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? 5 : 3));
-	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe'));
+	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
-	const [showFramePopup, setShowFramePopup] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
 
 	// Available frames with preview images
@@ -1205,13 +975,11 @@ const initialNodes = [];
 	// It's crucial for when data is loaded or updated externally, preventing "stale state".
 	useEffect(() => {
 		if (formData) {
-			setSubtype(formData.subtype || (data.type === 'image' ? 'general' : 'text_to_video'));
-			setSelectedFrame(formData.selectedFrame || null);
 			setDuration(formData.duration || 3);
-			setModel(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe'));
+			setModel(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
-	}, [formData.subtype, formData.selectedFrame, formData.duration, formData.model, data.type]);
+	}, [formData.duration, formData.model, data.type]);
 
 	const handleDropdownToggle = (dropdownId) => {
 		setOpenDropdown(prev => (prev === dropdownId ? null : dropdownId));
@@ -1231,89 +999,33 @@ const initialNodes = [];
 		};
 	}, [openDropdown]);
 
-	// Create combined options for the Image dropdown
-	const imageGenerationOptions = useMemo(() => {
-		const characterFrames = allFrameOptions.filter(f => f.type === 'ugc_character');
-		const backgroundFrames = allFrameOptions.filter(f => f.type === 'background');
-
-		const options = [
-			{ isHeader: true, label: 'General' },
-			{ value: 'general', label: 'General Image', icon: Image, subtitle: 'Generate any type of image', isFrame: false },
-			{ isHeader: true, label: 'UGC Character Frames' },
-			...characterFrames.map(frame => ({
-				value: frame.id,
-				label: frame.name,
-				subtitle: frame.description,
-				backgroundImage: frame.exampleImage,
-				isFrame: true,
-				subtypeForFrame: 'ugc_character'
-			})),
-			{ isHeader: true, label: 'Background Scenes' },
-			...backgroundFrames.map(frame => ({
-				value: frame.id,
-				label: frame.name,
-				subtitle: frame.description,
-				backgroundImage: frame.exampleImage,
-				isFrame: true,
-				subtypeForFrame: 'background'
-			})),
-		];
-		
-		return options;
-	}, []);
-
-	// Available AI models for image generation
-	const imageModelOptions = [
-		{ 
-			id: 'google/imagen-4', 
-			name: 'Google Imagen 4', 
-			icon: <Sparkle size={16} />, 
-			subtitle: 'Photorealistic, high quality' 
-		},
-		{ 
-			id: 'ideogram-ai/ideogram-v3-quality', 
-			name: 'Ideogram v3 Quality', 
-			icon: <PencilSimple size={16} />, 
-			subtitle: 'Great for text in images' 
-		}
-	];
-
-	const handleImageOptionChange = (selectedValue) => {
-		console.log('handleImageOptionChange called with:', selectedValue);
-		const selectedOption = imageGenerationOptions.find(opt => opt.value === selectedValue);
-		console.log('Found option:', selectedOption);
-		if (!selectedOption) {
-			console.log('No option found for value:', selectedValue);
-			return;
-		}
-
-		if (selectedOption.isFrame) {
-			console.log('Setting frame:', selectedOption.subtypeForFrame, selectedOption.value);
-			setSubtype(selectedOption.subtypeForFrame);
-			setSelectedFrame(selectedOption.value);
-			// Update node data immediately
-			onUpdateNode(id, { 
-				formData: { 
-					...formData, 
-					subtype: selectedOption.subtypeForFrame, 
-					selectedFrame: selectedOption.value 
+	// Get available models based on connection type
+	const getAvailableModels = () => {
+		if (data.type === 'image') {
+			const imageConfig = generationConfig.image;
+			const hasImageInput = connectedImages.length > 0 || uploadedImage;
+			
+			// Filter models based on whether they support image input
+			return Object.entries(imageConfig.models).filter(([modelKey, modelConfig]) => {
+				if (hasImageInput) {
+					return modelConfig.params.includes('image');
 				}
-			});
+				return true; // All models support text-only generation
+			}).map(([key, config]) => ({ value: key, ...config }));
 		} else {
-			console.log('Setting subtype:', selectedOption.value);
-			setSubtype(selectedOption.value);
-			setSelectedFrame(null);
-			// Update node data immediately
-			onUpdateNode(id, { 
-				formData: { 
-					...formData, 
-					subtype: selectedOption.value, 
-					selectedFrame: null 
+			const videoConfig = generationConfig.video;
+			const hasImageInput = connectedImages.length > 0 || uploadedImage;
+			
+			// Filter models based on whether they support image input for image-to-video
+			return Object.entries(videoConfig.models).filter(([modelKey, modelConfig]) => {
+				if (hasImageInput) {
+					return modelConfig.params.includes('image') || modelConfig.params.includes('start_image') || modelConfig.params.includes('first_frame_image');
 				}
-			});
+				return true; // All models support text-to-video
+			}).map(([key, config]) => ({ value: key, ...config }));
 		}
-		setOpenDropdown(null); // Close dropdown
 	};
+
 
 	// Handle image upload
 	const handleImageUpload = (file) => {
@@ -1386,20 +1098,19 @@ const initialNodes = [];
 	React.useEffect(() => {
 		const timeoutId = setTimeout(() => {
 			onUpdateNode(id, { 
-				formData: { prompt, subtype, selectedFrame, duration, model },
+				formData: { prompt, duration, model },
 				connectedImages 
 			});
 		}, 100);
 		
 		return () => clearTimeout(timeoutId);
-	}, [id, onUpdateNode, prompt, subtype, selectedFrame, duration, model, connectedImages]);
+	}, [id, onUpdateNode, prompt, duration, model, connectedImages]);
 
 	const handleGenerate = async () => {
 		console.log('🚀 handleGenerate called');
 		console.log('- prompt:', prompt);
-		console.log('- subtype:', subtype);
-		console.log('- selectedFrame:', selectedFrame);
 		console.log('- data.type:', data.type);
+		console.log('- model:', model);
 		console.log('- onGenerate exists:', !!onGenerate);
 		
 		if (!prompt.trim()) {
@@ -1424,12 +1135,11 @@ const initialNodes = [];
 			const generationData = {
 				type: data.type,
 				prompt,
-				subtype,
-				selectedFrame,
 				duration: data.type === 'video' ? duration : undefined,
 				model,
 				connectedImages: allImages,
-				uploadedImage
+				uploadedImage,
+				aspect_ratio: formData?.aspect_ratio || '9:16'
 			};
 
 			console.log('📤 Sending generation data:', generationData);
@@ -1446,25 +1156,24 @@ const initialNodes = [];
 	};
 
 	const getCreditsForType = () => {
-		if (data.type === 'image') {
-			return subtype === 'ugc_character' ? 75 : 50;
-		} else if (data.type === 'video') {
-			const baseCredits = subtype === 'image_to_video' ? 150 : 200;
-			const durationBonus = duration === 5 ? 50 : duration === 7 ? 100 : 0;
-			return baseCredits + durationBonus;
+		const selectedModelConfig = generationConfig[data.type]?.models?.[model];
+		if (selectedModelConfig) {
+			if (typeof selectedModelConfig.credits === 'number') {
+				return selectedModelConfig.credits;
+			}
+			// For dynamic pricing (like video), use base estimates
+			if (data.type === 'video') {
+				const baseCost = 60; // Base video cost
+				const durationMultiplier = duration || 5;
+				return baseCost * (durationMultiplier / 5);
+			}
 		}
-		return 50;
+		return data.type === 'image' ? 2 : 60;
 	};
 	
 	const IconComponent = useMemo(() => {
-		if (subtype === 'general') return Image;
-		if (subtype === 'ugc_character') return Smiley;
-		if (subtype === 'background') return Rectangle;
-		return config?.icon || Sparkle;
-	}, [subtype, config]);
-
-	// Determine current selected value for the dropdown
-	const currentDropdownValue = selectedFrame || (subtype === 'background' ? 'background' : subtype);
+		return config?.icon || (data.type === 'image' ? Image : VideoCamera);
+	}, [config, data.type]);
 	
 	// Current dropdown value
 
@@ -1543,7 +1252,7 @@ const initialNodes = [];
 				style={{
 					width: '36px',
 					height: '72px',
-					background: 'black',
+					background: 'transparent',
 					border: 'none',
 					outline: 'none',
 					display: 'flex',
@@ -1570,7 +1279,7 @@ const initialNodes = [];
 				style={{
 					width: '36px',
 					height: '72px',
-					background: 'black',
+					background: 'transparent',
 					border: 'none',
 					outline: 'none',
 					display: 'flex',
@@ -1590,13 +1299,17 @@ const initialNodes = [];
 				}}></div>
 			</Handle>
 				{/* Node content */}
-				<div className="p-4 space-y-3 h-full flex flex-col">
-				{/* Header */}
-				<div className="flex justify-between items-center text-xs font-medium text-neutral-400 px-1">
-					<span>{data.type.toUpperCase()}</span>
-					<div className="flex items-center px-2 py-1 bg-neutral-700 rounded-lg border border-neutral-600">
-						<LogoNaked className="w-3 h-3 mr-1.5 text-white rotate-90" />
-						<span className="text-xs text-neutral-300 font-medium">
+				<div className="h-full flex flex-col gap-2"
+					style={{
+						// Dynamic padding based on aspect ratio to optimize space usage
+						padding: nodeHeight > nodeWidth ? '8px' : '6px'
+					}}
+				>
+				{/* Header - Credit only */}
+				<div className="flex justify-center items-center flex-shrink-0">
+					<div className="flex items-center px-3 py-1.5 bg-neutral-700 rounded-lg border border-neutral-600">
+						<img src="/logonaked.png" alt="Logo" className="w-4 h-4 mr-2" />
+						<span className="text-sm text-neutral-300 font-medium">
 							{getCreditsForType()}
 						</span>
 					</div>
@@ -1607,20 +1320,20 @@ const initialNodes = [];
 
 
 
-				{/* Connected Images Display - small thumbnail in top right */}
+				{/* Connected Images Display - compact */}
 				{(connectedImages.length > 0 || uploadedImage) && (
-					<div className="bg-neutral-800/50 p-1.5 rounded-lg flex items-center gap-2">
+					<div className="bg-neutral-800/50 p-1.5 rounded-lg flex items-center gap-2 flex-shrink-0">
 						{/* Show uploaded image first */}
 						{uploadedImage && (
 							<div className="relative">
 								<img 
 									src={uploadedImage.url} 
 									alt={uploadedImage.fileName}
-									className="w-8 h-8 object-cover rounded border border-neutral-600"
+									className="w-7 h-7 object-cover rounded border border-neutral-600"
 								/>
 								<button
 									onClick={() => onUpdateNode(id, { uploadedImage: null })}
-									className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+									className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 transition-colors"
 								>
 									×
 								</button>
@@ -1632,137 +1345,102 @@ const initialNodes = [];
 								key={index}
 								src={img.url} 
 								alt={img.fileName}
-								className="w-8 h-8 object-cover rounded border border-neutral-600"
+								className="w-7 h-7 object-cover rounded border border-neutral-600"
 							/>
 						))}
 						{connectedImages.length > (uploadedImage ? 2 : 3) && (
-							<div className="w-8 h-8 bg-neutral-700 rounded border border-neutral-600 flex items-center justify-center">
-								<span className="text-xs text-neutral-300">+{connectedImages.length - (uploadedImage ? 2 : 3)}</span>
+							<div className="w-7 h-7 bg-neutral-700 rounded border border-neutral-600 flex items-center justify-center">
+								<span className="text-[9px] text-neutral-300">+{connectedImages.length - (uploadedImage ? 2 : 3)}</span>
 							</div>
 						)}
-						<span className="text-white text-sm font-medium truncate ml-1">
-							{uploadedImage && connectedImages.length > 0 ? 'Images' : uploadedImage ? 'Uploaded' : 'Connected Assets'}
+						<span className="text-white text-xs font-medium truncate ml-1">
+							{uploadedImage && connectedImages.length > 0 ? 'Images' : uploadedImage ? 'Uploaded' : 'Assets'}
 						</span>
 					</div>
 				)}
 
 				{/* Compact Generation Controls */}
 				{!isGenerating && (
-					<div className="space-y-2">
-						{/* Model Selection */}
-						<div className="space-y-1">
-							<label className="text-[10px] text-neutral-500 block px-1">AI Model</label>
-							<select
-								value={model}
-								onChange={(e) => setModel(e.target.value)}
-								onFocus={() => onDropdownStateChange?.(true)}
-								onBlur={() => onDropdownStateChange?.(false)}
-								className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
-							>
-								{data.type === 'image' ? (
-									<>
-										<option value="lungo-vibe">Lungo Vibe ✨</option>
-										<option value="google/imagen-4">Google Imagen 4</option>
-										<option value="google/imagen-4-ultra">Google Imagen 4 Ultra</option>
-										<option value="black-forest-labs/flux-kontext-pro">Flux Kontext Pro</option>
-										<option value="black-forest-labs/flux-kontext-max">Flux Kontext Max</option>
-										<option value="ideogram-ai/ideogram-v3-quality">Ideogram V3 Quality</option>
-									</>
-								) : (
-									<>
-										<option value="google/veo-3-fast">Google Veo 3 Fast</option>
-										<option value="google/veo-3">Google Veo 3</option>
-										<option value="google/veo-2">Google Veo 2</option>
-										<option value="bytedance/seedance-1-pro">ByteDance SeeDance Pro</option>
-										<option value="kwaivgi/kling-v2.1">KwaiVGI Kling v2.1</option>
-										<option value="minimax/hailuo-02">MiniMax Hailuo 02</option>
-									</>
-								)}
-							</select>
-						</div>
-
-						{/* Settings Row */}
-						<div className="flex gap-2">
-							{/* Aspect Ratio */}
-							<div className="flex-1">
-								<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
+					<div className="flex-shrink-0"
+						style={{
+							// Responsive layout based on aspect ratio
+							display: nodeWidth > nodeHeight ? 'flex' : 'block'
+						}}
+					>
+						{/* Controls container */}
+						<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
+							{/* AI Model */}
+							<div className="flex-1 min-w-0">
+								<label className="text-[10px] text-neutral-500 block px-1 mb-1">Model</label>
 								<select
-									value={formData?.aspect_ratio || '9:16'}
-									onChange={(e) => {
-										const currentFormData = formData || {};
-										onUpdateNode(id, { 
-											formData: { ...currentFormData, aspect_ratio: e.target.value }
-										});
-									}}
+									value={model}
+									onChange={(e) => setModel(e.target.value)}
 									onFocus={() => onDropdownStateChange?.(true)}
 									onBlur={() => onDropdownStateChange?.(false)}
-									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 								>
-									<option value="1:1">1:1</option>
-									<option value="4:3">4:3</option>
-									<option value="3:4">3:4</option>
-									<option value="16:9">16:9</option>
-									<option value="9:16">9:16</option>
+									{getAvailableModels().map((modelConfig) => (
+										<option key={modelConfig.value} value={modelConfig.value}>
+											{modelConfig.label}
+										</option>
+									))}
 								</select>
 							</div>
 
-							{/* Duration for videos */}
-							{data.type === 'video' && (
-								<div className="flex-1">
-									<label className="text-[10px] text-neutral-500 block px-1 mb-1">Duration</label>
+							{/* Settings Row */}
+							<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 flex-1' : 'flex gap-1.5'}`}>
+								{/* Aspect Ratio */}
+								<div className="flex-1 min-w-0">
+									<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
 									<select
-										value={duration}
-										onChange={(e) => setDuration(parseInt(e.target.value))}
+										value={formData?.aspect_ratio || '9:16'}
+										onChange={(e) => {
+											const currentFormData = formData || {};
+											onUpdateNode(id, { 
+												formData: { ...currentFormData, aspect_ratio: e.target.value }
+											});
+										}}
 										onFocus={() => onDropdownStateChange?.(true)}
 										onBlur={() => onDropdownStateChange?.(false)}
-										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-3 py-3 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 									>
-										<option value={3}>3s</option>
-										<option value={5}>5s</option>
-										<option value={6}>6s</option>
-										<option value={7}>7s</option>
-										<option value={8}>8s</option>
-										<option value={10}>10s</option>
+										<option value="1:1">1:1</option>
+										<option value="4:3">4:3</option>
+										<option value="3:4">3:4</option>
+										<option value="16:9">16:9</option>
+										<option value="9:16">9:16</option>
+										{data.type === 'video' && (
+											<>
+												<option value="21:9">21:9</option>
+												<option value="9:21">9:21</option>
+											</>
+										)}
 									</select>
 								</div>
-							)}
+
+								{/* Duration for videos */}
+								{data.type === 'video' && (
+									<div className="flex-1 min-w-0">
+										<label className="text-[10px] text-neutral-500 block px-1 mb-1">Duration</label>
+										<select
+											value={duration}
+											onChange={(e) => setDuration(parseInt(e.target.value))}
+											onFocus={() => onDropdownStateChange?.(true)}
+											onBlur={() => onDropdownStateChange?.(false)}
+											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+										>
+											<option value={3}>3s</option>
+											<option value={5}>5s</option>
+											<option value={6}>6s</option>
+											<option value={7}>7s</option>
+											<option value={8}>8s</option>
+											<option value={10}>10s</option>
+										</select>
+									</div>
+								)}
+							</div>
 						</div>
 
-						{/* Frame Selection - Only for Lungo Vibe model */}
-						{data.type === 'image' && model === 'lungo-vibe' && (
-							<div className="space-y-1">
-								<label className="text-[10px] text-neutral-500 block px-1">Style Frame</label>
-								<button
-									onClick={() => setShowFramePopup(true)}
-									onFocus={() => onDropdownStateChange?.(true)}
-									onBlur={() => onDropdownStateChange?.(false)}
-									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl p-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all hover:bg-neutral-800"
-								>
-									{(() => {
-										const currentFrameData = availableFrames.find(f => f.id === (selectedFrame || 'late_night_lofi'));
-										return (
-											<div className="flex items-center gap-3">
-												<div 
-													className="w-12 h-7 bg-neutral-700 rounded-lg overflow-hidden flex-shrink-0"
-													style={{
-														backgroundImage: currentFrameData ? `url(${currentFrameData.previewImage})` : 'none',
-														backgroundSize: 'cover',
-														backgroundPosition: 'center'
-													}}
-												/>
-												<div className="text-left flex-1">
-													<div className="font-medium">{currentFrameData?.name || 'Select Frame'}</div>
-													<div className="text-[10px] text-neutral-400 mt-0.5">{currentFrameData?.description}</div>
-												</div>
-												<div className="text-neutral-400">
-													<CaretDown size={12} />
-												</div>
-											</div>
-										);
-									})()}
-								</button>
-							</div>
-						)}
 					</div>
 				)}
 
@@ -1772,7 +1450,7 @@ const initialNodes = [];
 
 				{/* Prompt Input */}
 				<div 
-					className={`relative bg-neutral-800/50 rounded-lg border-2 border-dashed transition-colors ${
+					className={`relative bg-neutral-800/50 border-2 border-dashed transition-colors flex-shrink-0 ${
 						isDragOver 
 							? 'border-blue-500 bg-blue-500/10' 
 							: 'border-transparent hover:border-neutral-600'
@@ -1780,14 +1458,19 @@ const initialNodes = [];
 					onDragOver={handleDragOver}
 					onDragLeave={handleDragLeave}
 					onDrop={handleDrop}
+					style={{
+						// Dynamic height based on aspect ratio
+						minHeight: nodeHeight > nodeWidth ? '80px' : '70px',
+						borderRadius: '30px'
+					}}
 				>
-									{isGenerating ? (
-					<div className="p-3">
-						<div className="h-20 flex items-center justify-center bg-neutral-700/50 border border-neutral-600 rounded-lg">
-							<div className="text-neutral-400 text-sm">Generating...</div>
+					{isGenerating ? (
+						<div className="p-2">
+							<div className="h-12 flex items-center justify-center bg-neutral-700/50 border border-neutral-600 rounded-lg">
+								<div className="text-neutral-400 text-[10px]">Generating...</div>
+							</div>
 						</div>
-					</div>
-				) : (
+					) : (
 						<>
 							<textarea
 								value={prompt}
@@ -1801,19 +1484,22 @@ const initialNodes = [];
 									onDropdownStateChange?.(false);
 								}}
 								placeholder={data.type === 'image' ? 
-									(isDragOver ? 'Drop image here...' : 'Describe the image you want to create or drag & drop an image...') :
-									`Describe the ${data.type} you want to create...`
+									(isDragOver ? 'Drop image here...' : 'Describe the image...') :
+									`Describe the ${data.type}...`
 								}
-								rows={3}
-								className="w-full bg-transparent border-none text-neutral-400 text-sm p-3 pr-20 focus:outline-none resize-none"
+								rows={nodeHeight > nodeWidth ? 3 : 2}
+								className="w-full bg-transparent border-none text-neutral-400 text-sm p-2.5 pr-12 focus:outline-none resize-none"
+								style={{
+									lineHeight: '1.4'
+								}}
 							/>
-							<div className="absolute right-2 bottom-2 flex items-center gap-2">
+							<div className="absolute right-2 bottom-2 flex items-center gap-1">
 								<button
 									onClick={handleGenerate}
 									disabled={!prompt.trim() || isGenerating}
 									className="bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-neutral-200 transition-colors disabled:bg-neutral-600 disabled:text-neutral-400"
 								>
-									<ArrowUp size={16} weight="bold" />
+									<ArrowUp size={14} weight="bold" />
 								</button>
 							</div>
 						</>
@@ -2627,12 +2313,33 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 	const [activeTab, setActiveTab] = useState('images');
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
+	const [mouseOverPanel, setMouseOverPanel] = useState(false);
+	const [mouseOverHistoryIcon, setMouseOverHistoryIcon] = useState(false);
+
+	// Panel visibility logic
+	useEffect(() => {
+		if (mouseOverHistoryIcon || mouseOverPanel) {
+			setIsExpanded(true);
+		} else {
+			const timeout = setTimeout(() => {
+				setIsExpanded(false);
+			}, 300);
+			return () => clearTimeout(timeout);
+		}
+	}, [mouseOverHistoryIcon, mouseOverPanel]);
+
 
 	// Fetch generated content from Firestore (using Dashboard's approach)
 	useEffect(() => {
-		if (!user?.uid) return;
+		console.log('useEffect triggered, user:', user); // Debug log
+		
+		if (!user?.uid) {
+			console.log('No user found, skipping fetch'); // Debug log
+			return;
+		}
 
 		const fetchGeneratedContent = async () => {
+			console.log('Starting fetchGeneratedContent for user:', user.uid); // Debug log
 			setIsLoading(true);
 			try {
 				// Fetch from 'generations' collection (images and slideshows)
@@ -2640,15 +2347,24 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 					collection(db, 'users', user.uid, 'generations'),
 					orderBy('timestamp', 'desc')
 				);
+				console.log('Querying Firestore...'); // Debug log
 				const generationsSnapshot = await getDocs(generationsQuery);
+				console.log('Firestore query done, docs count:', generationsSnapshot.docs.length); // Debug log
 
 				// Process generations (images and slideshows)
 				const generations = generationsSnapshot.docs.map(doc => {
 					const data = doc.data();
 					const timestamp = data.timestamp?.toDate?.() || data.timestamp || data.createdAt?.toDate?.() || new Date();
+					console.log('Generation data:', data); // Debug log
+					
+					// Map common URL field names to standardized 'url'
+					const url = data.url || data.imageUrl || data.downloadURL || data.resultUrl || data.outputUrl;
+					console.log('Mapped URL:', url); // Debug log
+					
 					return {
 						id: doc.id,
 						...data,
+						url, // Standardized URL field
 						timestamp,
 						createdAt: timestamp
 					};
@@ -2661,6 +2377,9 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 				const videos = generations.filter(item => 
 					item.type === 'video'
 				);
+
+				console.log('Filtered images:', images); // Debug log
+				console.log('Filtered videos:', videos); // Debug log
 
 				setGeneratedContent({
 					images,
@@ -2708,128 +2427,147 @@ const GeneratedContentPanel = ({ user, onDragStart }) => {
 
 	return (
 		<>
-			{/* Main Panel */}
+			{/* Sidebar Panel */}
 			<div className="fixed top-1/2 left-4 -translate-y-1/2 z-50">
-				<div className={`bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl transition-all duration-300 ease-out ${
-					isExpanded ? 'w-80' : 'w-16'
-				}`}>
-					{/* Collapsed State - Icon Only */}
-					{!isExpanded && (
-						<div className="p-4 flex flex-col items-center">
-							<button
-								onClick={() => setIsExpanded(true)}
-								className="p-3 rounded-xl bg-neutral-800/50 hover:bg-neutral-700/50 text-neutral-300 hover:text-white transition-all duration-200 group"
-								title="Generated Content"
-							>
-								<div className="relative">
-									<Sparkle size={20} className="group-hover:scale-110 transition-transform" />
-									{(generatedContent.images.length + generatedContent.videos.length) > 0 && (
-										<span className="absolute -top-2 -right-2 w-4 h-4 text-[10px] font-bold rounded-full bg-lime-500 text-black flex items-center justify-center">
-											{generatedContent.images.length + generatedContent.videos.length}
-										</span>
-									)}
-								</div>
-							</button>
-							<span className="text-xs text-neutral-500 mt-2 text-center leading-tight">
-								My<br/>Content
-							</span>
+				{/* Main Sidebar */}
+				<div className="bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl w-12">
+					<div className="p-3 flex flex-col items-center gap-3">
+						{/* History Icon */}
+						<div 
+							className="flex flex-col items-center"
+							onMouseEnter={() => {
+								setMouseOverHistoryIcon(true);
+							}}
+							onMouseLeave={() => {
+								setMouseOverHistoryIcon(false);
+							}}
+						>
+							<div className="p-1 text-neutral-400">
+								<ClockCounterClockwise size={16} />
+							</div>
+							{(generatedContent.images.length + generatedContent.videos.length) > 0 && (
+								<div className="w-1 h-1 rounded-full bg-lime-500 mt-1"></div>
+							)}
 						</div>
-					)}
+					</div>
+				</div>
 
-					{/* Expanded State */}
-					{isExpanded && (
-						<div className="flex flex-col h-[500px]">
-							{/* Header */}
-							<div className="flex items-center justify-between p-4 border-b border-neutral-700/50">
-								<div className="flex items-center gap-2">
-									<Sparkle size={18} className="text-lime-500" />
-									<span className="text-sm font-semibold text-white">Generated Content</span>
+				{/* Expanded Panel - Appears to the right */}
+				{isExpanded && (
+					<div 
+						className="absolute -top-20 left-14 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl w-96"
+						onMouseEnter={() => {
+							setMouseOverPanel(true);
+						}}
+						onMouseLeave={() => {
+							setMouseOverPanel(false);
+						}}
+					>
+						<div className="flex flex-col h-[400px]">
+							{/* Search Bar */}
+							<div className="p-4 border-b border-neutral-700/50">
+								<div className="flex items-center gap-3 bg-neutral-800/50 rounded-xl px-4 py-3">
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-neutral-500">
+										<path d="M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42-1.42ZM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7Z"/>
+									</svg>
+									<input
+										type="text"
+										placeholder="Search History..."
+										className="flex-1 bg-transparent text-neutral-300 placeholder-neutral-500 text-sm outline-none"
+									/>
+									<button className="p-1 text-neutral-500 hover:text-neutral-300">
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M3 6h18v2H3V6zm2 5h14v2H5v-2zm4 5h6v2H9v-2z"/>
+										</svg>
+									</button>
+									<button className="p-1 text-neutral-500 hover:text-neutral-300">
+										<X size={16} />
+									</button>
 								</div>
-								<button
-									onClick={() => setIsExpanded(false)}
-									className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
-								>
-									<X size={16} />
-								</button>
 							</div>
 
-							{/* Tabs */}
-							<div className="flex border-b border-neutral-700/50">
-								{tabs.map((tab) => {
-									const IconComponent = tab.icon;
-									const isActive = activeTab === tab.id;
-									
-									return (
-										<button
-											key={tab.id}
-											onClick={() => setActiveTab(tab.id)}
-											className={`flex-1 flex items-center justify-center gap-2 p-3 text-sm font-medium transition-all duration-200 ${
-												isActive 
-													? 'text-lime-400 border-b-2 border-lime-400 bg-lime-500/5' 
-													: 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
-											}`}
-										>
-											<IconComponent size={16} />
-											<span>{tab.label}</span>
-											{tab.count > 0 && (
-												<span className={`text-xs px-1.5 py-0.5 rounded-full ${
-													isActive ? 'bg-lime-500 text-black' : 'bg-neutral-700 text-neutral-300'
-												}`}>
-													{tab.count}
-												</span>
-											)}
-										</button>
-									);
-								})}
-							</div>
-
-							{/* Content Grid */}
+							{/* Content Area */}
 							<div 
-								className="flex-1 overflow-y-auto p-3"
+								className="flex-1 overflow-y-auto p-4"
 								onWheel={(e) => e.stopPropagation()}
 							>
 								{isLoading ? (
 									<div className="flex items-center justify-center h-full">
 										<div className="animate-spin rounded-full h-8 w-8 border-2 border-lime-500 border-t-transparent"></div>
 									</div>
-								) : currentContent.length === 0 ? (
-									<div className="text-center py-8 px-4">
+								) : (generatedContent.images.length + generatedContent.videos.length) === 0 ? (
+									<div className="text-center py-12">
 										<div className="text-neutral-500 mb-3">
-											{activeTab === 'images' ? <Image size={32} /> : <VideoCamera size={32} />}
+											<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+												<path d="M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42-1.42ZM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7Z"/>
+											</svg>
 										</div>
-										<p className="text-sm text-neutral-400 mb-1">
-											No {activeTab} generated yet
-										</p>
-										<p className="text-xs text-neutral-500">
-											Generate some content to see it here
-										</p>
+										<p className="text-sm text-neutral-400 mb-1">No content generated yet</p>
+										<p className="text-xs text-neutral-500">Generate content to see it here</p>
 									</div>
 								) : (
-									<div className="grid grid-cols-3 gap-2">
-										{currentContent.map((content, index) => (
-											<GeneratedContentItem
-												key={content.id}
-												content={content}
-												index={index}
-												activeTab={activeTab}
-												handleDragStart={handleDragStart}
-												formatDate={formatDate}
-											/>
-										))}
+									<div>
+										{/* Date Header */}
+										<h2 className="text-lg font-semibold text-white mb-4">
+											{new Date().toLocaleDateString('en-US', { 
+												year: 'numeric', 
+												month: 'long', 
+												day: 'numeric' 
+											})}
+										</h2>
+										
+										{/* Grid Layout */}
+										<div className="grid grid-cols-4 gap-2">
+											{[...generatedContent.images, ...generatedContent.videos].map((content, index) => (
+												<div
+													key={content.id}
+													className="relative cursor-pointer group"
+													draggable
+													onDragStart={(e) => handleDragStart(e, content)}
+												>
+													<div className="relative bg-neutral-800/50 rounded-xl overflow-hidden aspect-square">
+														{/* Type Badge */}
+														<div className="absolute top-2 left-2 z-10">
+															<span className="bg-black/70 text-white text-xs font-medium px-2 py-1 rounded-md">
+																{content.type === 'video' || content.commandCode >= 400 ? 'VIDEO' : 'IMAGE'}
+															</span>
+														</div>
+														
+														{/* Media */}
+														{content.type === 'video' || content.commandCode >= 400 ? (
+															<video 
+																src={content.url}
+																className="w-full h-full object-cover"
+																muted
+																playsInline
+																onError={(e) => {
+																	console.error('Video failed to load:', content.url);
+																	e.target.style.display = 'none';
+																}}
+															/>
+														) : (
+															<img 
+																src={content.url} 
+																alt={content.prompt}
+																className="w-full h-full object-cover"
+																onError={(e) => {
+																	console.error('Image failed to load:', content.url);
+																	e.target.style.display = 'none';
+																}}
+																onLoad={() => console.log('Image loaded:', content.url)}
+															/>
+														)}
+													</div>
+												</div>
+											))}
+										</div>
 									</div>
 								)}
 							</div>
-
-							{/* Footer Stats */}
-							<div className="border-t border-neutral-700/50 p-3">
-								<div className="flex items-center justify-between text-xs text-neutral-500">
-									<span>Total: {generatedContent.images.length + generatedContent.videos.length}</span>
-									<span>Drag to canvas to reuse</span>
-								</div>
-							</div>
 						</div>
-					)}
-				</div>
+					</div>
+				)}
+
 			</div>
 		</>
 	);
@@ -2842,6 +2580,7 @@ const GeneratedContentItem = React.memo(({ content, index, activeTab, handleDrag
 	const [frameType, setFrameType] = useState('image');
 	const [frameRatio, setFrameRatio] = useState('9:16');
 	const [frameModel, setFrameModel] = useState('google/imagen-3.0-generate-001');
+	const [hoverTimeout, setHoverTimeout] = useState(null);
 
 	const typeOptions = [
 		{ value: 'image', label: 'Image', icon: Image },
@@ -2869,8 +2608,20 @@ const GeneratedContentItem = React.memo(({ content, index, activeTab, handleDrag
 			}}
 			draggable
 			onDragStart={(e) => handleDragStart(e, content)}
-			onMouseEnter={() => setShowFrame(true)}
-			onMouseLeave={() => setShowFrame(false)}
+			onMouseEnter={() => {
+				if (hoverTimeout) {
+					clearTimeout(hoverTimeout);
+					setHoverTimeout(null);
+				}
+				setShowFrame(true);
+			}}
+			onMouseLeave={() => {
+				const timeout = setTimeout(() => {
+					setShowFrame(false);
+					setHoverTimeout(null);
+				}, 300);
+				setHoverTimeout(timeout);
+			}}
 			onClick={() => setShowFrame(!showFrame)}
 		>
 			{/* Content Display */}
@@ -2912,6 +2663,19 @@ const GeneratedContentItem = React.memo(({ content, index, activeTab, handleDrag
 				<div 
 					className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col p-3 z-10"
 					onClick={(e) => e.stopPropagation()}
+					onMouseEnter={() => {
+						if (hoverTimeout) {
+							clearTimeout(hoverTimeout);
+							setHoverTimeout(null);
+						}
+					}}
+					onMouseLeave={() => {
+						const timeout = setTimeout(() => {
+							setShowFrame(false);
+							setHoverTimeout(null);
+						}, 300);
+						setHoverTimeout(timeout);
+					}}
 				>
 					{/* Prompt Input */}
 					<div className="mb-3">
@@ -3382,6 +3146,17 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	const [showTutorial, setShowTutorial] = useState(false);
 	const [isAnyDropdownOpen, setIsAnyDropdownOpen] = useState(false);
 	const [isInputFocused, setIsInputFocused] = useState(false);
+	
+	// Feedback menu states
+	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+	const [feedbackForm, setFeedbackForm] = useState({
+		type: 'feedback',
+		title: '',
+		description: '',
+		email: user?.email || ''
+	});
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	// Global input focus tracking
 	useEffect(() => {
@@ -3476,6 +3251,46 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	const addNodeToCanvas = useCallback((newNode) => {
 		setNodes((nds) => nds.concat(newNode));
 	}, []);
+
+	// Submit feedback to Firestore
+	const submitFeedback = async () => {
+		if (!feedbackForm.title.trim() || !feedbackForm.description.trim()) {
+			alert('Please fill in all required fields');
+			return;
+		}
+
+		setIsSubmitting(true);
+		try {
+			await addDoc(collection(db, 'feedbacks'), {
+				userId: user?.uid || 'anonymous',
+				userEmail: user?.email || feedbackForm.email,
+				type: feedbackForm.type,
+				title: feedbackForm.title,
+				description: feedbackForm.description,
+				timestamp: new Date(),
+				status: 'open'
+			});
+
+			alert('Feedback submitted successfully!');
+			setShowFeedbackModal(false);
+			setFeedbackForm({
+				type: 'feedback',
+				title: '',
+				description: '',
+				email: user?.email || ''
+			});
+		} catch (error) {
+			console.error('Error submitting feedback:', error);
+			alert('Failed to submit feedback. Please try again.');
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	// Open tutorial function
+	const openTutorial = () => {
+		setShowTutorial(true);
+	};
 
 			// Edit mode state
 	const [editModeNodes, setEditModeNodes] = useState(new Set());
@@ -3913,10 +3728,9 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		
 		const timestamp = Date.now();
 
-		// Transform the generation node instead of creating a new one
+		// Mark node as generating but keep original type
 		updateNodeData(sourceNodeId, { 
 			isGenerating: true,
-			type: 'generatedFrame',
 			generatedContent: {
 				prompt: generationData.prompt,
 				type: generationData.type,
@@ -4020,8 +3834,9 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			}
 
 			if (result && result.success) {
-				// Update the source node with the generated content
+				// Transform to generated content node and update with results
 				updateNodeData(sourceNodeId, {
+					type: 'generatedFrame',
 					imageUrl: result.imageUrl,
 					videoUrl: result.videoUrl || result.data?.videoUrl,
 					prompt: generationData.prompt,
@@ -4160,7 +3975,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			if ((sourceNode.type === 'imageUpload' || sourceNode.type === 'generatedFrame') && 
 				targetNode.data.type === 'video') {
 				const targetModel = targetNode.data.formData?.model || 'google/veo-3-fast';
-				const modelConfig = generationConfig.video?.subtypes?.image_to_video?.models?.[targetModel];
+				const modelConfig = generationConfig.video?.models?.[targetModel];
 				
 				// Check if model supports any image input parameters
 				const imageParams = ['image_input', 'image', 'start_image', 'first_frame_image'];
@@ -4530,6 +4345,157 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 					onClose={() => setShowTutorial(false)}
 					onOpenTutorial={() => setShowTutorial(true)}
 				/>
+
+				{/* Hover Menu */}
+				<div 
+					className="fixed bottom-4 right-4 z-40"
+					onMouseEnter={() => setIsMenuOpen(true)}
+					onMouseLeave={() => setIsMenuOpen(false)}
+				>
+					<div className={`bg-neutral-900/95 backdrop-blur-sm border border-neutral-700 rounded-xl shadow-xl px-2 transition-all duration-700 ease-in-out transform ${
+						isMenuOpen ? ' w-12 flex flex-col-reverse gap-1 py-2 scale-100 opacity-100' : 'h-12 w-12 flex items-center justify-center py-2 opacity-90'
+					} overflow-hidden`}>
+						<button
+							onClick={() => {
+								openTutorial();
+								setIsMenuOpen(false);
+							}}
+							className="flex items-center justify-center w-8 h-8 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-md transition-all duration-200"
+							title="Open canvas tutorial"
+						>
+							<Info size={16} />
+						</button>
+						
+						{isMenuOpen && (
+							<>
+								<button
+									onClick={() => {
+										window.location.href = 'mailto:deniz@lungoai.com?subject=LungoAI Canvas Support';
+										setIsMenuOpen(false);
+									}}
+									className="flex items-center justify-center w-8 h-8 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-md transition-colors duration-200"
+									title="Contact support via email"
+								>
+									<Question size={16} />
+								</button>
+								
+								<button
+									onClick={() => {
+										setIsMenuOpen(false);
+										setShowFeedbackModal(true);
+									}}
+									className="flex items-center justify-center w-8 h-8 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded-md transition-colors duration-200"
+									title="Submit feedback or bug report"
+								>
+									<Bug size={16} />
+								</button>
+							</>
+						)}
+					</div>
+				</div>
+
+				{/* Feedback Modal */}
+				{showFeedbackModal && createPortal(
+					<div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[10000] flex items-center justify-center p-4">
+						<div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-2xl w-full max-w-lg animate-in fade-in-0 zoom-in-95 duration-200">
+							{/* Header */}
+							<div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-700">
+								<div>
+									<h3 className="text-xl font-bold text-neutral-900 dark:text-white">Feedback</h3>
+									<p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">Help us improve LungoAI Canvas</p>
+								</div>
+								<button
+									onClick={() => setShowFeedbackModal(false)}
+									className="w-10 h-10 rounded-full bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 flex items-center justify-center text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors"
+								>
+									<X size={18} />
+								</button>
+							</div>
+
+							{/* Form */}
+							<div className="p-6 space-y-5">
+								{/* Type Selection */}
+								<div>
+									<label className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">What type of feedback?</label>
+									<div className="grid grid-cols-3 gap-2">
+										{['feedback', 'bug', 'feature'].map((type) => (
+											<button
+												key={type}
+												onClick={() => setFeedbackForm({ ...feedbackForm, type })}
+												className={`p-3 rounded-lg border text-sm font-medium transition-all ${
+													feedbackForm.type === type
+														? 'bg-lime-50 border-lime-300 text-lime-700 dark:bg-lime-900/20 dark:border-lime-600 dark:text-lime-300'
+														: 'bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
+												}`}
+											>
+												{type === 'feedback' ? '💬 General' : type === 'bug' ? '🐛 Bug Report' : '✨ Feature'}
+											</button>
+										))}
+									</div>
+								</div>
+
+								{/* Title */}
+								<div>
+									<label className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Title *</label>
+									<input
+										type="text"
+										value={feedbackForm.title}
+										onChange={(e) => setFeedbackForm({ ...feedbackForm, title: e.target.value })}
+										placeholder="Brief summary of your feedback"
+										className="w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-lg px-4 py-3 text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500/50 transition-colors"
+									/>
+								</div>
+
+								{/* Description */}
+								<div>
+									<label className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Description *</label>
+									<textarea
+										value={feedbackForm.description}
+										onChange={(e) => setFeedbackForm({ ...feedbackForm, description: e.target.value })}
+										placeholder="Tell us more about your experience, issue, or suggestion..."
+										rows={4}
+										className="w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-lg px-4 py-3 text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500/50 resize-none transition-colors"
+									/>
+								</div>
+
+								{/* Email (if not logged in) */}
+								{!user?.email && (
+									<div>
+										<label className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Email (Optional)</label>
+										<input
+											type="email"
+											value={feedbackForm.email}
+											onChange={(e) => setFeedbackForm({ ...feedbackForm, email: e.target.value })}
+											placeholder="your@email.com"
+											className="w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-lg px-4 py-3 text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500/50 transition-colors"
+										/>
+									</div>
+								)}
+							</div>
+
+							{/* Footer */}
+							<div className="flex items-center justify-between p-6 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 rounded-b-xl">
+								<p className="text-xs text-neutral-500 dark:text-neutral-400">We read every piece of feedback</p>
+								<div className="flex items-center gap-3">
+									<button
+										onClick={() => setShowFeedbackModal(false)}
+										className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										onClick={submitFeedback}
+										disabled={isSubmitting || !feedbackForm.title.trim() || !feedbackForm.description.trim()}
+										className="px-6 py-2.5 bg-lime-500 hover:bg-lime-600 disabled:bg-neutral-300 disabled:text-neutral-500 dark:disabled:bg-neutral-700 dark:disabled:text-neutral-500 text-white font-semibold rounded-lg transition-all transform hover:scale-105 disabled:transform-none disabled:hover:scale-100 text-sm shadow-lg hover:shadow-xl disabled:shadow-none"
+									>
+										{isSubmitting ? 'Sending...' : 'Send Feedback'}
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>,
+					document.body
+				)}
 		</div>
 	);
 };

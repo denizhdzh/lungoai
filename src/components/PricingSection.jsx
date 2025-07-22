@@ -555,7 +555,10 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
               }`}
               onClick={() => setPricingMode('subscription')}
             >
-              Monthly Plans
+              Subscriptions
+              <span className="ml-2 text-xs bg-lime-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                Best Value
+              </span>
             </button>
             <button 
               className={`relative inline-flex items-center rounded-md px-6 py-2 text-sm font-medium transition-all duration-200 ${
@@ -566,9 +569,6 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
               onClick={() => setPricingMode('credits')}
             >
               One-Time Credits
-              <span className="ml-2 text-xs bg-lime-500 text-white px-2 py-0.5 rounded-full font-semibold">
-                Better Value
-              </span>
             </button>
           </div>
         </div>

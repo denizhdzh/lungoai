@@ -571,7 +571,7 @@ const generationConfig = {
 				label: 'Google Imagen 4 Ultra',
 				icon: Sparkle,
 				subtitle: 'Ultra high quality images',
-				credits: 2,
+				credits: 1.5,
 				params: ['prompt'],
 				options: {
 					aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
@@ -581,7 +581,7 @@ const generationConfig = {
 				label: 'Ideogram V3 Quality',
 				icon: Image,
 				subtitle: 'Quality focused generation',
-				credits: 3,
+				credits: 2.25,
 				params: ['prompt', 'image'],
 				options: {
 					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
@@ -596,31 +596,34 @@ const generationConfig = {
 			'google/veo-3-fast': { 
 				label: 'Google Veo 3 Fast', 
 				icon: Lightning, 
-				subtitle: 'Fast video generation', 
-				credits: 60,
+				subtitle: '10 credits per second', 
+				creditsPerSecond: 10,
 				params: ['prompt', 'negative_prompt', 'image'],
+				type: 'text_to_video', // Primary mode is text-to-video, image is optional
 				options: {
-					duration: [3, 5],
+					duration: [8, 8],
 					aspect_ratio: ['9:16', '16:9', '1:1']
 				}
 			},
 			'google/veo-3': { 
 				label: 'Google Veo 3', 
 				icon: Lightning, 
-				subtitle: 'Google\'s latest video AI', 
-				credits: 100,
+				subtitle: '18.75 credits per second', 
+				creditsPerSecond: 19,
 				params: ['prompt', 'negative_prompt', 'image'],
+				type: 'text_to_video', // Primary mode is text-to-video, image is optional
 				options: {
-					duration: [3, 5],
+					duration: [8, 8],
 					aspect_ratio: ['9:16', '16:9', '1:1']
 				}
 			},
 			'bytedance/seedance-1-pro': { 
 				label: 'ByteDance SeeDance Pro', 
 				icon: Sparkle, 
-				subtitle: '1-3 credits per second', 
-				credits: 2,
+				subtitle: '0.75-3.75 credits per second', 
+				creditsPerSecond: { '480p': 1, '1080p': 4 },
 				params: ['prompt', 'image', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
+				type: 'both', // Supports both text-to-video and image-to-video
 				options: {
 					duration: [5, 10],
 					resolution: ['480p', '1080p'],
@@ -631,9 +634,10 @@ const generationConfig = {
 			'kwaivgi/kling-v2.1': { 
 				label: 'KwaiVGI Kling v2.1', 
 				icon: VideoCamera, 
-				subtitle: '1-2 credits per second', 
-				credits: 60,
+				subtitle: '1.25-2.25 credits per second', 
+				creditsPerSecond: { 'standard': 1.5, 'pro': 2.5 },
 				params: ['prompt', 'negative_prompt', 'start_image', 'mode', 'duration'],
+				type: 'image_to_video', // Image-to-video model, requires start_image
 				options: {
 					mode: ['standard', 'pro'],
 					duration: [5, 10]
@@ -642,9 +646,10 @@ const generationConfig = {
 			'minimax/hailuo-02': { 
 				label: 'MiniMax Hailuo 02', 
 				icon: Play, 
-				subtitle: '1-2 credits per second', 
-				credits: 'dynamic',
+				subtitle: '1.125-2 credits per second', 
+				creditsPerSecond: { '768p': 1, '1080p': 2 },
 				params: ['prompt', 'first_frame_image', 'duration', 'resolution', 'prompt_optimizer'],
+				type: 'both', // Supports both text-to-video and image-to-video
 				options: {
 					duration: [6, 10],
 					resolution: ['768p', '1080p'],
@@ -653,6 +658,185 @@ const generationConfig = {
 			}
 		}
 	}
+};
+
+// Custom Model Dropdown Component
+const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStateChange }) => {
+	const [isOpen, setIsOpen] = useState(false);
+	const dropdownRef = useRef(null);
+	const buttonRef = useRef(null);
+
+	const selectedOption = options.find(opt => opt.value === value);
+
+	const handleToggle = () => {
+		setIsOpen(!isOpen);
+		onDropdownStateChange?.(!isOpen);
+	};
+
+	const handleSelect = (option) => {
+		if (!option.disabled) {
+			onChange(option.value);
+			setIsOpen(false);
+			onDropdownStateChange?.(false);
+		}
+	};
+
+	// Click outside to close and close on drag
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+			    buttonRef.current && !buttonRef.current.contains(event.target)) {
+				setIsOpen(false);
+				onDropdownStateChange?.(false);
+			}
+		};
+
+		const handleMouseMove = (event) => {
+			// Close dropdown if mouse is dragging (node being moved)
+			if (event.buttons === 1 && isOpen) {
+				setIsOpen(false);
+				onDropdownStateChange?.(false);
+			}
+		};
+
+		document.addEventListener('mousedown', handleClickOutside);
+		document.addEventListener('mousemove', handleMouseMove);
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+			document.removeEventListener('mousemove', handleMouseMove);
+		};
+	}, [onDropdownStateChange, isOpen]);
+
+	// Add scrollbar styles
+	useEffect(() => {
+		const style = document.createElement('style');
+		style.textContent = `
+			.model-dropdown-scroll::-webkit-scrollbar {
+				width: 8px;
+			}
+			.model-dropdown-scroll::-webkit-scrollbar-track {
+				background: #404040;
+				border-radius: 4px;
+			}
+			.model-dropdown-scroll::-webkit-scrollbar-thumb {
+				background: #525252;
+				border-radius: 4px;
+			}
+			.model-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+				background: #606060;
+			}
+		`;
+		document.head.appendChild(style);
+		return () => document.head.removeChild(style);
+	}, []);
+
+	const getCreditsText = (modelConfig) => {
+		if (typeof modelConfig.creditsPerSecond === 'number') {
+			return `${Math.ceil(modelConfig.creditsPerSecond)} credits/sec`;
+		} else if (typeof modelConfig.creditsPerSecond === 'object') {
+			const entries = Object.entries(modelConfig.creditsPerSecond);
+			if (entries.length === 1) {
+				return `${Math.ceil(entries[0][1])} credits/sec`;
+			} else {
+				const values = Object.values(modelConfig.creditsPerSecond);
+				const min = Math.ceil(Math.min(...values));
+				const max = Math.ceil(Math.max(...values));
+				return min === max ? `${min} credits/sec` : `${min}-${max} credits/sec`;
+			}
+		}
+		return '';
+	};
+
+	const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+	const updateDropdownPosition = () => {
+		if (buttonRef.current) {
+			const rect = buttonRef.current.getBoundingClientRect();
+			setDropdownPosition({
+				top: rect.bottom + window.scrollY + 4,
+				left: rect.left + window.scrollX,
+				width: rect.width
+			});
+		}
+	};
+
+	const handleToggleWithPosition = () => {
+		if (!isOpen) {
+			updateDropdownPosition();
+		}
+		setIsOpen(!isOpen);
+		onDropdownStateChange?.(!isOpen);
+	};
+
+	return (
+		<div className="relative">
+			<button
+				ref={buttonRef}
+				onClick={handleToggleWithPosition}
+				className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all flex items-center justify-between"
+			>
+				<div className="flex items-center gap-2 min-w-0">
+					<span className="truncate">{selectedOption?.label || 'Select Model'}</span>
+				</div>
+				<CaretDown size={12} className="text-neutral-400 flex-shrink-0" />
+			</button>
+
+			{isOpen && createPortal(
+				<div 
+					ref={dropdownRef}
+					className="fixed bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-[9999] max-h-80 overflow-y-auto model-dropdown-scroll"
+					style={{
+						top: dropdownPosition.top,
+						left: dropdownPosition.left,
+						width: dropdownPosition.width,
+						scrollbarWidth: 'thin',
+						scrollbarColor: '#525252 #404040'
+					}}
+					onWheel={(e) => e.stopPropagation()}
+					onScroll={(e) => e.stopPropagation()}
+				>
+					{options.map((option) => {
+						const isDisabled = option.disabled;
+						const creditsText = getCreditsText(option);
+						
+						return (
+							<button
+								key={option.value}
+								onClick={() => handleSelect(option)}
+								disabled={isDisabled}
+								className={`w-full p-3 text-left transition-colors border-b border-neutral-700/50 last:border-b-0 ${
+									isDisabled 
+										? 'bg-neutral-800/50 text-neutral-500 cursor-not-allowed' 
+										: value === option.value
+											? 'bg-neutral-700 text-white'
+											: 'hover:bg-neutral-700/50 text-neutral-200'
+								}`}
+							>
+								<div className="flex items-center justify-between">
+									<div className="flex-1 min-w-0">
+										<span className={`text-sm truncate ${isDisabled ? 'text-neutral-500' : 'text-white'}`}>
+											{option.label}
+										</span>
+									</div>
+									<div className="flex items-center gap-2 ml-3 flex-shrink-0">
+										<span className={`text-xs ${isDisabled ? 'text-neutral-600' : 'text-neutral-400'}`}>
+											{creditsText}
+										</span>
+										{isDisabled && (
+											<span className="text-xs text-orange-400">
+												Need Image
+											</span>
+										)}
+									</div>
+								</div>
+							</button>
+						);
+					})}
+				</div>,
+				document.body
+			)}
+		</div>
+	);
 };
 
 // Enhanced Dropdown Component with search and categories
@@ -1016,13 +1200,16 @@ const initialNodes = [];
 			const videoConfig = generationConfig.video;
 			const hasImageInput = connectedImages.length > 0 || uploadedImage;
 			
-			// Filter models based on whether they support image input for image-to-video
+			// Filter models based on model type and image availability
 			return Object.entries(videoConfig.models).filter(([modelKey, modelConfig]) => {
-				if (hasImageInput) {
-					return modelConfig.params.includes('image') || modelConfig.params.includes('start_image') || modelConfig.params.includes('first_frame_image');
-				}
-				return true; // All models support text-to-video
-			}).map(([key, config]) => ({ value: key, ...config }));
+				// Always show all models, but mark some as disabled in the UI
+				return true;
+			}).map(([key, config]) => ({ 
+				value: key, 
+				...config,
+				// Mark image-to-video only models as disabled when no image is available
+				disabled: !hasImageInput && config.type === 'image_to_video'
+			}));
 		}
 	};
 
@@ -1158,14 +1345,35 @@ const initialNodes = [];
 	const getCreditsForType = () => {
 		const selectedModelConfig = generationConfig[data.type]?.models?.[model];
 		if (selectedModelConfig) {
+			// Handle image models
 			if (typeof selectedModelConfig.credits === 'number') {
 				return selectedModelConfig.credits;
 			}
-			// For dynamic pricing (like video), use base estimates
-			if (data.type === 'video') {
-				const baseCost = 60; // Base video cost
-				const durationMultiplier = duration || 5;
-				return baseCost * (durationMultiplier / 5);
+			// Handle video models with per-second pricing
+			if (data.type === 'video' && selectedModelConfig.creditsPerSecond) {
+				const videoDuration = duration || 5;
+				let creditsPerSec = selectedModelConfig.creditsPerSecond;
+				
+				// Handle resolution-dependent pricing
+				if (typeof creditsPerSec === 'object') {
+					const resolution = formData?.resolution || '480p';
+					const mode = formData?.mode || 'standard';
+					
+					// Check for resolution-based pricing (ByteDance, MiniMax)
+					if (creditsPerSec[resolution]) {
+						creditsPerSec = creditsPerSec[resolution];
+					}
+					// Check for mode-based pricing (Kling)
+					else if (creditsPerSec[mode]) {
+						creditsPerSec = creditsPerSec[mode];
+					}
+					// Fallback to first available value
+					else {
+						creditsPerSec = Object.values(creditsPerSec)[0];
+					}
+				}
+				
+				return Math.ceil(creditsPerSec * videoDuration); // Round up to nearest integer
 			}
 		}
 		return data.type === 'image' ? 2 : 60;
@@ -1308,7 +1516,7 @@ const initialNodes = [];
 				{/* Header - Credit only */}
 				<div className="flex justify-center items-center flex-shrink-0">
 					<div className="flex items-center px-3 py-1.5 bg-neutral-700 rounded-lg border border-neutral-600">
-						<img src="/logonaked.png" alt="Logo" className="w-4 h-4 mr-2" />
+						<LogoNaked className="w-4 h-4 mr-2 text-neutral-300" />
 						<span className="text-sm text-neutral-300 font-medium">
 							{getCreditsForType()}
 						</span>
@@ -1372,19 +1580,13 @@ const initialNodes = [];
 							{/* AI Model */}
 							<div className="flex-1 min-w-0">
 								<label className="text-[10px] text-neutral-500 block px-1 mb-1">Model</label>
-								<select
+								<ModelDropdown
 									value={model}
-									onChange={(e) => setModel(e.target.value)}
-									onFocus={() => onDropdownStateChange?.(true)}
-									onBlur={() => onDropdownStateChange?.(false)}
-									className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
-								>
-									{getAvailableModels().map((modelConfig) => (
-										<option key={modelConfig.value} value={modelConfig.value}>
-											{modelConfig.label}
-										</option>
-									))}
-								</select>
+									options={getAvailableModels()}
+									onChange={setModel}
+									hasImageInput={connectedImages.length > 0 || uploadedImage}
+									onDropdownStateChange={onDropdownStateChange}
+								/>
 							</div>
 
 							{/* Settings Row */}
@@ -1429,16 +1631,75 @@ const initialNodes = [];
 											onBlur={() => onDropdownStateChange?.(false)}
 											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 										>
-											<option value={3}>3s</option>
-											<option value={5}>5s</option>
-											<option value={6}>6s</option>
-											<option value={7}>7s</option>
-											<option value={8}>8s</option>
-											<option value={10}>10s</option>
+											{(() => {
+												const selectedModel = generationConfig.video.models[model];
+												if (!selectedModel?.options?.duration) return <option value={5}>5s</option>;
+												
+												const [min, max] = selectedModel.options.duration;
+												const options = [];
+												
+												// Generate duration options based on model's range
+												for (let i = min; i <= max; i++) {
+													options.push(<option key={i} value={i}>{i}s</option>);
+												}
+												
+												return options;
+											})()}
 										</select>
 									</div>
 								)}
 							</div>
+
+							{/* Additional Video Settings */}
+							{data.type === 'video' && (
+								<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
+									{/* Resolution for models that support it */}
+									{generationConfig.video.models[model]?.options?.resolution && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Resolution</label>
+											<select
+												value={formData?.resolution || generationConfig.video.models[model].options.resolution[0]}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, resolution: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{generationConfig.video.models[model].options.resolution.map((res) => (
+													<option key={res} value={res}>{res}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Mode for models that support it */}
+									{generationConfig.video.models[model]?.options?.mode && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Mode</label>
+											<select
+												value={formData?.mode || generationConfig.video.models[model].options.mode[0]}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, mode: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{generationConfig.video.models[model].options.mode.map((mode) => (
+													<option key={mode} value={mode}>{mode === 'standard' ? 'Standard' : mode === 'pro' ? 'Pro' : mode}</option>
+												))}
+											</select>
+										</div>
+									)}
+								</div>
+							)}
 						</div>
 
 					</div>

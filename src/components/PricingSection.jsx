@@ -73,7 +73,7 @@ const plans = [
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 14.00,
-    yearlyMonthlyPrice: Math.round(14.00 * 10 / 12),
+    yearlyMonthlyPrice: Math.round(14.00 * 9 / 12),
     monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX", // Update with new Stripe price ID
     yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6", // Update with new Stripe price ID
     credits: 200,
@@ -93,7 +93,7 @@ const plans = [
     id: 'creator',
     name: 'Creator',
     monthlyPrice: 30.00,
-    yearlyMonthlyPrice: Math.round(30.00 * 10 / 12),
+    yearlyMonthlyPrice: Math.round(30.00 * 9 / 12),
     monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM", // Update with new Stripe price ID
     yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq", // Update with new Stripe price ID
     credits: 500,
@@ -114,7 +114,7 @@ const plans = [
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 150.00,
-    yearlyMonthlyPrice: Math.round(150.00 * 10 / 12),
+    yearlyMonthlyPrice: Math.round(150.00 * 9 / 12),
     monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND", // Update with new Stripe price ID
     yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho", // Update with new Stripe price ID
     credits: 3000,
@@ -551,8 +551,8 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
               onClick={() => setPricingMode('subscription')}
             >
               Subscriptions
-              <span className="ml-2 text-xs bg-lime-500 text-white px-2 py-0.5 rounded-full font-semibold">
-                Best Value
+              <span className="ml-2 text-xs text-lime-500 rounded-full font-semibold">
+                | Best Value
               </span>
             </button>
             <button 
@@ -599,7 +599,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   onClick={() => setBillingCycle('yearly')}
                 >
                   Yearly 
-                  <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">2 months free</span>
+                  <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">3 months free</span>
                 </button>
               </div>
             </div>

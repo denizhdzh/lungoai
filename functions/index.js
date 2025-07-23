@@ -1560,10 +1560,18 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
                 break;
 
             case 'kwaivgi/kling-v2.1':
+                // Kling v2.1 requires start_image, so only allow image-to-video
+                if (!imageUrl) {
+                    throw new HttpsError('invalid-argument', 'Kling v2.1 requires an input image (start_image)');
+                }
+                // Kling v2.1 only supports duration of 5 or 10
+                if (duration !== 5 && duration !== 10) {
+                    throw new HttpsError('invalid-argument', 'Kling v2.1 only supports duration of 5 or 10 seconds');
+                }
                 modelInput = {
                     prompt: prompt,
                     ...(negative_prompt && { negative_prompt: negative_prompt }),
-                    ...(imageUrl && { start_image: imageUrl }),
+                    start_image: imageUrl,
                     mode: mode || 'standard',
                     duration: duration
                 };

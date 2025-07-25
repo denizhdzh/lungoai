@@ -231,6 +231,54 @@ const getModelType = (modelId) => {
 };
 // --- End Models Configuration ---
 
+// Helper function to get model version for Replicate
+async function getModelVersion(modelName) {
+    // Model versions for Replicate API
+    const modelVersions = {
+        'google/veo-3-fast': 'google/veo-3-fast:latest',
+        'google/veo-3': 'google/veo-3:latest',
+        'bytedance/seedance-1-pro': 'bytedance/seedance-1-pro:latest',
+        'kwaivgi/kling-v2.1': 'kwaivgi/kling-v2.1:latest',
+        'minimax/hailuo-02': 'minimax/hailuo-02:latest'
+    };
+    
+    return modelVersions[modelName] || `${modelName}:latest`;
+}
+
+// Helper function to poll prediction status
+async function pollPrediction(replicate, predictionId, generationRef, maxAttempts = 60) {
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+        try {
+            const prediction = await replicate.predictions.get(predictionId);
+            
+            logger.info(`[pollPrediction] Attempt ${attempts + 1}: Status = ${prediction.status}`);
+            
+            // Update Firestore with current status
+            await generationRef.update({
+                status: prediction.status,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            
+            if (prediction.status === 'succeeded' || prediction.status === 'failed' || prediction.status === 'canceled') {
+                return prediction;
+            }
+            
+            // Wait 5 seconds before next poll
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            attempts++;
+            
+        } catch (error) {
+            logger.error(`[pollPrediction] Error polling prediction ${predictionId}:`, error);
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+    
+    throw new Error(`Prediction polling timed out after ${maxAttempts} attempts`);
+}
+
 // --- OpenAI and Google AI Initialization ---
 // Vertex AI API configuration
 const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'lungoai-39982';
@@ -1827,31 +1875,52 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
         logger.info(`generateVideo: Starting generation with model ${model} for user ${userId}`);
         logger.info(`generateVideo: Model input:`, modelInput);
         
-        // Generate video using Replicate
-        const output = await replicate.run(model, { input: modelInput });
-        
-        let videoUrl;
-        if (typeof output === 'string' && output.startsWith('http')) {
-            videoUrl = output;
-        } else if (Array.isArray(output) && output.length > 0) {
-            videoUrl = output[0];
-        } else if (output && output.video) {
-            videoUrl = output.video;
-        } else if (output && output.url) {
-            videoUrl = output.url;
-        } else {
-            throw new Error('Invalid output format from Replicate');
-        }
-
-        logger.info(`generateVideo: Successfully generated video: ${videoUrl}`);
-
-        // Update generation record with success
-        await generationRef.update({
-            status: 'completed',
-            videoUrl: videoUrl,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            error: null
+        // Create prediction on Replicate (async)
+        const prediction = await replicate.predictions.create({
+            version: await getModelVersion(model),
+            input: modelInput
         });
+
+        logger.info(`generateVideo: Created prediction ${prediction.id} for user ${userId}`);
+
+        // Update generation record with prediction ID
+        await generationRef.update({
+            status: 'processing',
+            predictionId: prediction.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Start polling the prediction status
+        const finalPrediction = await pollPrediction(replicate, prediction.id, generationRef);
+        
+        if (finalPrediction.status === 'succeeded') {
+            let videoUrl;
+            const output = finalPrediction.output;
+            
+            if (typeof output === 'string' && output.startsWith('http')) {
+                videoUrl = output;
+            } else if (Array.isArray(output) && output.length > 0) {
+                videoUrl = output[0];
+            } else if (output && output.video) {
+                videoUrl = output.video;
+            } else if (output && output.url) {
+                videoUrl = output.url;
+            } else {
+                throw new Error('Invalid output format from Replicate');
+            }
+
+            logger.info(`generateVideo: Successfully generated video: ${videoUrl}`);
+
+            // Update generation record with success
+            await generationRef.update({
+                status: 'completed',
+                videoUrl: videoUrl,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                error: null
+            });
+        } else {
+            throw new Error(`Video generation failed: ${finalPrediction.error || 'Unknown error'}`);
+        }
 
         return {
             success: true,

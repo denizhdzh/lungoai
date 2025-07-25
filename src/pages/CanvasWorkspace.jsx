@@ -881,7 +881,10 @@ const initialNodes = [];
 			
 			setDuration(formData.duration || defaultDuration);
 			setModel(newModel);
-			setSelectedAspectRatio(formData.aspect_ratio || '3:4');
+			// Only update aspect ratio if it's actually in formData, don't reset to default
+			if (formData.aspect_ratio) {
+				setSelectedAspectRatio(formData.aspect_ratio);
+			}
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
 	}, [formData.duration, formData.model, formData.aspect_ratio, data.type]);

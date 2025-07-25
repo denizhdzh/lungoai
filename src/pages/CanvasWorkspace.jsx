@@ -1363,35 +1363,29 @@ const initialNodes = [];
 
 							{/* Settings Row */}
 							<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 flex-1' : 'flex gap-1.5'}`}>
-								{/* Aspect Ratio */}
-								<div className="flex-1 min-w-0">
-									<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
-									<select
-										value={selectedAspectRatio}
-										onChange={(e) => {
-											setSelectedAspectRatio(e.target.value);
-											// Don't update the node immediately - only on generate
-										}}
-										onFocus={() => onDropdownStateChange?.(true)}
-										onBlur={() => onDropdownStateChange?.(false)}
-										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
-									>
-										<option value="1:1">1:1</option>
-										<option value="4:3">4:3</option>
-										<option value="3:4">3:4</option>
-										<option value="16:9">16:9</option>
-										<option value="9:16">9:16</option>
-										{data.type === 'video' && (
-											<>
-												<option value="21:9">21:9</option>
-												<option value="9:21">9:21</option>
-											</>
-										)}
-									</select>
-								</div>
+								{/* Aspect Ratio - Only show if model supports aspect ratio options */}
+								{modelConfig?.options?.aspect_ratio && (
+									<div className="flex-1 min-w-0">
+										<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
+										<select
+											value={selectedAspectRatio}
+											onChange={(e) => {
+												setSelectedAspectRatio(e.target.value);
+												// Don't update the node immediately - only on generate
+											}}
+											onFocus={() => onDropdownStateChange?.(true)}
+											onBlur={() => onDropdownStateChange?.(false)}
+											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+										>
+											{modelConfig.options.aspect_ratio.map(ratio => (
+												<option key={ratio} value={ratio}>{ratio}</option>
+											))}
+										</select>
+									</div>
+								)}
 
-								{/* Duration for videos */}
-								{data.type === 'video' && (
+								{/* Duration for videos - Only show if model supports duration options */}
+								{data.type === 'video' && modelConfig?.options?.duration && (
 									<div className="flex-1 min-w-0">
 										<label className="text-[10px] text-neutral-500 block px-1 mb-1">Duration</label>
 										<select
@@ -1401,16 +1395,9 @@ const initialNodes = [];
 											onBlur={() => onDropdownStateChange?.(false)}
 											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 										>
-											{(() => {
-												const selectedModel = getModelById(model);
-												if (!selectedModel?.options?.duration) return <option value={8}>8s</option>;
-												
-												const durationOptions = selectedModel.options.duration;
-												// Always use the exact duration options from the model - no range generation
-												return durationOptions.map(duration => (
-													<option key={duration} value={duration}>{duration}s</option>
-												));
-											})()}
+											{modelConfig.options.duration.map(duration => (
+												<option key={duration} value={duration}>{duration}s</option>
+											))}
 										</select>
 									</div>
 								)}
@@ -1460,6 +1447,29 @@ const initialNodes = [];
 											>
 												{getModelById(model).options.mode.map((mode) => (
 													<option key={mode} value={mode}>{mode === 'standard' ? 'Standard' : mode === 'pro' ? 'Pro' : mode}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Prompt Optimizer for models that support it */}
+									{getModelById(model)?.options?.prompt_optimizer && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Optimizer</label>
+											<select
+												value={formData?.prompt_optimizer !== undefined ? formData.prompt_optimizer : getModelById(model).params.prompt_optimizer?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, prompt_optimizer: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.prompt_optimizer.map((opt) => (
+													<option key={opt} value={opt}>{opt ? 'On' : 'Off'}</option>
 												))}
 											</select>
 										</div>
@@ -3771,7 +3781,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 						</feMerge>
 					</filter>
 				</defs>
-				<Background variant="dots" gap={24} size={1.5} color="#303030" />
+				<Background variant="dots" gap={24} size={2} color="#303030" />
 			</ReactFlow>
 
 				{/* Right-click/Double-click menu for creating nodes */}

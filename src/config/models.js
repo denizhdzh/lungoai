@@ -10,7 +10,6 @@ export const models = {
       params: {
         prompt: { required: true, type: "string" },
         aspect_ratio: { required: false, type: "string", default: "1:1" },
-        image: { required: false, type: "string", description: "Input image for img2img" }
       },
       options: {
         aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
@@ -153,6 +152,7 @@ export const models = {
       },
       options: {
         duration: [6, 10],
+        resolution: ["768p", "1080p"],
         prompt_optimizer: [true, false]
       }
     }

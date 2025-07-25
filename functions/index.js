@@ -27,6 +27,210 @@ const db = admin.firestore(); // Firestore instance
 const bucket = getStorage().bucket(); // Default Firebase Storage bucket
 const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
 
+// --- Models Configuration (CommonJS version matching frontend) ---
+const models = {
+  image: {
+    "google/imagen-4": {
+      name: "Google Imagen 4",
+      type: "image",
+      credits: 1,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        image: { required: false, type: "string", description: "Input image for img2img" }
+      },
+      options: {
+        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
+      }
+    },
+    "imagen/imagen-4-fast": {
+      name: "Imagen 4 Fast",
+      type: "image",
+      credits: 1,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        safety_filter_level: { required: false, type: "string", default: "block_only_high" },
+        output_format: { required: false, type: "string", default: "jpg" }
+      },
+      options: {
+        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"],
+        safety_filter_level: ["block_low_and_above", "block_medium_and_above", "block_only_high"],
+        output_format: ["jpg", "png"]
+      }
+    },
+    "black-forest-labs/flux-1.1-pro": {
+      name: "Flux 1.1 Pro",
+      type: "image", 
+      credits: 1,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        image: { required: false, type: "string", description: "Input image for img2img" }
+      },
+      options: {
+        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
+      }
+    },
+    "black-forest-labs/flux-kontext-max": {
+      name: "Flux Kontext Max",
+      type: "image",
+      credits: 2,
+      params: {
+        prompt: { required: true, type: "string" },
+        input_image: { required: false, type: "string", description: "Image to use as reference. Must be jpeg, png, gif, or webp." },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        prompt_upsampling: { required: false, type: "boolean", default: false },
+        seed: { required: false, type: "integer" },
+        output_format: { required: false, type: "string", default: "png" },
+        safety_tolerance: { required: false, type: "integer", default: 2 }
+      },
+      options: {
+        aspect_ratio: [
+          "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
+          "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2"
+        ],
+        output_format: ["jpg", "png"]
+      }
+    }
+  },
+  
+  video: {
+    "google/veo-3-fast": {
+      name: "Google Veo 3 Fast",
+      type: "text_to_video",
+      creditsPerSecond: 10,
+      params: {
+        prompt: { required: true, type: "string" },
+        negative_prompt: { required: false, type: "string" },
+        duration: { required: false, type: "number", default: 8 },
+        aspect_ratio: { required: false, type: "string", default: "9:16" },
+      },
+      options: {
+        duration: [8],
+        aspect_ratio: ["9:16", "16:9", "1:1"]
+      }
+    },
+    
+    "google/veo-3": {
+      name: "Google Veo 3",
+      type: "text_to_video",
+      creditsPerSecond: 20,
+      params: {
+        prompt: { required: true, type: "string" },
+        negative_prompt: { required: false, type: "string" },
+        duration: { required: false, type: "number", default: 8 },
+        aspect_ratio: { required: false, type: "string", default: "9:16" },
+      },
+      options: {
+        duration: [8],
+        aspect_ratio: ["9:16", "16:9", "1:1"]
+      }
+    },
+
+    "bytedance/seedance-1-pro": {
+      name: "ByteDance Seedance Pro",
+      type: "both",
+      creditsPerSecond: { "480p": 1, "1080p": 4 },
+      params: {
+        fps: { required: false, type: "number", default: 24 },
+        prompt: { required: true, type: "string" },
+        duration: { required: false, type: "number", default: 5 },
+        resolution: { required: false, type: "string", default: "480p" },
+        aspect_ratio: { required: false, type: "string", default: "16:9" },
+        camera_fixed: { required: false, type: "boolean", default: false },
+        image: { required: false, type: "string", description: "Input image for image-to-video generation" }
+      },
+      options: {
+        duration: [5,10],
+        resolution: ["480p", "1080p"],
+        aspect_ratio: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "9:21"],
+        camera_fixed: [true, false]
+      }
+    },
+
+    "kwaivgi/kling-v2.1": {
+      name: "KwaiVGI Kling v2.1",
+      type: "image_to_video",
+      creditsPerSecond: { "standard": 2, "pro": 3 },
+      params: {
+        prompt: { required: true, type: "string" },
+        negative_prompt: { required: false, type: "string" },
+        start_image: { required: true, type: "string", description: "Starting image for video generation" },
+        mode: { required: false, type: "string", default: "standard" },
+        duration: { required: false, type: "number", default: 5 }
+      },
+      options: {
+        mode: ["standard", "pro"],
+        duration: [5, 10]
+      }
+    },
+
+    "minimax/hailuo-02": {
+      name: "MiniMax Hailuo 02",
+      type: "both",
+      creditsPerSecond: { "768p": 1, "1080p": 2 },
+      params: {
+        prompt: { required: true, type: "string" },
+        first_frame_image: { required: false, type: "string", description: "First frame image for video generation" },
+        duration: { required: false, type: "number", default: 6 },
+        resolution: { required: false, type: "string", default: "768p" },
+        prompt_optimizer: { required: false, type: "boolean", default: true }
+      },
+      options: {
+        duration: [6, 10],
+        resolution: ["768p", "1080p"],
+        prompt_optimizer: [true, false]
+      }
+    }
+  }
+};
+
+// Helper functions for models
+const getModelById = (modelId) => {
+  for (const category in models) {
+    if (models[category][modelId]) {
+      return { ...models[category][modelId], id: modelId, category };
+    }
+  }
+  return null;
+};
+
+const getModelsByCategory = (category) => {
+  return models[category] || {};
+};
+
+const requiresImage = (modelId) => {
+  const model = getModelById(modelId);
+  if (!model) return false;
+  
+  for (const paramName in model.params) {
+    const param = model.params[paramName];
+    if (param.required && (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image')) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const supportsImageInput = (modelId) => {
+  const model = getModelById(modelId);
+  if (!model) return false;
+  
+  for (const paramName in model.params) {
+    if (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image') {
+      return true;
+    }
+  }
+  return false;
+};
+
+const getModelType = (modelId) => {
+  const model = getModelById(modelId);
+  return model?.type || null;
+};
+// --- End Models Configuration ---
+
 // --- OpenAI and Google AI Initialization ---
 // Vertex AI API configuration
 const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'lungoai-39982';
@@ -560,84 +764,67 @@ exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, asy
         // Determine model and prepare input
         let selectedModel = data.model || 'google/imagen-4'; // Default to Imagen 4
         
-        // If Lungo Vibe is selected, use Ideogram V3 Quality instead
-        if (selectedModel === 'lungo-vibe') {
-            selectedModel = 'ideogram-ai/ideogram-v3-quality';
-            logger.info(`[generateImage User: ${userId}] Lungo Vibe detected, switching to Ideogram V3 Quality`);
-        }
-        
         let modelInput;
-        let modelName;
+        let modelName = selectedModel;
 
-        switch (selectedModel) {
-            case 'black-forest-labs/flux-kontext-max':
-                modelName = 'black-forest-labs/flux-kontext-max';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16"
-                };
-                // Add image input if provided
-                if (data.imageUrl) {
+        // Get model configuration
+        const modelConfig = getModelById(selectedModel);
+        
+        if (modelConfig && modelConfig.category === 'image') {
+            // Build model input based on model configuration
+            modelInput = {
+                prompt: finalPromptToUse
+            };
+            
+            // Add parameters based on model config with defaults
+            const params = modelConfig.params;
+            
+            // Handle aspect_ratio parameter
+            if (params.aspect_ratio) {
+                modelInput.aspect_ratio = data.aspectRatio || params.aspect_ratio.default || "9:16";
+            }
+            
+            // Handle image input parameters (different names for different models)
+            if (data.imageUrl) {
+                if (params.image) {
                     modelInput.image = data.imageUrl;
-                }
-                break;
-
-            case 'black-forest-labs/flux-kontext-pro':
-                modelName = 'black-forest-labs/flux-kontext-pro';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16"
-                };
-                // Add image input if provided
-                if (data.imageUrl) {
-                    modelInput.image = data.imageUrl;
-                }
-                break;
-
-            case 'google/imagen-4':
-                modelName = 'google/imagen-4';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16",
-                    output_format: "png",
-                    safety_tolerance: 2
-                };
-                break;
-
-            case 'google/imagen-4-ultra':
-                modelName = 'google/imagen-4-ultra';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16",
-                    output_format: "png",
-                    safety_tolerance: 2
-                };
-                break;
-
-            case 'ideogram-ai/ideogram-v3-quality':
-                modelName = 'ideogram-ai/ideogram-v3-quality';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16",
-                    model: "V_3_QUALITY",
-                    magic_prompt_option: "AUTO"
-                };
-                // Add image input if provided
-                if (data.imageUrl) {
+                } else if (params.input_image) {
+                    modelInput.input_image = data.imageUrl;
+                } else if (params.image_url) {
                     modelInput.image_url = data.imageUrl;
                 }
-                break;
-
-            default:
-                // Default to Imagen 4
-                modelName = 'google/imagen-4';
-                modelInput = {
-                    prompt: finalPromptToUse,
-                    aspect_ratio: data.aspectRatio || "9:16",
-                    output_format: "png",
-                    safety_tolerance: 2
-                };
-                break;
+            }
+            
+            // Add model-specific parameters
+            if (selectedModel === 'google/imagen-4' || selectedModel === 'google/imagen-4-ultra') {
+                modelInput.output_format = "png";
+                modelInput.safety_tolerance = 2;
+            } else if (selectedModel === 'ideogram-ai/ideogram-v3-quality') {
+                modelInput.model = "V_3_QUALITY";
+                modelInput.magic_prompt_option = "AUTO";
+            } else if (selectedModel === 'black-forest-labs/flux-kontext-max') {
+                // Add any flux-specific parameters if needed
+                if (params.safety_tolerance) {
+                    modelInput.safety_tolerance = params.safety_tolerance.default || 2;
+                }
+                if (params.output_format) {
+                    modelInput.output_format = params.output_format.default || "png";
+                }
+            } else if (selectedModel === 'imagen/imagen-4-fast') {
+                modelInput.safety_filter_level = params.safety_filter_level?.default || "block_only_high";
+                modelInput.output_format = params.output_format?.default || "jpg";
+            }
+            
+        } else {
+            // Fallback for unknown models - default to Imagen 4 format
+            logger.warn(`[generateImage User: ${userId}] Unknown model ${selectedModel}, using default format`);
+            modelName = 'google/imagen-4';
+            modelInput = {
+                prompt: finalPromptToUse,
+                aspect_ratio: data.aspectRatio || "9:16",
+                output_format: "png",
+                safety_tolerance: 2
+            };
         }
 
         logger.info(`[generateImage User: ${userId}] ====== SENDING TO REPLICATE ${modelName.toUpperCase()} ======`);
@@ -1546,69 +1733,61 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
         const Replicate = require('replicate');
         const replicate = new Replicate({ auth: replicateToken });
 
-        // Build model input based on selected model and frontend data
-        let modelInput = {};
+        // Build model input based on model configuration
         const data = request.data; // Get all data from frontend
+        const modelConfig = getModelById(model);
         
-        switch (model) {
-            case 'google/veo-3-fast':
-            case 'google/veo-3':
-                modelInput = {
-                    prompt: prompt
-                };
-                // Add optional parameters
-                if (data.negative_prompt) modelInput.negative_prompt = data.negative_prompt;
-                if (data.seed) modelInput.seed = parseInt(data.seed);
-                // Note: Veo models don't support aspect_ratio or duration (fixed 8s)
-                break;
-
-            case 'bytedance/seedance-1-pro':
-                modelInput = {
-                    prompt: prompt,
-                    duration: duration
-                };
-                // Add required parameters
-                if (data.resolution) modelInput.resolution = data.resolution;
-                if (data.aspect_ratio) modelInput.aspect_ratio = data.aspect_ratio;
-                if (data.fps) modelInput.fps = data.fps;
-                if (data.camera_fixed !== undefined) modelInput.camera_fixed = data.camera_fixed;
-                if (data.seed) modelInput.seed = parseInt(data.seed);
-                // Handle image parameter
-                if (data.image) modelInput.image = data.image;
-                break;
-
-            case 'kwaivgi/kling-v2.1':
-                // Kling v2.1 requires start_image, so only allow image-to-video
-                if (!data.start_image) {
-                    throw new HttpsError('invalid-argument', 'Kling v2.1 requires an input image (start_image)');
+        if (!modelConfig || modelConfig.category !== 'video') {
+            throw new HttpsError('invalid-argument', `Unsupported or invalid video model: ${model}`);
+        }
+        
+        // Build model input based on model configuration
+        let modelInput = {
+            prompt: prompt
+        };
+        
+        const params = modelConfig.params;
+        
+        // Add parameters based on model config
+        for (const paramName in params) {
+            const param = params[paramName];
+            let value = data[paramName];
+            
+            // Handle parameter defaults and data conversion
+            if (value !== undefined) {
+                // Convert data types as needed
+                if (param.type === 'number' || param.type === 'integer') {
+                    value = param.type === 'integer' ? parseInt(value) : parseFloat(value);
+                } else if (param.type === 'boolean') {
+                    value = Boolean(value);
                 }
-                // Kling v2.1 only supports duration of 5 or 10
-                if (duration !== 5 && duration !== 10) {
-                    throw new HttpsError('invalid-argument', 'Kling v2.1 only supports duration of 5 or 10 seconds');
-                }
-                modelInput = {
-                    prompt: prompt,
-                    start_image: data.start_image,
-                    mode: data.mode || 'standard',
-                    duration: duration
-                };
-                // Add optional parameters
-                if (data.negative_prompt) modelInput.negative_prompt = data.negative_prompt;
-                break;
-
-            case 'minimax/hailuo-02':
-                modelInput = {
-                    prompt: prompt,
-                    duration: duration
-                };
-                // Add optional parameters
-                if (data.first_frame_image) modelInput.first_frame_image = data.first_frame_image;
-                if (data.resolution) modelInput.resolution = data.resolution;
-                if (data.prompt_optimizer !== undefined) modelInput.prompt_optimizer = data.prompt_optimizer;
-                break;
-
-            default:
-                throw new HttpsError('invalid-argument', `Unsupported model: ${model}`);
+                modelInput[paramName] = value;
+            } else if (param.default !== undefined) {
+                modelInput[paramName] = param.default;
+            }
+        }
+        
+        // Model-specific validations and requirements
+        if (model === 'kwaivgi/kling-v2.1') {
+            // Kling v2.1 requires start_image
+            if (!data.start_image) {
+                throw new HttpsError('invalid-argument', 'Kling v2.1 requires an input image (start_image)');
+            }
+            // Kling v2.1 only supports duration of 5 or 10
+            if (duration !== 5 && duration !== 10) {
+                throw new HttpsError('invalid-argument', 'Kling v2.1 only supports duration of 5 or 10 seconds');
+            }
+        }
+        
+        // Handle image parameters specifically
+        if (data.image && params.image) {
+            modelInput.image = data.image;
+        }
+        if (data.start_image && params.start_image) {
+            modelInput.start_image = data.start_image;
+        }
+        if (data.first_frame_image && params.first_frame_image) {
+            modelInput.first_frame_image = data.first_frame_image;
         }
 
         // Create generation record in Firestore
@@ -1709,43 +1888,37 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
 });
 
 // Helper function to calculate video generation credits
-function getVideoCredits(model, duration, resolution = '1080p', mode = 'standard') {
-    switch (model) {
-        case 'google/veo-3-fast':
-            return duration * 10; // 10 credits per second (8s = 80 credits)
-            
-        case 'google/veo-3':
-            return duration * 19; // 19 credits per second (8s = 152 credits)
-            
-        case 'bytedance/seedance-1-pro':
-            const creditsPerSecond = resolution === '480p' ? 1 : 4; // Updated: 1 for 480p, 4 for 1080p
+function getVideoCredits(modelId, duration, resolution = '1080p', mode = 'standard') {
+    const model = getModelById(modelId);
+    if (model && model.category === 'video' && model.creditsPerSecond) {
+        const creditsPerSecond = model.creditsPerSecond;
+        
+        if (typeof creditsPerSecond === 'number') {
+            // Simple number (like google/veo-3-fast: 10)
             return duration * creditsPerSecond;
-            
-        case 'kwaivgi/kling-v2.1':
-            const modeMultiplier = mode === 'pro' ? 2.5 : 1.5; // Updated: 1.5 for standard, 2.5 for pro
-            return Math.ceil(duration * modeMultiplier);
-            
-        case 'minimax/hailuo-02':
-            const resolutionMultiplier = resolution === '768p' ? 1 : 2; // 1 for 768p, 2 for 1080p  
-            return Math.ceil(duration * resolutionMultiplier);
-            
-        default:
-            return duration * 10; // Default fallback
+        } else if (typeof creditsPerSecond === 'object') {
+            // Object with different rates (like bytedance/seedance-1-pro: {"480p": 1, "1080p": 4})
+            if (modelId === 'bytedance/seedance-1-pro') {
+                return duration * (creditsPerSecond[resolution] || creditsPerSecond['480p']);
+            } else if (modelId === 'kwaivgi/kling-v2.1') {
+                return Math.ceil(duration * (creditsPerSecond[mode] || creditsPerSecond['standard']));
+            } else if (modelId === 'minimax/hailuo-02') {
+                return Math.ceil(duration * (creditsPerSecond[resolution] || creditsPerSecond['768p']));
+            }
+        }
     }
+    
+    return duration * 10; // Default fallback
 }
 
 // Helper function to calculate image generation credits
-function getImageCredits(model) {
-    const baseCredits = {
-        'black-forest-labs/flux-kontext-max': 2,
-        'black-forest-labs/flux-kontext-pro': 1,
-        'google/imagen-4': 1,
-        'google/imagen-4-ultra': 2,
-        'ideogram-ai/ideogram-v3-quality': 3,
-        'lungo-vibe': 3  // Lungo Vibe uses Ideogram V3, so same credits
-    };
+function getImageCredits(modelId) {
+    const model = getModelById(modelId);
+    if (model && model.category === 'image' && model.credits) {
+        return model.credits;
+    }
     
-    return baseCredits[model] || 1; // Default to Imagen-4 credits
+    return 1; // Default to 1 credit if model not found
 }
 
 // --- NEW: Function to Create One-Time Credit Purchase Session ---

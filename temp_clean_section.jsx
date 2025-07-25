@@ -1,0 +1,3 @@
+});
+
+const CanvasWorkspace = ({ preloadedCanvasData }) => {

@@ -14,7 +14,6 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import PricingSection from './components/PricingSection.jsx';
 import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
-import TikTokAuthCallback from './components/TikTokAuthCallback.jsx';
 import { motion } from 'framer-motion';
 import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
@@ -23,6 +22,214 @@ import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 document.documentElement.classList.add('dark');
 console.log("[main.jsx] Dark mode forced.");
 // --- END FORCE DARK MODE ---
+
+// --- ENHANCED NAVIGATION PROTECTION ---
+// Protect against all common techniques to disable browser navigation
+(function() {
+  // Store original functions
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  const originalBack = history.back;
+  const originalForward = history.forward;
+  const originalGo = history.go;
+  const originalSetTimeout = window.setTimeout;
+  const originalSetInterval = window.setInterval;
+  
+  // Track navigation blocking attempts
+  let suspiciousActivity = {
+    forwardLoops: 0,
+    pushStateSpam: 0,
+    timeoutHijacks: 0
+  };
+  
+  // Override history.pushState to detect manipulation
+  history.pushState = function(state, title, url) {
+    if (state === null && title === null && url === window.location.href) {
+      suspiciousActivity.pushStateSpam++;
+      console.log("[Navigation Protection] Blocked suspicious pushState manipulation #" + suspiciousActivity.pushStateSpam);
+      return;
+    }
+    return originalPushState.apply(this, arguments);
+  };
+  
+  // Override history.forward to detect loops and immediate calls
+  let lastForwardCall = 0;
+  let forwardCallCount = 0;
+  let pageLoadTime = Date.now();
+  
+  history.forward = function() {
+    const now = Date.now();
+    
+    // Block rapid consecutive calls
+    if (now - lastForwardCall < 100) {
+      suspiciousActivity.forwardLoops++;
+      console.log("[Navigation Protection] Blocked rapid history.forward() loop #" + suspiciousActivity.forwardLoops);
+      return;
+    }
+    
+    // Block multiple forward calls within first 2 seconds of page load (common pattern)
+    if (now - pageLoadTime < 2000) {
+      forwardCallCount++;
+      if (forwardCallCount > 1) {
+        suspiciousActivity.forwardLoops++;
+        console.log("[Navigation Protection] Blocked multiple history.forward() calls during page load #" + suspiciousActivity.forwardLoops);
+        return;
+      }
+    }
+    
+    // Check if called from a suspicious context (look at call stack)
+    const stack = new Error().stack;
+    if (stack && (stack.includes('noBack') || stack.includes('preventBack') || stack.includes('disableBack'))) {
+      suspiciousActivity.forwardLoops++;
+      console.log("[Navigation Protection] Blocked history.forward() from suspicious function");
+      return;
+    }
+    
+    lastForwardCall = now;
+    console.log("[Navigation Protection] Allowing normal forward navigation");
+    return originalForward.apply(this, arguments);
+  };
+  
+  // Override history.back to ensure it works normally
+  history.back = function() {
+    console.log("[Navigation Protection] Back navigation called normally");
+    return originalBack.apply(this, arguments);
+  };
+  
+  // Override history.go to prevent blocking
+  history.go = function(delta) {
+    if (delta === 1) {
+      const now = Date.now();
+      if (now - lastForwardCall < 100) {
+        console.log("[Navigation Protection] Blocked suspicious history.go(1) call");
+        return;
+      }
+    }
+    console.log("[Navigation Protection] Go navigation called with delta:", delta);
+    return originalGo.apply(this, arguments);
+  };
+  
+  // Override setTimeout to detect navigation blocking scripts
+  window.setTimeout = function(callback, delay) {
+    if (typeof callback === 'string') {
+      // Check for suspicious setTimeout strings
+      if (callback.includes('history.forward') || callback.includes('preventBack') || callback.includes('disableBack')) {
+        suspiciousActivity.timeoutHijacks++;
+        console.log("[Navigation Protection] Blocked suspicious setTimeout: " + callback);
+        return;
+      }
+    } else if (typeof callback === 'function') {
+      // Check function content for navigation blocking
+      const funcStr = callback.toString();
+      if (funcStr.includes('history.forward') && delay === 0) {
+        suspiciousActivity.timeoutHijacks++;
+        console.log("[Navigation Protection] Blocked suspicious setTimeout function");
+        return;
+      }
+    }
+    return originalSetTimeout.apply(this, arguments);
+  };
+  
+  // Prevent onpopstate hijacking
+  let originalOnPopState = window.onpopstate;
+  Object.defineProperty(window, 'onpopstate', {
+    get: function() {
+      return originalOnPopState;
+    },
+    set: function(value) {
+      if (typeof value === 'function') {
+        const funcStr = value.toString();
+        if (funcStr.includes('history.go(1)') || funcStr.includes('history.forward()')) {
+          console.log("[Navigation Protection] Blocked suspicious onpopstate handler");
+          return;
+        }
+      }
+      originalOnPopState = value;
+    }
+  });
+  
+  // Prevent onbeforeunload from being used for navigation blocking
+  let originalOnBeforeUnload = window.onbeforeunload;
+  Object.defineProperty(window, 'onbeforeunload', {
+    get: function() {
+      return originalOnBeforeUnload;
+    },
+    set: function(value) {
+      if (typeof value === 'function') {
+        const funcStr = value.toString();
+        // Allow legitimate beforeunload handlers but block those used just for navigation blocking
+        if (funcStr.length < 100 && (funcStr.includes('sorry') || funcStr.includes('work will be lost'))) {
+          console.log("[Navigation Protection] Blocked suspicious onbeforeunload handler");
+          return;
+        }
+      }
+      originalOnBeforeUnload = value;
+    }
+  });
+  
+  // Override onunload to prevent null assignments
+  let originalOnUnload = window.onunload;
+  Object.defineProperty(window, 'onunload', {
+    get: function() {
+      return originalOnUnload;
+    },
+    set: function(value) {
+      if (value === null || (typeof value === 'function' && value.toString().includes('null'))) {
+        console.log("[Navigation Protection] Blocked suspicious onunload manipulation");
+        return;
+      }
+      originalOnUnload = value;
+    }
+  });
+  
+  // Monitor global function definitions that might be used for navigation blocking
+  const originalDefineProperty = Object.defineProperty;
+  Object.defineProperty = function(obj, prop, descriptor) {
+    if (obj === window && typeof prop === 'string') {
+      const suspiciousFunctionNames = ['noBack', 'preventBack', 'disableBack', 'blockBack', 'stopBack'];
+      if (suspiciousFunctionNames.includes(prop)) {
+        console.log("[Navigation Protection] Blocked suspicious global function definition: " + prop);
+        return obj;
+      }
+    }
+    return originalDefineProperty.apply(this, arguments);
+  };
+  
+  // Override window property assignment for suspicious functions
+  const originalWindow = window;
+  const windowProxy = new Proxy(window, {
+    set: function(target, property, value) {
+      if (typeof property === 'string' && typeof value === 'function') {
+        const suspiciousFunctionNames = ['noBack', 'preventBack', 'disableBack', 'blockBack', 'stopBack'];
+        if (suspiciousFunctionNames.includes(property)) {
+          console.log("[Navigation Protection] Blocked suspicious global function assignment: " + property);
+          return true;
+        }
+        // Also check function content
+        const funcStr = value.toString();
+        if (funcStr.includes('history.forward') && funcStr.length < 200) {
+          console.log("[Navigation Protection] Blocked suspicious function with history.forward: " + property);
+          return true;
+        }
+      }
+      target[property] = value;
+      return true;
+    }
+  });
+  
+  console.log("[Navigation Protection] Enhanced browser navigation protection enabled");
+  
+  // Report protection stats every 10 seconds if there's activity
+  setInterval(() => {
+    const total = suspiciousActivity.forwardLoops + suspiciousActivity.pushStateSpam + suspiciousActivity.timeoutHijacks;
+    if (total > 0) {
+      console.log("[Navigation Protection] Blocked attempts - Forward loops:", suspiciousActivity.forwardLoops, 
+                  "PushState spam:", suspiciousActivity.pushStateSpam, 
+                  "Timeout hijacks:", suspiciousActivity.timeoutHijacks);
+    }
+  }, 10000);
+})();
+// --- END ENHANCED NAVIGATION PROTECTION ---
 
 // Protected Route Component (Updated to use userData)
 function ProtectedRoute({ user, userData, userDataFetched, children }) {
@@ -167,9 +374,6 @@ function AppRouter() {
           )
         }
       />
-
-      {/* --- NEW TIKTOK CALLBACK ROUTE --- */}
-      <Route path="/auth/tiktok/callback" element={<TikTokAuthCallback />} />
 
       {/* Protected Routes using Layout (Pass userData now) */}
       <Route 

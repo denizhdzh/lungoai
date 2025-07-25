@@ -1488,26 +1488,42 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
 
     const {
         prompt,
-        imageUrl = null,
-        aspectRatio = '9:16',
         duration = 5,
         model = 'google/veo-3-fast',
-        subtype = 'text_to_video',
+        type = 'video',
+        // All model-specific parameters from frontend
         negative_prompt,
+        seed,
         resolution,
-        mode,
+        aspect_ratio = '9:16',
+        fps,
         camera_fixed,
-        prompt_optimizer
+        mode,
+        prompt_optimizer,
+        // Image parameters with different names per model
+        image,           // ByteDance uses 'image'
+        start_image,     // Kling uses 'start_image'  
+        first_frame_image, // Hailuo uses 'first_frame_image'
+        // Legacy support
+        imageUrl = null,
+        aspectRatio = '9:16',
+        subtype = 'text_to_video'
     } = request.data;
 
-    if (!prompt && !imageUrl) {
-        throw new HttpsError('invalid-argument', 'Either prompt or imageUrl must be provided.');
+    if (!prompt && !image && !start_image && !first_frame_image && !imageUrl) {
+        throw new HttpsError('invalid-argument', 'Either prompt or an image must be provided.');
     }
 
     logger.info(`generateVideo called by user: ${userId}`, {
         prompt: prompt?.substring(0, 100) + '...',
-        hasImage: !!imageUrl,
-        aspectRatio,
+        hasAnyImage: !!(image || start_image || first_frame_image || imageUrl),
+        imageTypes: {
+            image: !!image,
+            start_image: !!start_image, 
+            first_frame_image: !!first_frame_image,
+            imageUrl: !!imageUrl
+        },
+        aspect_ratio,
         duration,
         model,
         subtype,
@@ -1515,7 +1531,9 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
         resolution,
         mode,
         camera_fixed,
-        prompt_optimizer
+        prompt_optimizer,
+        fps,
+        seed
     });
 
     try {
@@ -1528,40 +1546,40 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
         const Replicate = require('replicate');
         const replicate = new Replicate({ auth: replicateToken });
 
-        // Build model input based on selected model
+        // Build model input based on selected model and frontend data
         let modelInput = {};
+        const data = request.data; // Get all data from frontend
         
         switch (model) {
             case 'google/veo-3-fast':
             case 'google/veo-3':
                 modelInput = {
-                    prompt: prompt,
-                    ...(negative_prompt && { negative_prompt: negative_prompt })
+                    prompt: prompt
                 };
-                break;
-
-            case 'google/veo-2':
-                modelInput = {
-                    ...(imageUrl && { image_input: imageUrl }),
-                    aspect_ratio: aspectRatio,
-                    duration: `${duration}s`
-                };
+                // Add optional parameters
+                if (data.negative_prompt) modelInput.negative_prompt = data.negative_prompt;
+                if (data.seed) modelInput.seed = parseInt(data.seed);
+                // Note: Veo models don't support aspect_ratio or duration (fixed 8s)
                 break;
 
             case 'bytedance/seedance-1-pro':
                 modelInput = {
                     prompt: prompt,
-                    ...(imageUrl && { image: imageUrl }),
-                    duration: duration,
-                    ...(resolution && { resolution: resolution }),
-                    aspect_ratio: aspectRatio,
-                    ...(camera_fixed !== undefined && { camera_fixed: camera_fixed })
+                    duration: duration
                 };
+                // Add required parameters
+                if (data.resolution) modelInput.resolution = data.resolution;
+                if (data.aspect_ratio) modelInput.aspect_ratio = data.aspect_ratio;
+                if (data.fps) modelInput.fps = data.fps;
+                if (data.camera_fixed !== undefined) modelInput.camera_fixed = data.camera_fixed;
+                if (data.seed) modelInput.seed = parseInt(data.seed);
+                // Handle image parameter
+                if (data.image) modelInput.image = data.image;
                 break;
 
             case 'kwaivgi/kling-v2.1':
                 // Kling v2.1 requires start_image, so only allow image-to-video
-                if (!imageUrl) {
+                if (!data.start_image) {
                     throw new HttpsError('invalid-argument', 'Kling v2.1 requires an input image (start_image)');
                 }
                 // Kling v2.1 only supports duration of 5 or 10
@@ -1570,21 +1588,23 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
                 }
                 modelInput = {
                     prompt: prompt,
-                    ...(negative_prompt && { negative_prompt: negative_prompt }),
-                    start_image: imageUrl,
-                    mode: mode || 'standard',
+                    start_image: data.start_image,
+                    mode: data.mode || 'standard',
                     duration: duration
                 };
+                // Add optional parameters
+                if (data.negative_prompt) modelInput.negative_prompt = data.negative_prompt;
                 break;
 
             case 'minimax/hailuo-02':
                 modelInput = {
                     prompt: prompt,
-                    ...(imageUrl && { first_frame_image: imageUrl }),
-                    duration: duration,
-                    ...(resolution && { resolution: resolution }),
-                    ...(prompt_optimizer !== undefined && { prompt_optimizer: prompt_optimizer })
+                    duration: duration
                 };
+                // Add optional parameters
+                if (data.first_frame_image) modelInput.first_frame_image = data.first_frame_image;
+                if (data.resolution) modelInput.resolution = data.resolution;
+                if (data.prompt_optimizer !== undefined) modelInput.prompt_optimizer = data.prompt_optimizer;
                 break;
 
             default:
@@ -1600,21 +1620,28 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
             subtype: subtype,
             prompt: prompt,
             model: model,
-            aspectRatio: aspectRatio,
+            aspect_ratio: aspect_ratio,
             duration: duration,
             status: 'processing',
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             creditsUsed: getVideoCredits(model, duration, resolution, mode),
-            error: null
+            error: null,
+            // Store model input for debugging
+            modelInput: modelInput
         };
 
         // Conditionally add optional fields to avoid storing undefined/null
-        if (imageUrl) firestoreData.imageUrl = imageUrl;
+        if (image) firestoreData.image = image;
+        if (start_image) firestoreData.start_image = start_image;
+        if (first_frame_image) firestoreData.first_frame_image = first_frame_image;
+        if (imageUrl) firestoreData.imageUrl = imageUrl; // Legacy support
         if (negative_prompt) firestoreData.negative_prompt = negative_prompt;
         if (resolution) firestoreData.resolution = resolution;
         if (mode) firestoreData.mode = mode;
         if (camera_fixed !== undefined) firestoreData.camera_fixed = camera_fixed;
         if (prompt_optimizer !== undefined) firestoreData.prompt_optimizer = prompt_optimizer;
+        if (fps) firestoreData.fps = fps;
+        if (seed) firestoreData.seed = seed;
 
         await generationRef.set(firestoreData);
 
@@ -1685,25 +1712,22 @@ exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, mem
 function getVideoCredits(model, duration, resolution = '1080p', mode = 'standard') {
     switch (model) {
         case 'google/veo-3-fast':
-            return 60; // Fixed 60 credits
+            return duration * 10; // 10 credits per second (8s = 80 credits)
             
         case 'google/veo-3':
-            return 100; // Fixed 100 credits
-            
-        case 'google/veo-2':
-            return duration * 10; // 10 credits per second
+            return duration * 19; // 19 credits per second (8s = 152 credits)
             
         case 'bytedance/seedance-1-pro':
-            const creditsPerSecond = resolution === '480p' ? 1 : 3; // 1 for 480p, 3 for 1080p
+            const creditsPerSecond = resolution === '480p' ? 1 : 4; // Updated: 1 for 480p, 4 for 1080p
             return duration * creditsPerSecond;
             
         case 'kwaivgi/kling-v2.1':
-            const modeMultiplier = mode === 'pro' ? 2 : 1; // 1 for standard, 2 for pro
-            return duration * modeMultiplier;
+            const modeMultiplier = mode === 'pro' ? 2.5 : 1.5; // Updated: 1.5 for standard, 2.5 for pro
+            return Math.ceil(duration * modeMultiplier);
             
         case 'minimax/hailuo-02':
-            const resolutionMultiplier = resolution === '768p' ? 1 : 2; // 1 for 768p, 2 for 1080p
-            return duration * resolutionMultiplier;
+            const resolutionMultiplier = resolution === '768p' ? 1 : 2; // 1 for 768p, 2 for 1080p  
+            return Math.ceil(duration * resolutionMultiplier);
             
         default:
             return duration * 10; // Default fallback

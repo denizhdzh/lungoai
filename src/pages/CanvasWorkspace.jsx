@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { models, getModelById, requiresImage, supportsImageInput, getModelsByCategory } from '../config/models.js';
 import ReactFlow, {
 	Controls,
 	Background,
@@ -396,269 +397,6 @@ const CustomImageDropdown = React.memo(({
 	);
 });
 
-// All available frame options including background
-const allFrameOptions = [
-	// Background option
-	{
-		id: 'background',
-		name: 'Background Scene',
-		description: 'Atmospheric environmental backgrounds',
-		exampleImage: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=300&fit=crop',
-		rules: 'background_image_rules',
-		type: 'background'
-	},
-	// UGC Character frames
-	{
-		id: 'car_selfie_glow',
-		name: 'Car Selfie Glow',
-		description: 'Smartphone selfie in car with natural daylight',
-		exampleImage: 'https://images.unsplash.com/photo-1494790108755-2616c96bb4de?w=400&h=300&fit=crop&crop=face',
-		rules: 'car_selfie_glow',
-		type: 'ugc_character'
-	},
-	
-	{
-		id: 'empty_highway_fashion',
-		name: 'Highway Fashion Shot',
-		description: 'Smartphone selfie in car with natural daylight',
-		exampleImage: 'https://images.unsplash.com/photo-1494790108755-2616c96bb4de?w=400&h=300&fit=crop&crop=face',
-		rules: 'empty_highway_fashion',
-		type: 'ugc_character'
-	},
-	{
-		id: 'late_night_lofi',
-		name: 'Late Night Lo-Fi',
-		description: 'Flash snapshot in casual indoor settings',
-		exampleImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop&crop=face',
-		rules: 'late_night_lofi',
-		type: 'ugc_character'
-	},
-	{
-		id: 'forced_perspective_play',
-		name: 'Forced Perspective Play',
-		description: 'Wide-angle street photography with playful scale',
-		exampleImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=300&fit=crop&crop=face',
-		rules: 'forced_perspective_play',
-		type: 'ugc_character'
-	},
-	{
-		id: 'wide_angle_pov',
-		name: 'Wide-Angle POV Walk',
-		description: 'Environmental street shots with movement',
-		exampleImage: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=300&fit=crop&crop=face',
-		rules: 'wide_angle_pov',
-		type: 'ugc_character'
-	},
-	{
-		id: 'city_street_style',
-		name: 'City Street Style',
-		description: 'Urban fashion photography',
-		exampleImage: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&h=300&fit=crop&crop=face',
-		rules: 'city_street_style',
-		type: 'ugc_character'
-	},
-	{
-		id: 'solo_snap_vibe',
-		name: 'Solo Snap Vibe',
-		description: 'Casual individual portraits',
-		exampleImage: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=300&fit=crop&crop=face',
-		rules: 'solo_snap_vibe',
-		type: 'ugc_character'
-	},
-	{
-		id: 'warm_moments',
-		name: 'Warm Moments',
-		description: 'Intimate couple photography',
-		exampleImage: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&h=300&fit=crop&crop=face',
-		rules: 'warm_moments',
-		type: 'ugc_character'
-	},
-	{
-		id: 'urban_motion_girl',
-		name: 'Urban Motion Girl',
-		description: 'Dynamic city street portraits',
-		exampleImage: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=300&fit=crop&crop=face',
-		rules: 'urban_motion_girl',
-		type: 'ugc_character'
-	},
-	{
-		id: '90s_vintage_buddy',
-		name: '90s Vintage Buddy Vibes',
-		description: 'Analog film aesthetic with friends',
-		exampleImage: 'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&h=300&fit=crop&crop=face',
-		rules: '90s_vintage_buddy',
-		type: 'ugc_character'
-	},
-	// New frames added
-	{
-		id: 'fish_eye_selfie_urban',
-		name: 'Urban Fisheye Selfie Drama',
-		description: 'Bold fisheye lens selfies with urban backgrounds',
-		exampleImage: 'https://images.unsplash.com/photo-1606836591695-4d58a1b0eba9?w=400&h=300&fit=crop&crop=face',
-		rules: 'fish_eye_selfie_urban',
-		type: 'ugc_character'
-	},
-	{
-		id: 'y2k_flash_pop',
-		name: 'Y2K Flash Pop Street Portrait',
-		description: 'Early 2000s digital camera flash photography',
-		exampleImage: 'https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=400&h=300&fit=crop&crop=face',
-		rules: 'y2k_flash_pop',
-		type: 'ugc_character'
-	},
-	{
-		id: 'elevator_mirror_selfie',
-		name: 'Elevator Mirror Flex',
-		description: 'Mirror selfies in elevators with metallic backgrounds',
-		exampleImage: 'https://images.unsplash.com/photo-1615887023516-86caaa4c5a5a?w=400&h=300&fit=crop&crop=face',
-		rules: 'elevator_mirror_selfie',
-		type: 'ugc_character'
-	},
-	{
-		id: 'yum_moment_diaries',
-		name: 'Yum Moment Diaries',
-		description: 'Capturing joyful eating moments in cozy settings',
-		exampleImage: 'https://images.unsplash.com/photo-1544681280-f2803650ee5d?w=400&h=300&fit=crop&crop=face',
-		rules: 'yum_moment_diaries',
-		type: 'ugc_character'
-	},
-	{
-		id: 'selfcare_bliss_aesthetic',
-		name: 'Selfcare Bliss Aesthetic',
-		description: 'Relaxing self-care moments with skincare and cozy vibes',
-		exampleImage: 'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=400&h=300&fit=crop&crop=face',
-		rules: 'selfcare_bliss_aesthetic',
-		type: 'ugc_character'
-	}
-];
-
-const generationConfig = {
-	image: {
-		label: 'AI Image',
-		icon: Image,
-		models: {
-			'black-forest-labs/flux-kontext-max': {
-				label: 'Flux Kontext Max',
-				icon: Lightning,
-				subtitle: 'High quality image generation',
-				credits: 2,
-				params: ['prompt', 'image'],
-				options: {
-					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-				}
-			},
-			'black-forest-labs/flux-kontext-pro': {
-				label: 'Flux Kontext Pro',
-				icon: Lightning,
-				subtitle: 'Professional image generation',
-				credits: 1,
-				params: ['prompt', 'image'],
-				options: {
-					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-				}
-			},
-			'google/imagen-4': {
-				label: 'Google Imagen 4',
-				icon: Lightning,
-				subtitle: 'Google\'s latest image AI',
-				credits: 1,
-				params: ['prompt'],
-				options: {
-					aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-				}
-			},
-			'google/imagen-4-ultra': {
-				label: 'Google Imagen 4 Ultra',
-				icon: Sparkle,
-				subtitle: 'Ultra high quality images',
-				credits: 1.5,
-				params: ['prompt'],
-				options: {
-					aspect_ratio: ['1:1', '9:16', '16:9', '3:4', '4:3']
-				}
-			},
-			'ideogram-ai/ideogram-v3-quality': {
-				label: 'Ideogram V3 Quality',
-				icon: Image,
-				subtitle: 'Quality focused generation',
-				credits: 2.25,
-				params: ['prompt', 'image'],
-				options: {
-					aspect_ratio: ['1:1', '3:4', '4:3', '9:16', '16:9']
-				}
-			}
-		}
-	},
-	video: {
-		label: 'AI Video',
-		icon: VideoCamera,
-		models: {
-			'google/veo-3-fast': { 
-				label: 'Google Veo 3 Fast', 
-				icon: Lightning, 
-				subtitle: '10 credits per second', 
-				creditsPerSecond: 10,
-				params: ['prompt', 'negative_prompt', 'image'],
-				type: 'text_to_video', // Primary mode is text-to-video, image is optional
-				options: {
-					duration: [8, 8],
-					aspect_ratio: ['9:16', '16:9', '1:1']
-				}
-			},
-			'google/veo-3': { 
-				label: 'Google Veo 3', 
-				icon: Lightning, 
-				subtitle: '18.75 credits per second', 
-				creditsPerSecond: 19,
-				params: ['prompt', 'negative_prompt', 'image'],
-				type: 'text_to_video', // Primary mode is text-to-video, image is optional
-				options: {
-					duration: [8, 8],
-					aspect_ratio: ['9:16', '16:9', '1:1']
-				}
-			},
-			'bytedance/seedance-1-pro': { 
-				label: 'ByteDance SeeDance Pro', 
-				icon: Sparkle, 
-				subtitle: '0.75-3.75 credits per second', 
-				creditsPerSecond: { '480p': 1, '1080p': 4 },
-				params: ['prompt', 'image', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
-				type: 'both', // Supports both text-to-video and image-to-video
-				options: {
-					duration: [5, 10],
-					resolution: ['480p', '1080p'],
-					aspect_ratio: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '9:21'],
-					camera_fixed: [true, false]
-				}
-			},
-			'kwaivgi/kling-v2.1': { 
-				label: 'KwaiVGI Kling v2.1', 
-				icon: VideoCamera, 
-				subtitle: '1.25-2.25 credits per second', 
-				creditsPerSecond: { 'standard': 1.5, 'pro': 2.5 },
-				params: ['prompt', 'negative_prompt', 'start_image', 'mode', 'duration'],
-				type: 'image_to_video', // Image-to-video model, requires start_image
-				options: {
-					mode: ['standard', 'pro'],
-					duration: [5, 10]
-				}
-			},
-			'minimax/hailuo-02': { 
-				label: 'MiniMax Hailuo 02', 
-				icon: Play, 
-				subtitle: '1.125-2 credits per second', 
-				creditsPerSecond: { '768p': 1, '1080p': 2 },
-				params: ['prompt', 'first_frame_image', 'duration', 'resolution', 'prompt_optimizer'],
-				type: 'both', // Supports both text-to-video and image-to-video
-				options: {
-					duration: [6, 10],
-					resolution: ['768p', '1080p'],
-					prompt_optimizer: [true, false]
-				}
-			}
-		}
-	}
-};
 
 // Custom Model Dropdown Component
 const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStateChange }) => {
@@ -773,12 +511,10 @@ const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStat
 			<button
 				ref={buttonRef}
 				onClick={handleToggleWithPosition}
-				className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all flex items-center justify-between"
+				className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-750 transition-all flex items-center justify-between"
 			>
-				<div className="flex items-center gap-2 min-w-0">
-					<span className="truncate">{selectedOption?.label || 'Select Model'}</span>
-				</div>
-				<CaretDown size={12} className="text-neutral-400 flex-shrink-0" />
+				<span className="truncate text-[11px]">{selectedOption?.label || 'Select Model'}</span>
+				<CaretDown size={10} className="text-neutral-400 flex-shrink-0 ml-1" />
 			</button>
 
 			{isOpen && createPortal(
@@ -804,7 +540,7 @@ const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStat
 								key={option.value}
 								onClick={() => handleSelect(option)}
 								disabled={isDisabled}
-								className={`w-full p-3 text-left transition-colors border-b border-neutral-700/50 last:border-b-0 ${
+								className={`w-full px-2 py-1.5 text-left transition-colors ${
 									isDisabled 
 										? 'bg-neutral-800/50 text-neutral-500 cursor-not-allowed' 
 										: value === option.value
@@ -813,21 +549,14 @@ const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStat
 								}`}
 							>
 								<div className="flex items-center justify-between">
-									<div className="flex-1 min-w-0">
-										<span className={`text-sm truncate ${isDisabled ? 'text-neutral-500' : 'text-white'}`}>
-											{option.label}
+									<span className={`text-[11px] truncate ${isDisabled ? 'text-neutral-500' : 'text-white'}`}>
+										{option.label}
+									</span>
+									{isDisabled && (
+										<span className="text-[10px] text-orange-400 ml-2">
+											Need Image
 										</span>
-									</div>
-									<div className="flex items-center gap-2 ml-3 flex-shrink-0">
-										<span className={`text-xs ${isDisabled ? 'text-neutral-600' : 'text-neutral-400'}`}>
-											{creditsText}
-										</span>
-										{isDisabled && (
-											<span className="text-xs text-orange-400">
-												Need Image
-											</span>
-										)}
-									</div>
+									)}
 								</div>
 							</button>
 						);
@@ -1127,43 +856,52 @@ const initialNodes = [];
 	onDropdownStateChange
 }) => {
 	const { formData = {}, generatedContent, isGenerating, error, connectedImages = [], uploadedImage } = data;
-	const config = generationConfig[data.type];
 	const fileInputRef = useRef(null);
 	const [openDropdown, setOpenDropdown] = useState(null);
 
 	// Local state for form fields
 	const [prompt, setPrompt] = useState(formData.prompt || '');
-	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? 5 : 3));
 	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
+	const modelConfig = getModelById(model);
+	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? (modelConfig?.params?.duration?.default || 8) : 3));
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
 
-	// Available frames with preview images
-	const availableFrames = [
-		{
-			id: 'late_night_lofi',
-			name: 'Late Night Lo-Fi Vibes',
-			description: 'Lo-fi aesthetic with indoor settings',
-			previewImage: 'https://images.unsplash.com/photo-1493514789931-586cb221d7a7?w=400&h=225&fit=crop&crop=center'
-		},
-		{
-			id: 'japanese_night_drive',
-			name: 'Japanese Night Drive',
-			description: 'Urban night scenes with neon vibes',
-			previewImage: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=400&h=225&fit=crop&crop=center'
-		}
-	];
 
 	// This effect syncs the component's internal state with props from the parent canvas.
 	// It's crucial for when data is loaded or updated externally, preventing "stale state".
 	useEffect(() => {
 		if (formData) {
-			setDuration(formData.duration || 3);
-			setModel(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
+			const newModel = formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4');
+			const newModelConfig = getModelById(newModel);
+			const defaultDuration = data.type === 'video' ? (newModelConfig?.params?.duration?.default || 8) : 3;
+			
+			setDuration(formData.duration || defaultDuration);
+			setModel(newModel);
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
 	}, [formData.duration, formData.model, data.type]);
+
+	// Update duration when model changes to use model's default/first option
+	useEffect(() => {
+		const modelConfig = getModelById(model);
+		if (modelConfig && data.type === 'video') {
+			// Use model's default duration or first available option
+			const defaultDuration = modelConfig.params?.duration?.default || 
+				(modelConfig.options?.duration?.length > 0 ? modelConfig.options.duration[0] : 8);
+			
+			// Only update if current duration is not in the model's available options
+			if (modelConfig.options?.duration && !modelConfig.options.duration.includes(duration)) {
+				setDuration(defaultDuration);
+				// Update parent component
+				const currentFormData = formData || {};
+				onUpdateNode(id, { 
+					formData: { ...currentFormData, duration: defaultDuration, model }
+				});
+			}
+		}
+	}, [model]);
 
 	const handleDropdownToggle = (dropdownId) => {
 		setOpenDropdown(prev => (prev === dropdownId ? null : dropdownId));
@@ -1183,34 +921,17 @@ const initialNodes = [];
 		};
 	}, [openDropdown]);
 
-	// Get available models based on connection type
+	// Get available models using new config system
 	const getAvailableModels = () => {
-		if (data.type === 'image') {
-			const imageConfig = generationConfig.image;
-			const hasImageInput = connectedImages.length > 0 || uploadedImage;
-			
-			// Filter models based on whether they support image input
-			return Object.entries(imageConfig.models).filter(([modelKey, modelConfig]) => {
-				if (hasImageInput) {
-					return modelConfig.params.includes('image');
-				}
-				return true; // All models support text-only generation
-			}).map(([key, config]) => ({ value: key, ...config }));
-		} else {
-			const videoConfig = generationConfig.video;
-			const hasImageInput = connectedImages.length > 0 || uploadedImage;
-			
-			// Filter models based on model type and image availability
-			return Object.entries(videoConfig.models).filter(([modelKey, modelConfig]) => {
-				// Always show all models, but mark some as disabled in the UI
-				return true;
-			}).map(([key, config]) => ({ 
-				value: key, 
-				...config,
-				// Mark image-to-video only models as disabled when no image is available
-				disabled: !hasImageInput && config.type === 'image_to_video'
-			}));
-		}
+		const category = data.type === 'image' ? 'image' : 'video';
+		const categoryModels = getModelsByCategory(category);
+		
+		// Return all models in category - no filtering, all available
+		return Object.entries(categoryModels).map(([modelId, modelConfig]) => ({
+			value: modelId,
+			label: modelConfig.name,
+			...modelConfig
+		}));
 	};
 
 
@@ -1343,7 +1064,7 @@ const initialNodes = [];
 	};
 
 	const getCreditsForType = () => {
-		const selectedModelConfig = generationConfig[data.type]?.models?.[model];
+		const selectedModelConfig = getModelById(model);
 		if (selectedModelConfig) {
 			// Handle image models
 			if (typeof selectedModelConfig.credits === 'number') {
@@ -1380,8 +1101,8 @@ const initialNodes = [];
 	};
 	
 	const IconComponent = useMemo(() => {
-		return config?.icon || (data.type === 'image' ? Image : VideoCamera);
-	}, [config, data.type]);
+		return modelConfig?.icon || (data.type === 'image' ? Image : VideoCamera);
+	}, [modelConfig, data.type]);
 	
 	// Current dropdown value
 
@@ -1528,16 +1249,16 @@ const initialNodes = [];
 
 
 
-				{/* Connected Images Display - compact */}
+				{/* Connected Images Display - clean */}
 				{(connectedImages.length > 0 || uploadedImage) && (
-					<div className="bg-neutral-800/50 p-1.5 rounded-lg flex items-center gap-2 flex-shrink-0">
+					<div className="flex items-center gap-2 flex-shrink-0">
 						{/* Show uploaded image first */}
 						{uploadedImage && (
 							<div className="relative">
 								<img 
 									src={uploadedImage.url} 
 									alt={uploadedImage.fileName}
-									className="w-7 h-7 object-cover rounded border border-neutral-600"
+									className="w-21 h-21 object-cover rounded"
 								/>
 								<button
 									onClick={() => onUpdateNode(id, { uploadedImage: null })}
@@ -1553,17 +1274,14 @@ const initialNodes = [];
 								key={index}
 								src={img.url} 
 								alt={img.fileName}
-								className="w-7 h-7 object-cover rounded border border-neutral-600"
+								className="w-21 h-21 object-cover rounded"
 							/>
 						))}
 						{connectedImages.length > (uploadedImage ? 2 : 3) && (
-							<div className="w-7 h-7 bg-neutral-700 rounded border border-neutral-600 flex items-center justify-center">
-								<span className="text-[9px] text-neutral-300">+{connectedImages.length - (uploadedImage ? 2 : 3)}</span>
+							<div className="w-21 h-21 bg-neutral-700 rounded flex items-center justify-center">
+								<span className="text-sm text-neutral-300">+{connectedImages.length - (uploadedImage ? 2 : 3)}</span>
 							</div>
 						)}
-						<span className="text-white text-xs font-medium truncate ml-1">
-							{uploadedImage && connectedImages.length > 0 ? 'Images' : uploadedImage ? 'Uploaded' : 'Assets'}
-						</span>
 					</div>
 				)}
 
@@ -1587,6 +1305,26 @@ const initialNodes = [];
 									hasImageInput={connectedImages.length > 0 || uploadedImage}
 									onDropdownStateChange={onDropdownStateChange}
 								/>
+								{/* Warning for models that require images */}
+								{(() => {
+									const hasImage = connectedImages.length > 0 || uploadedImage;
+									const imageCount = connectedImages.length + (uploadedImage ? 1 : 0);
+									
+									// Show upload button for models that support images (only if less than 1 image)
+									if (supportsImageInput(model) && imageCount < 1) {
+										return (
+											<button
+												onClick={() => fileInputRef.current?.click()}
+												className="w-full mt-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-neutral-300 hover:bg-neutral-750 hover:text-white transition-all duration-200 flex items-center justify-center gap-2"
+											>
+												<Upload size={12} />
+												Upload Image
+											</button>
+										);
+									}
+									
+									return null;
+								})()}
 							</div>
 
 							{/* Settings Row */}
@@ -1632,18 +1370,14 @@ const initialNodes = [];
 											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 										>
 											{(() => {
-												const selectedModel = generationConfig.video.models[model];
-												if (!selectedModel?.options?.duration) return <option value={5}>5s</option>;
+												const selectedModel = getModelById(model);
+												if (!selectedModel?.options?.duration) return <option value={8}>8s</option>;
 												
-												const [min, max] = selectedModel.options.duration;
-												const options = [];
-												
-												// Generate duration options based on model's range
-												for (let i = min; i <= max; i++) {
-													options.push(<option key={i} value={i}>{i}s</option>);
-												}
-												
-												return options;
+												const durationOptions = selectedModel.options.duration;
+												// Always use the exact duration options from the model - no range generation
+												return durationOptions.map(duration => (
+													<option key={duration} value={duration}>{duration}s</option>
+												));
 											})()}
 										</select>
 									</div>
@@ -1654,11 +1388,11 @@ const initialNodes = [];
 							{data.type === 'video' && (
 								<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
 									{/* Resolution for models that support it */}
-									{generationConfig.video.models[model]?.options?.resolution && (
+									{getModelById(model)?.options?.resolution && (
 										<div className="flex-1 min-w-0">
 											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Resolution</label>
 											<select
-												value={formData?.resolution || generationConfig.video.models[model].options.resolution[0]}
+												value={formData?.resolution || getModelById(model).options.resolution[0]}
 												onChange={(e) => {
 													const currentFormData = formData || {};
 													onUpdateNode(id, { 
@@ -1669,7 +1403,7 @@ const initialNodes = [];
 												onBlur={() => onDropdownStateChange?.(false)}
 												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 											>
-												{generationConfig.video.models[model].options.resolution.map((res) => (
+												{getModelById(model).options.resolution.map((res) => (
 													<option key={res} value={res}>{res}</option>
 												))}
 											</select>
@@ -1677,11 +1411,11 @@ const initialNodes = [];
 									)}
 
 									{/* Mode for models that support it */}
-									{generationConfig.video.models[model]?.options?.mode && (
+									{getModelById(model)?.options?.mode && (
 										<div className="flex-1 min-w-0">
 											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Mode</label>
 											<select
-												value={formData?.mode || generationConfig.video.models[model].options.mode[0]}
+												value={formData?.mode || getModelById(model).options.mode[0]}
 												onChange={(e) => {
 													const currentFormData = formData || {};
 													onUpdateNode(id, { 
@@ -1692,7 +1426,7 @@ const initialNodes = [];
 												onBlur={() => onDropdownStateChange?.(false)}
 												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 											>
-												{generationConfig.video.models[model].options.mode.map((mode) => (
+												{getModelById(model).options.mode.map((mode) => (
 													<option key={mode} value={mode}>{mode === 'standard' ? 'Standard' : mode === 'pro' ? 'Pro' : mode}</option>
 												))}
 											</select>
@@ -2565,275 +2299,6 @@ const GeneratedFrame = ({ data, id, selected }) => {
 
 
 
-// Generated Content Panel - Showcase generated content for reuse
-const GeneratedContentPanel = ({ user, onDragStart }) => {
-	const [generatedContent, setGeneratedContent] = useState({
-		images: [],
-		videos: []
-	});
-	const [activeTab, setActiveTab] = useState('images');
-	const [isExpanded, setIsExpanded] = useState(false);
-	const [isLoading, setIsLoading] = useState(false);
-	const [mouseOverPanel, setMouseOverPanel] = useState(false);
-	const [mouseOverHistoryIcon, setMouseOverHistoryIcon] = useState(false);
-
-	// Panel visibility logic
-	useEffect(() => {
-		if (mouseOverHistoryIcon || mouseOverPanel) {
-			setIsExpanded(true);
-		} else {
-			const timeout = setTimeout(() => {
-				setIsExpanded(false);
-			}, 300);
-			return () => clearTimeout(timeout);
-		}
-	}, [mouseOverHistoryIcon, mouseOverPanel]);
-
-
-	// Fetch generated content from Firestore (using Dashboard's approach)
-	useEffect(() => {
-		console.log('useEffect triggered, user:', user); // Debug log
-		
-		if (!user?.uid) {
-			console.log('No user found, skipping fetch'); // Debug log
-			return;
-		}
-
-		const fetchGeneratedContent = async () => {
-			console.log('Starting fetchGeneratedContent for user:', user.uid); // Debug log
-			setIsLoading(true);
-			try {
-				// Fetch from 'generations' collection (images and slideshows)
-				const generationsQuery = query(
-					collection(db, 'users', user.uid, 'generations'),
-					orderBy('timestamp', 'desc')
-				);
-				console.log('Querying Firestore...'); // Debug log
-				const generationsSnapshot = await getDocs(generationsQuery);
-				console.log('Firestore query done, docs count:', generationsSnapshot.docs.length); // Debug log
-
-				// Process generations (images and slideshows)
-				const generations = generationsSnapshot.docs.map(doc => {
-					const data = doc.data();
-					const timestamp = data.timestamp?.toDate?.() || data.timestamp || data.createdAt?.toDate?.() || new Date();
-					console.log('Generation data:', data); // Debug log
-					
-					// Map common URL field names to standardized 'url'
-					const url = data.url || data.imageUrl || data.downloadURL || data.resultUrl || data.outputUrl;
-					console.log('Mapped URL:', url); // Debug log
-					
-					return {
-						id: doc.id,
-						...data,
-						url, // Standardized URL field
-						timestamp,
-						createdAt: timestamp
-					};
-				});
-
-				// Separate content by type
-				const images = generations.filter(item => 
-					item.type === 'image' || (item.commandCode >= 200 && item.commandCode < 300)
-				);
-				const videos = generations.filter(item => 
-					item.type === 'video'
-				);
-
-				console.log('Filtered images:', images); // Debug log
-				console.log('Filtered videos:', videos); // Debug log
-
-				setGeneratedContent({
-					images,
-					videos
-				});
-			} catch (error) {
-				console.error('Error fetching generated content:', error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		fetchGeneratedContent();
-	}, [user]);
-
-	const handleDragStart = (e, content) => {
-		e.dataTransfer.setData('text/plain', JSON.stringify(content));
-		e.dataTransfer.effectAllowed = 'copy';
-		
-		if (onDragStart) {
-			onDragStart(content);
-		}
-	};
-
-	const tabs = [
-		{ id: 'images', icon: Image, label: 'Images', count: generatedContent.images.length },
-		{ id: 'videos', icon: VideoCamera, label: 'Videos', count: generatedContent.videos.length }
-	];
-
-	const currentContent = generatedContent[activeTab] || [];
-
-	const formatDate = (date) => {
-		if (!date) return 'Unknown';
-		const now = new Date();
-		const diff = now - date;
-		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-		const hours = Math.floor(diff / (1000 * 60 * 60));
-		const minutes = Math.floor(diff / (1000 * 60));
-
-		if (days > 0) return `${days}d ago`;
-		if (hours > 0) return `${hours}h ago`;
-		if (minutes > 0) return `${minutes}m ago`;
-		return 'Just now';
-	};
-
-	return (
-		<>
-			{/* Sidebar Panel */}
-			<div className="fixed top-1/2 left-4 -translate-y-1/2 z-50">
-				{/* Main Sidebar */}
-				<div className="bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl w-12">
-					<div className="p-3 flex flex-col items-center gap-3">
-						{/* History Icon */}
-						<div 
-							className="flex flex-col items-center"
-							onMouseEnter={() => {
-								setMouseOverHistoryIcon(true);
-							}}
-							onMouseLeave={() => {
-								setMouseOverHistoryIcon(false);
-							}}
-						>
-							<div className="p-1 text-neutral-400">
-								<ClockCounterClockwise size={16} />
-							</div>
-							{(generatedContent.images.length + generatedContent.videos.length) > 0 && (
-								<div className="w-1 h-1 rounded-full bg-lime-500 mt-1"></div>
-							)}
-						</div>
-					</div>
-				</div>
-
-				{/* Expanded Panel - Appears to the right */}
-				{isExpanded && (
-					<div 
-						className="absolute -top-20 left-14 bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50 rounded-2xl shadow-2xl w-96"
-						onMouseEnter={() => {
-							setMouseOverPanel(true);
-						}}
-						onMouseLeave={() => {
-							setMouseOverPanel(false);
-						}}
-					>
-						<div className="flex flex-col h-[400px]">
-							{/* Search Bar */}
-							<div className="p-4 border-b border-neutral-700/50">
-								<div className="flex items-center gap-3 bg-neutral-800/50 rounded-xl px-4 py-3">
-									<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-neutral-500">
-										<path d="M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42-1.42ZM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7Z"/>
-									</svg>
-									<input
-										type="text"
-										placeholder="Search History..."
-										className="flex-1 bg-transparent text-neutral-300 placeholder-neutral-500 text-sm outline-none"
-									/>
-									<button className="p-1 text-neutral-500 hover:text-neutral-300">
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-											<path d="M3 6h18v2H3V6zm2 5h14v2H5v-2zm4 5h6v2H9v-2z"/>
-										</svg>
-									</button>
-									<button className="p-1 text-neutral-500 hover:text-neutral-300">
-										<X size={16} />
-									</button>
-								</div>
-							</div>
-
-							{/* Content Area */}
-							<div 
-								className="flex-1 overflow-y-auto p-4"
-								onWheel={(e) => e.stopPropagation()}
-							>
-								{isLoading ? (
-									<div className="flex items-center justify-center h-full">
-										<div className="animate-spin rounded-full h-8 w-8 border-2 border-lime-500 border-t-transparent"></div>
-									</div>
-								) : (generatedContent.images.length + generatedContent.videos.length) === 0 ? (
-									<div className="text-center py-12">
-										<div className="text-neutral-500 mb-3">
-											<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-												<path d="M21.71 20.29L18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a1 1 0 0 0 1.42-1.42ZM11 18a7 7 0 1 1 7-7 7 7 0 0 1-7 7Z"/>
-											</svg>
-										</div>
-										<p className="text-sm text-neutral-400 mb-1">No content generated yet</p>
-										<p className="text-xs text-neutral-500">Generate content to see it here</p>
-									</div>
-								) : (
-									<div>
-										{/* Date Header */}
-										<h2 className="text-lg font-semibold text-white mb-4">
-											{new Date().toLocaleDateString('en-US', { 
-												year: 'numeric', 
-												month: 'long', 
-												day: 'numeric' 
-											})}
-										</h2>
-										
-										{/* Grid Layout */}
-										<div className="grid grid-cols-4 gap-2">
-											{[...generatedContent.images, ...generatedContent.videos].map((content, index) => (
-												<div
-													key={content.id}
-													className="relative cursor-pointer group"
-													draggable
-													onDragStart={(e) => handleDragStart(e, content)}
-												>
-													<div className="relative bg-neutral-800/50 rounded-xl overflow-hidden aspect-square">
-														{/* Type Badge */}
-														<div className="absolute top-2 left-2 z-10">
-															<span className="bg-black/70 text-white text-xs font-medium px-2 py-1 rounded-md">
-																{content.type === 'video' || content.commandCode >= 400 ? 'VIDEO' : 'IMAGE'}
-															</span>
-														</div>
-														
-														{/* Media */}
-														{content.type === 'video' || content.commandCode >= 400 ? (
-															<video 
-																src={content.url}
-																className="w-full h-full object-cover"
-																muted
-																playsInline
-																onError={(e) => {
-																	console.error('Video failed to load:', content.url);
-																	e.target.style.display = 'none';
-																}}
-															/>
-														) : (
-															<img 
-																src={content.url} 
-																alt={content.prompt}
-																className="w-full h-full object-cover"
-																onError={(e) => {
-																	console.error('Image failed to load:', content.url);
-																	e.target.style.display = 'none';
-																}}
-																onLoad={() => console.log('Image loaded:', content.url)}
-															/>
-														)}
-													</div>
-												</div>
-											))}
-										</div>
-									</div>
-								)}
-							</div>
-						</div>
-					</div>
-				)}
-
-			</div>
-		</>
-	);
-};
-
 // Generated Content Item with Hover Frame
 const GeneratedContentItem = React.memo(({ content, index, activeTab, handleDragStart, formatDate }) => {
 	const [showFrame, setShowFrame] = useState(false);
@@ -3033,360 +2498,6 @@ const GeneratedContentItem = React.memo(({ content, index, activeTab, handleDrag
 	);
 });
 
-// Floating Generation Panel Component
-const FloatingGenerationPanel = ({ selectedNodes, onUpdateNode, onGenerate }) => {
-	const [isVisible, setIsVisible] = useState(false);
-	const [activeNode, setActiveNode] = useState(null);
-
-	// All aspect ratio options
-	const aspectRatios = [
-		{ value: '1:1', label: '1:1', description: 'Square' },
-		{ value: '4:3', label: '4:3', description: 'Standard' },
-		{ value: '3:4', label: '3:4', description: 'Portrait' },
-		{ value: '16:9', label: '16:9', description: 'Landscape' },
-		{ value: '9:16', label: '9:16', description: 'Vertical' },
-		{ value: '3:2', label: '3:2', description: 'Photo' },
-		{ value: '2:3', label: '2:3', description: 'Photo Portrait' },
-		{ value: '21:9', label: '21:9', description: 'Ultrawide' },
-		{ value: '9:21', label: '9:21', description: 'Ultra Vertical' }
-	];
-
-	// Model options based on node type from actual functions/index.js implementation
-	const getModelOptions = (nodeType, subtype = 'text_to_video') => {
-		if (nodeType === 'image') {
-			// Real image models from new configuration
-			return [
-				{ 
-					value: 'lungo-vibe', 
-					label: 'Lungo Vibe ✨', 
-					type: 'image', 
-					subtitle: 'Lungo\'s signature AI model',
-					credits: 80,
-					params: ['prompt', 'selectedFrame'],
-					supportedOptions: ['aspect_ratio', 'selectedFrame']
-				},
-				{ 
-					value: 'black-forest-labs/flux-kontext-max', 
-					label: 'Flux Kontext Max', 
-					type: 'image', 
-					subtitle: 'High quality image generation',
-					credits: 120,
-					params: ['prompt', 'image'],
-					supportedOptions: ['aspect_ratio']
-				},
-				{ 
-					value: 'black-forest-labs/flux-kontext-pro', 
-					label: 'Flux Kontext Pro', 
-					type: 'image', 
-					subtitle: 'Professional image generation',
-					credits: 100,
-					params: ['prompt', 'image'],
-					supportedOptions: ['aspect_ratio']
-				},
-				{ 
-					value: 'google/imagen-4', 
-					label: 'Google Imagen 4', 
-					type: 'image', 
-					subtitle: 'Google\'s latest image AI',
-					credits: 80,
-					params: ['prompt'],
-					supportedOptions: ['aspect_ratio']
-				},
-				{ 
-					value: 'google/imagen-4-ultra', 
-					label: 'Google Imagen 4 Ultra', 
-					type: 'image', 
-					subtitle: 'Ultra high quality images',
-					credits: 'dynamic',
-					params: ['prompt'],
-					supportedOptions: ['aspect_ratio']
-				},
-				{ 
-					value: 'ideogram-ai/ideogram-v3-quality', 
-					label: 'Ideogram V3 Quality', 
-					type: 'image', 
-					subtitle: 'Quality focused generation',
-					credits: 90,
-					params: ['prompt', 'image'],
-					supportedOptions: ['aspect_ratio']
-				}
-			];
-		} else if (nodeType === 'video') {
-			// Real video models from functions/index.js
-			return [
-				{ 
-					value: 'google/veo-3-fast', 
-					label: 'Google Veo 3 Fast', 
-					type: 'video', 
-					subtitle: '60 credits per video',
-					credits: 60,
-					params: ['prompt', 'negative_prompt'],
-					supportedOptions: ['duration', 'aspect_ratio']
-				},
-				{ 
-					value: 'google/veo-3', 
-					label: 'Google Veo 3', 
-					type: 'video', 
-					subtitle: '100 credits per video',
-					credits: 100,
-					params: ['prompt', 'negative_prompt'],
-					supportedOptions: ['duration', 'aspect_ratio']
-				},
-				{ 
-					value: 'google/veo-2', 
-					label: 'Google Veo 2', 
-					type: 'video', 
-					subtitle: '10 credits per second',
-					credits: 'dynamic',
-					params: ['image_input', 'aspect_ratio', 'duration'],
-					supportedOptions: ['aspect_ratio', 'duration']
-				},
-				{ 
-					value: 'bytedance/seedance-1-pro', 
-					label: 'ByteDance SeeDance Pro', 
-					type: 'video', 
-					subtitle: '1-3 credits per second',
-					credits: 'dynamic',
-					params: ['prompt', 'image', 'duration', 'resolution', 'aspect_ratio', 'camera_fixed'],
-					supportedOptions: ['duration', 'resolution', 'aspect_ratio', 'camera_fixed']
-				},
-				{ 
-					value: 'kwaivgi/kling-v2.1', 
-					label: 'KwaiVGI Kling v2.1', 
-					type: 'video', 
-					subtitle: '1-2 credits per second',
-					credits: 60,
-					params: ['prompt', 'negative_prompt', 'start_image', 'mode', 'duration'],
-					supportedOptions: ['mode', 'duration']
-				},
-				{ 
-					value: 'minimax/hailuo-02', 
-					label: 'MiniMax Hailuo 02', 
-					type: 'video', 
-					subtitle: '1-2 credits per second',
-					credits: 'dynamic',
-					params: ['prompt', 'first_frame_image', 'duration', 'resolution', 'prompt_optimizer'],
-					supportedOptions: ['duration', 'resolution', 'prompt_optimizer']
-				}
-			];
-		} else {
-			// Real image models from functions/index.js
-			return [
-				{ 
-					value: 'google/imagen-4', 
-					label: 'Google Imagen 4', 
-					type: 'image', 
-					subtitle: 'Photorealistic, high quality',
-					params: ['prompt', 'aspect_ratio', 'output_format', 'safety_tolerance'],
-					supportedOptions: ['aspect_ratio']
-				},
-				{ 
-					value: 'ideogram-ai/ideogram-v3-quality', 
-					label: 'Ideogram v3 Quality', 
-					type: 'image', 
-					subtitle: 'Great for text in images',
-					params: ['prompt', 'aspect_ratio', 'model', 'magic_prompt_option'],
-					supportedOptions: ['aspect_ratio']
-				}
-			];
-		}
-	};
-
-	// Check if panel should be visible - only for selected nodes, not hover
-	useEffect(() => {
-		const generationNodes = [...selectedNodes].filter(node => 
-			['aiFrame', 'video', 'generatedFrame', 'image'].includes(node.type)
-		);
-		
-		if (generationNodes.length === 1) {
-			setActiveNode(generationNodes[0]);
-			setIsVisible(true);
-		} else {
-			setIsVisible(false);
-			setActiveNode(null);
-		}
-	}, [selectedNodes]);
-
-	if (!isVisible || !activeNode) return null;
-
-	const currentAspectRatio = activeNode.data?.formData?.aspect_ratio || activeNode.data?.aspect_ratio || '9:16';
-	const currentSubtype = activeNode.data?.formData?.subtype || activeNode.data?.subtype || (activeNode.type === 'video' ? 'text_to_video' : 'general');
-	const currentModel = activeNode.data?.formData?.model || activeNode.data?.model || 
-		(activeNode.type === 'video' ? 'google/veo-3-fast' : 'lungo-vibe');
-	const modelOptions = getModelOptions(activeNode.type, currentSubtype);
-	
-	// Get current selected model details
-	const selectedModelDetails = modelOptions.find(model => model.value === currentModel);
-	
-	// Get model-specific options
-	const getModelSpecificOptions = () => {
-		if (!selectedModelDetails) return {};
-		
-		const options = {};
-		
-		// Duration options for video models
-		if (selectedModelDetails.supportedOptions?.includes('duration')) {
-			if (currentModel === 'google/veo-3-fast' || currentModel === 'google/veo-3') {
-				options.duration = [3, 5];
-			} else if (currentModel === 'google/veo-2') {
-				options.duration = [5, 6, 7, 8];
-			} else if (currentModel === 'bytedance/seedance-1-pro') {
-				options.duration = [5, 10];
-			} else if (currentModel === 'kwaivgi/kling-v2.1') {
-				options.duration = [5, 10];
-			} else if (currentModel === 'minimax/hailuo-02') {
-				options.duration = [6, 10];
-			}
-		}
-		
-		// Resolution options
-		if (selectedModelDetails.supportedOptions?.includes('resolution')) {
-			if (currentModel === 'bytedance/seedance-1-pro') {
-				options.resolution = ['480p', '1080p'];
-			} else if (currentModel === 'minimax/hailuo-02') {
-				options.resolution = ['768p', '1080p'];
-			}
-		}
-		
-		// Mode options
-		if (selectedModelDetails.supportedOptions?.includes('mode')) {
-			if (currentModel === 'kwaivgi/kling-v2.1') {
-				options.mode = ['standard', 'pro'];
-			}
-		}
-		
-		// Aspect ratio options (model specific)
-		if (selectedModelDetails.supportedOptions?.includes('aspect_ratio')) {
-			// Image models
-			if (currentModel === 'black-forest-labs/flux-kontext-max' || currentModel === 'black-forest-labs/flux-kontext-pro') {
-				options.aspect_ratio = ['1:1', '3:4', '4:3', '9:16', '16:9'];
-			} else if (currentModel === 'google/imagen-4' || currentModel === 'google/imagen-4-ultra') {
-				options.aspect_ratio = ['1:1', '9:16', '16:9', '3:4', '4:3'];
-			} else if (currentModel === 'ideogram-ai/ideogram-v3-quality') {
-				options.aspect_ratio = ['1:1', '3:4', '4:3', '9:16', '16:9'];
-			}
-			// Video models
-			else if (currentModel === 'bytedance/seedance-1-pro') {
-				options.aspect_ratio = ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '9:21'];
-			} else if (currentModel === 'google/veo-3-fast' || currentModel === 'google/veo-3') {
-				options.aspect_ratio = ['9:16', '16:9', '1:1'];
-			} else if (currentModel === 'google/veo-2') {
-				options.aspect_ratio = ['9:16', '16:9'];
-			} else {
-				// Default aspect ratios for other models
-				options.aspect_ratio = ['1:1', '4:3', '3:4', '16:9', '9:16'];
-			}
-		}
-		
-		return options;
-	};
-	
-	const modelSpecificOptions = getModelSpecificOptions();
-	const availableAspectRatios = modelSpecificOptions.aspect_ratio ? 
-		aspectRatios.filter(ratio => modelSpecificOptions.aspect_ratio.includes(ratio.value)) : 
-		aspectRatios;
-
-	const handleAspectRatioChange = (ratio) => {
-		const currentFormData = activeNode.data?.formData || {};
-		onUpdateNode(activeNode.id, { 
-			formData: { ...currentFormData, aspect_ratio: ratio }
-		});
-	};
-
-	const handleModelChange = (model) => {
-		const currentFormData = activeNode.data?.formData || {};
-		onUpdateNode(activeNode.id, { 
-			formData: { ...currentFormData, model }
-		});
-	};
-
-	const handleGenerateClick = () => {
-		const currentPrompt = activeNode.data?.formData?.prompt || activeNode.data?.prompt;
-		if (currentPrompt?.trim()) {
-			onGenerate(activeNode.id, {
-				prompt: currentPrompt,
-				type: activeNode.type === 'video' ? 'video' : 'image',
-				aspect_ratio: currentAspectRatio,
-				model: currentModel,
-				subtype: currentSubtype,
-				...activeNode.data?.formData
-			});
-		}
-	};
-
-	return (
-		<div className="fixed top-32 right-0 z-50 w-72 bg-neutral-900/98 backdrop-blur-sm border-l border-neutral-700/30 rounded-l-xl shadow-xl">
-			{/* Header */}
-			<div className="px-3 py-2.5 border-b border-neutral-700/20">
-				<div className="flex items-center justify-between">
-					<h3 className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">Node Info</h3>
-					<div className="text-xs text-neutral-500 capitalize px-2 py-0.5 bg-neutral-800/50 rounded-md">{activeNode.type}</div>
-				</div>
-			</div>
-
-			{/* Content */}
-			<div className="p-3 space-y-3">
-				{/* Current Settings Display (Read-only) */}
-				<div className="space-y-2.5">
-					{/* Model */}
-					<div className="space-y-1">
-						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Model</label>
-						<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-lime-500/30">
-							{selectedModelDetails?.label || currentModel}
-						</div>
-					</div>
-
-					{/* Aspect Ratio */}
-					<div className="space-y-1">
-						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Aspect</label>
-						<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-blue-500/30">
-							{currentAspectRatio}
-						</div>
-					</div>
-
-					{/* Duration for videos */}
-					{activeNode.type === 'video' && (
-						<div className="space-y-1">
-							<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Duration</label>
-							<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-purple-500/30">
-								{activeNode.data?.formData?.duration || activeNode.data?.duration || 5}s
-							</div>
-						</div>
-					)}
-
-					{/* Frame Selection - Only for Lungo Vibe */}
-					{activeNode.type === 'image' && currentModel === 'lungo-vibe' && activeNode.data?.formData?.selectedFrame && (
-						<div className="space-y-1">
-							<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Style Frame</label>
-							<div className="bg-neutral-800/60 rounded-lg p-2 text-xs text-neutral-200 border-l-2 border-orange-500/30">
-								{activeNode.data.formData.selectedFrame === 'late_night_lofi' ? 'Late Night Lo-Fi' :
-								 activeNode.data.formData.selectedFrame === 'japanese_night_drive' ? 'Japanese Night Drive' :
-								 activeNode.data.formData.selectedFrame}
-							</div>
-						</div>
-					)}
-				</div>
-
-				{/* Current Prompt Display */}
-				{(activeNode.data?.formData?.prompt || activeNode.data?.prompt) && (
-					<div className="space-y-1">
-						<label className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">Prompt</label>
-						<div className="bg-neutral-800/60 rounded-lg p-2.5 text-xs text-neutral-200 max-h-20 overflow-y-auto border-l-2 border-green-500/30">
-							{activeNode.data?.formData?.prompt || activeNode.data?.prompt}
-						</div>
-					</div>
-				)}
-
-				{/* Minimal Info Note */}
-				<div className="mt-4 pt-3 border-t border-neutral-700/20">
-					<div className="text-[10px] text-neutral-500 text-center">
-						Configure settings in node
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-};
 
 const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	const { user, setCanvasStatus, generatingItem, commandQueue, isDarkMode } = useOutletContext() || {};
@@ -4059,9 +3170,8 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 				const formData = sourceNode?.data?.formData || {};
 				
 				// Get model configuration to determine which parameters to send
-				const config = generationConfig.video?.subtypes?.[generationData.subtype];
-				const modelConfig = config?.models?.[generationData.model];
-				const supportedParams = modelConfig?.params || [];
+				const modelConfig = getModelById(generationData.model);
+				const supportedParams = modelConfig?.params ? Object.keys(modelConfig.params) : [];
 				const modelOptions = modelConfig?.options || {};
 				
 				// Build parameters object based on what the model supports
@@ -4240,11 +3350,11 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			if ((sourceNode.type === 'imageUpload' || sourceNode.type === 'generatedFrame') && 
 				targetNode.data.type === 'video') {
 				const targetModel = targetNode.data.formData?.model || 'google/veo-3-fast';
-				const modelConfig = generationConfig.video?.models?.[targetModel];
+				const modelConfig = getModelById(targetModel);
 				
 				// Check if model supports any image input parameters
 				const imageParams = ['image_input', 'image', 'start_image', 'first_frame_image'];
-				const supportsImage = modelConfig?.params?.some(param => imageParams.includes(param));
+				const supportsImage = modelConfig?.params ? imageParams.some(param => param in modelConfig.params) : false;
 				
 				if (!supportsImage) {
 					console.warn(`Model ${targetModel} does not support image input`);
@@ -4547,20 +3657,8 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 
 	return (
 		<div className="w-full h-screen relative overflow-hidden" ref={reactFlowWrapper}>
-			{/* Generated Content Panel */}
-			<GeneratedContentPanel 
-				user={user}
-				onDragStart={(content) => {
-					console.log('Dragging generated content:', content);
-				}}
-			/>
 
-			{/* Floating Generation Panel */}
-			<FloatingGenerationPanel 
-				selectedNodes={nodes.filter(node => node.selected)}
-				onUpdateNode={updateNodeData}
-				onGenerate={handleGenerate}
-			/>
+
 
 			<ReactFlow
 				nodes={nodes}

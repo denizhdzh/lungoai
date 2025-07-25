@@ -3419,6 +3419,10 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	});
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
+	// Touch handling for 2-finger pan
+	const [touchStart, setTouchStart] = useState(null);
+	const [lastTouchDistance, setLastTouchDistance] = useState(null);
+
 	// Global input focus tracking
 	useEffect(() => {
 		const handleFocus = (e) => {
@@ -4465,6 +4469,80 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		event.dataTransfer.dropEffect = 'copy';
 	}, []);
 
+	// Touch event handlers for 2-finger pan
+	const handleTouchStart = useCallback((event) => {
+		if (event.touches.length === 2 && !isAnyDropdownOpen && !isInputFocused) {
+			const touch1 = event.touches[0];
+			const touch2 = event.touches[1];
+			
+			setTouchStart({
+				x1: touch1.clientX,
+				y1: touch1.clientY,
+				x2: touch2.clientX,
+				y2: touch2.clientY,
+				centerX: (touch1.clientX + touch2.clientX) / 2,
+				centerY: (touch1.clientY + touch2.clientY) / 2
+			});
+			
+			// Calculate initial distance for zoom detection
+			const distance = Math.sqrt(
+				Math.pow(touch2.clientX - touch1.clientX, 2) + 
+				Math.pow(touch2.clientY - touch1.clientY, 2)
+			);
+			setLastTouchDistance(distance);
+		}
+	}, [isAnyDropdownOpen, isInputFocused]);
+
+	const handleTouchMove = useCallback((event) => {
+		if (event.touches.length === 2 && touchStart && reactFlowInstance && !isAnyDropdownOpen && !isInputFocused) {
+			event.preventDefault();
+			
+			const touch1 = event.touches[0];
+			const touch2 = event.touches[1];
+			
+			const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
+			const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
+			
+			// Calculate current distance for zoom detection
+			const currentDistance = Math.sqrt(
+				Math.pow(touch2.clientX - touch1.clientX, 2) + 
+				Math.pow(touch2.clientY - touch1.clientY, 2)
+			);
+			
+			// Only pan if this is not a zoom gesture (distance hasn't changed much)
+			const distanceChange = Math.abs(currentDistance - lastTouchDistance);
+			const isZoomGesture = distanceChange > 10; // Threshold for zoom vs pan
+			
+			if (!isZoomGesture) {
+				// Calculate pan delta
+				const deltaX = currentCenterX - touchStart.centerX;
+				const deltaY = currentCenterY - touchStart.centerY;
+				
+				// Apply horizontal pan only (2-finger left/right movement)
+				const viewport = reactFlowInstance.getViewport();
+				reactFlowInstance.setViewport({
+					x: viewport.x + deltaX,
+					y: viewport.y + deltaY,
+					zoom: viewport.zoom
+				});
+				
+				// Update touch start for next move
+				setTouchStart({
+					...touchStart,
+					centerX: currentCenterX,
+					centerY: currentCenterY
+				});
+			}
+			
+			setLastTouchDistance(currentDistance);
+		}
+	}, [touchStart, lastTouchDistance, reactFlowInstance, isAnyDropdownOpen, isInputFocused]);
+
+	const handleTouchEnd = useCallback(() => {
+		setTouchStart(null);
+		setLastTouchDistance(null);
+	}, []);
+
 
 
 	return (
@@ -4501,17 +4579,20 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 				onNodeContextMenu={onNodeContextMenu}
 				onDrop={handleContentDrop}
 				onDragOver={handleContentDragOver}
+				onTouchStart={handleTouchStart}
+				onTouchMove={handleTouchMove}
+				onTouchEnd={handleTouchEnd}
 				className="bg-neutral-950"
 				style={{ width: '100%', height: '100vh' }}
 				zoomOnScroll={!isAnyDropdownOpen && !isInputFocused}
 				zoomOnPinch={!isAnyDropdownOpen && !isInputFocused}
-				panOnScroll={false}
+				panOnScroll={!isAnyDropdownOpen && !isInputFocused}
 				selectionOnDrag={!isAnyDropdownOpen && !isInputFocused}
-				panOnDrag={!isAnyDropdownOpen && !isInputFocused}
+				panOnDrag={false}
 				nodesDraggable={!isInputFocused}
-				nodesFocusable={false}
-				selectNodesOnDrag={false}
-				selectionKeyCode={'Shift'}
+				nodesFocusable={true}
+				selectNodesOnDrag={true}
+				selectionKeyCode={null}
 				minZoom={0.1}
 				defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
 				snapToGrid={true}

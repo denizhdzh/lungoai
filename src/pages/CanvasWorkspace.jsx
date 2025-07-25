@@ -511,7 +511,7 @@ const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStat
 			<button
 				ref={buttonRef}
 				onClick={handleToggleWithPosition}
-				className="w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-750 transition-all flex items-center justify-between"
+				className="w-full bg-neutral-800 border border-neutral-700 rounded-xl px-2 py-1.5 text-xs text-neutral-200 hover:bg-neutral-750 transition-all flex items-center justify-between"
 			>
 				<span className="truncate text-[11px]">{selectedOption?.label || 'Select Model'}</span>
 				<CaretDown size={10} className="text-neutral-400 flex-shrink-0 ml-1" />
@@ -520,7 +520,7 @@ const ModelDropdown = ({ value, options, onChange, hasImageInput, onDropdownStat
 			{isOpen && createPortal(
 				<div 
 					ref={dropdownRef}
-					className="fixed bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-[9999] max-h-80 overflow-y-auto model-dropdown-scroll"
+					className="fixed bg-neutral-800 border border-neutral-700 rounded-xl shadow-xl z-[9999] max-h-80 overflow-y-auto model-dropdown-scroll"
 					style={{
 						top: dropdownPosition.top,
 						left: dropdownPosition.left,
@@ -853,7 +853,8 @@ const initialNodes = [];
 	onImageUpload,
 	onSettingChange,
 	onUpdateNode,
-	onDropdownStateChange
+	onDropdownStateChange,
+	onRemoveIncomingEdges
 }) => {
 	const { formData = {}, generatedContent, isGenerating, error, connectedImages = [], uploadedImage } = data;
 	const fileInputRef = useRef(null);
@@ -864,6 +865,7 @@ const initialNodes = [];
 	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
 	const modelConfig = getModelById(model);
 	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? (modelConfig?.params?.duration?.default || 8) : 3));
+	const [selectedAspectRatio, setSelectedAspectRatio] = useState(formData.aspect_ratio || '3:4');
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
@@ -879,11 +881,13 @@ const initialNodes = [];
 			
 			setDuration(formData.duration || defaultDuration);
 			setModel(newModel);
+			setSelectedAspectRatio(formData.aspect_ratio || '3:4');
 			// We intentionally don't sync `prompt` here to avoid cursor jumps and conflicts while typing.
 		}
-	}, [formData.duration, formData.model, data.type]);
+	}, [formData.duration, formData.model, formData.aspect_ratio, data.type]);
 
 	// Update duration when model changes to use model's default/first option
+	// Also remove image connections if model doesn't support images
 	useEffect(() => {
 		const modelConfig = getModelById(model);
 		if (modelConfig && data.type === 'video') {
@@ -900,8 +904,24 @@ const initialNodes = [];
 					formData: { ...currentFormData, duration: defaultDuration, model }
 				});
 			}
+
+			// If model doesn't support image input, clear connected images and uploaded image
+			if (!supportsImageInput(model) && (connectedImages.length > 0 || uploadedImage)) {
+				console.log('🗑️ Model', model, 'does not support images, clearing image connections');
+				
+				// Clear uploaded image and connected images from node data
+				onUpdateNode(id, { 
+					connectedImages: [],
+					uploadedImage: null
+				});
+
+				// Remove incoming edges from image nodes
+				if (onRemoveIncomingEdges) {
+					onRemoveIncomingEdges(id);
+				}
+			}
 		}
-	}, [model]);
+	}, [model, connectedImages.length, uploadedImage]);
 
 	const handleDropdownToggle = (dropdownId) => {
 		setOpenDropdown(prev => (prev === dropdownId ? null : dropdownId));
@@ -1047,10 +1067,24 @@ const initialNodes = [];
 				model,
 				connectedImages: allImages,
 				uploadedImage,
-				aspect_ratio: formData?.aspect_ratio || '9:16'
+				aspect_ratio: selectedAspectRatio // Use the selected aspect ratio
 			};
 
 			console.log('📤 Sending generation data:', generationData);
+
+			// Clear the prompt immediately after sending
+			setPrompt('');
+			
+			// Update node to generating state and apply selected aspect ratio
+			const currentFormData = formData || {};
+			onUpdateNode(id, { 
+				formData: { 
+					...currentFormData, 
+					prompt: '', // Clear prompt in form data too
+					aspect_ratio: selectedAspectRatio // Apply the selected aspect ratio
+				},
+				isGenerating: true // Set generating state
+			});
 
 			try {
 				await onGenerate(id, generationData);
@@ -1108,7 +1142,7 @@ const initialNodes = [];
 
 	// Calculate node dimensions based on aspect ratio
 	const getNodeDimensions = () => {
-		const aspectRatio = formData?.aspect_ratio || '9:16';
+		const aspectRatio = formData?.aspect_ratio || '3:4';
 		
 		// Base dimensions: 1:1 = 320x320 (square as reference)
 		const squareSize = 320;
@@ -1236,7 +1270,7 @@ const initialNodes = [];
 				>
 				{/* Header - Credit only */}
 				<div className="flex justify-center items-center flex-shrink-0">
-					<div className="flex items-center px-3 py-1.5 bg-neutral-700 rounded-lg border border-neutral-600">
+					<div className="flex items-center px-3 py-1.5 bg-neutral-700 rounded-xl border border-neutral-600">
 						<LogoNaked className="w-4 h-4 mr-2 text-neutral-300" />
 						<span className="text-sm text-neutral-300 font-medium">
 							{getCreditsForType()}
@@ -1258,7 +1292,7 @@ const initialNodes = [];
 								<img 
 									src={uploadedImage.url} 
 									alt={uploadedImage.fileName}
-									className="w-21 h-21 object-cover rounded"
+									className="w-12 h-12 object-cover rounded-xl"
 								/>
 								<button
 									onClick={() => onUpdateNode(id, { uploadedImage: null })}
@@ -1274,11 +1308,11 @@ const initialNodes = [];
 								key={index}
 								src={img.url} 
 								alt={img.fileName}
-								className="w-21 h-21 object-cover rounded"
+								className="w-12 h-12 object-cover rounded-xl"
 							/>
 						))}
 						{connectedImages.length > (uploadedImage ? 2 : 3) && (
-							<div className="w-21 h-21 bg-neutral-700 rounded flex items-center justify-center">
+							<div className="w-12 h-12 bg-neutral-700 rounded-xl flex items-center justify-center">
 								<span className="text-sm text-neutral-300">+{connectedImages.length - (uploadedImage ? 2 : 3)}</span>
 							</div>
 						)}
@@ -1333,16 +1367,14 @@ const initialNodes = [];
 								<div className="flex-1 min-w-0">
 									<label className="text-[10px] text-neutral-500 block px-1 mb-1">Aspect</label>
 									<select
-										value={formData?.aspect_ratio || '9:16'}
+										value={selectedAspectRatio}
 										onChange={(e) => {
-											const currentFormData = formData || {};
-											onUpdateNode(id, { 
-												formData: { ...currentFormData, aspect_ratio: e.target.value }
-											});
+											setSelectedAspectRatio(e.target.value);
+											// Don't update the node immediately - only on generate
 										}}
 										onFocus={() => onDropdownStateChange?.(true)}
 										onBlur={() => onDropdownStateChange?.(false)}
-										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+										className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 									>
 										<option value="1:1">1:1</option>
 										<option value="4:3">4:3</option>
@@ -1367,7 +1399,7 @@ const initialNodes = [];
 											onChange={(e) => setDuration(parseInt(e.target.value))}
 											onFocus={() => onDropdownStateChange?.(true)}
 											onBlur={() => onDropdownStateChange?.(false)}
-											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 										>
 											{(() => {
 												const selectedModel = getModelById(model);
@@ -1401,7 +1433,7 @@ const initialNodes = [];
 												}}
 												onFocus={() => onDropdownStateChange?.(true)}
 												onBlur={() => onDropdownStateChange?.(false)}
-												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 											>
 												{getModelById(model).options.resolution.map((res) => (
 													<option key={res} value={res}>{res}</option>
@@ -1424,7 +1456,7 @@ const initialNodes = [];
 												}}
 												onFocus={() => onDropdownStateChange?.(true)}
 												onBlur={() => onDropdownStateChange?.(false)}
-												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-lg px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 											>
 												{getModelById(model).options.mode.map((mode) => (
 													<option key={mode} value={mode}>{mode === 'standard' ? 'Standard' : mode === 'pro' ? 'Pro' : mode}</option>
@@ -2111,7 +2143,7 @@ const GeneratedFrame = ({ data, id, selected }) => {
 		}
 		
 		// Fallback to aspect ratio based calculation (same as production nodes)
-		const aspectRatio = formData?.aspect_ratio || '9:16';
+		const aspectRatio = formData?.aspect_ratio || '3:4';
 		
 		// Base dimensions: 1:1 = 320x320 (same as production nodes)
 		const squareSize = 320;
@@ -3019,7 +3051,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 				if (setCanvasStatus) {
 					setCanvasStatus({
 						isAutoSaving: false,
-						lastSaved: now,
+						lastSaved: new Date(),
 						nodeCount: nodes.length,
 						edgeCount: edges.length
 					});
@@ -3188,7 +3220,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 					videoParams.negative_prompt = formData.negative_prompt;
 				}
 				if (supportedParams.includes('aspect_ratio') || modelOptions.aspect_ratio) {
-					videoParams.aspectRatio = formData.aspect_ratio || '9:16';
+					videoParams.aspectRatio = formData.aspect_ratio || '3:4';
 				}
 				if (supportedParams.includes('resolution') || modelOptions.resolution) {
 					videoParams.resolution = formData.resolution || (modelOptions.resolution?.[0] || '1080p');
@@ -3231,7 +3263,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			});
 			alert(`Generation failed: ${error.message}`);
 		}
-	}, [updateNodeData, reactFlowInstance, user]);
+	}, [updateNodeData]);
 
 	const onSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }) => {
 		setEdges(eds =>
@@ -3430,15 +3462,21 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		updateNodeData(nodeId, { formData: newFormData });
 	};
 
+	// Remove incoming edges to a specific node (for when model doesn't support images)
+	const removeIncomingEdges = useCallback((targetNodeId) => {
+		console.log('🗑️ Removing incoming edges to node:', targetNodeId);
+		setEdges((eds) => eds.filter(edge => edge.target !== targetNodeId));
+	}, []);
+
 	// Stable nodeTypes without connected images dependency
 	const nodeTypes = useMemo(() => ({
-		aiFrame: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
-		image: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
-		video: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} user={user} />,
+		aiFrame: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} onRemoveIncomingEdges={removeIncomingEdges} />,
+		image: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} onRemoveIncomingEdges={removeIncomingEdges} />,
+		video: (props) => <AIFrame {...props} onUpdateNode={updateNodeData} onAddNode={addNodeToCanvas} onGenerate={handleGenerate} onDropdownStateChange={setIsAnyDropdownOpen} onRemoveIncomingEdges={removeIncomingEdges} />,
 		imageUpload: (props) => <ImageUpload {...props} onUpdateNode={updateNodeData} />,
 		videoUpload: (props) => <VideoUpload {...props} />,
 		generatedFrame: (props) => <GeneratedFrame {...props} />,
-	}), [updateNodeData, addNodeToCanvas, handleGenerate, user]);
+	}), [updateNodeData, addNodeToCanvas, handleGenerate, removeIncomingEdges]);
 
 	// Event handlers for right-click menus
 	const onPaneClick = useCallback((event) => {

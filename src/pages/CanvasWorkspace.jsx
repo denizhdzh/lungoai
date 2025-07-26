@@ -50,6 +50,40 @@ function LoadingAnimation({ className = "", variant = "default" }) {
     </div>
   );
 }
+
+// Square Grid Loading Animation Component
+function SquareGridLoadingAnimation({ className = "" }) {
+  const gridSize = 10; // 10x10 grid for 1:1 squares
+  const totalSquares = gridSize * gridSize;
+  
+  const randomDelays = React.useMemo(() => {
+    return [...Array(totalSquares)].map(() => Math.random() * 3);
+  }, [totalSquares]);
+  
+  return (
+    <div className={`w-full h-full ${className}`} style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
+      gridTemplateRows: `repeat(${gridSize}, 1fr)`,
+      gap: '1px',
+      backgroundColor: '#262626'
+    }}>
+      {[...Array(totalSquares)].map((_, index) => (
+        <div
+          key={index}
+          className="bg-neutral-600 animate-square-fade"
+          style={{
+            aspectRatio: '1/1',
+            animationDelay: `${randomDelays[index]}s`,
+            animationDuration: '2s',
+            animationIterationCount: 'infinite',
+            animationTimingFunction: 'ease-in-out'
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 import {
 	Image, 
 	VideoCamera, 
@@ -865,7 +899,7 @@ const initialNodes = [];
 	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
 	const modelConfig = getModelById(model);
 	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? (modelConfig?.params?.duration?.default || 8) : 3));
-	const [selectedAspectRatio, setSelectedAspectRatio] = useState(formData.aspect_ratio || '3:4');
+	const [selectedAspectRatio, setSelectedAspectRatio] = useState(formData.aspect_ratio || '3:5');
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [isConnectionDragOver, setIsConnectionDragOver] = useState(false);
 	const { showHandles, handleMouseEnter, handleMouseLeave } = useHandleHover();
@@ -1037,6 +1071,66 @@ const initialNodes = [];
 		return () => clearTimeout(timeoutId);
 	}, [id, onUpdateNode, prompt, duration, model, connectedImages]);
 
+	// Helper function to build parameters dynamically from model config
+	const buildModelParameters = () => {
+		const modelConfig = getModelById(model);
+		if (!modelConfig) return {};
+
+		const parameters = {};
+
+		// Always include the basic prompt
+		parameters.prompt = prompt;
+
+		// Process each parameter from the model config
+		Object.entries(modelConfig.params).forEach(([paramName, paramConfig]) => {
+			// Skip prompt as it's already handled
+			if (paramName === 'prompt') return;
+
+			// Handle image parameters
+			if (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image' || paramName === 'input_image') {
+				// For image parameters, check connected images or uploaded image
+				if (connectedImages.length > 0) {
+					parameters[paramName] = connectedImages[0].url;
+				} else if (uploadedImage) {
+					parameters[paramName] = uploadedImage.url;
+				} else if (paramConfig.required) {
+					// If image is required but not provided, this will be caught by validation
+					parameters[paramName] = null;
+				}
+				return;
+			}
+
+			// Get value from formData or use default
+			let value = formData?.[paramName];
+			
+			// If no value in formData, use component state or model default
+			if (value === undefined) {
+				switch (paramName) {
+					case 'duration':
+						value = duration;
+						break;
+					case 'aspect_ratio':
+						value = selectedAspectRatio;
+						break;
+					default:
+						// Use model default if available
+						value = paramConfig.default;
+						break;
+				}
+			}
+
+			// Only include parameter if it has a value or is required
+			if (value !== undefined && value !== null) {
+				parameters[paramName] = value;
+			} else if (paramConfig.required) {
+				// Include required parameters even if null for validation
+				parameters[paramName] = null;
+			}
+		});
+
+		return parameters;
+	};
+
 	const handleGenerate = async () => {
 		console.log('🚀 handleGenerate called');
 		console.log('- prompt:', prompt);
@@ -1047,6 +1141,14 @@ const initialNodes = [];
 		if (!prompt.trim()) {
 			console.log('❌ No prompt provided');
 			alert('Please enter a prompt');
+			return;
+		}
+
+		// Check if model requires image input
+		const modelConfig = getModelById(model);
+		if (requiresImage(model) && connectedImages.length === 0 && !uploadedImage) {
+			console.log('❌ Model requires image input but none provided');
+			alert('This model requires an image input. Please upload an image or connect an image node.');
 			return;
 		}
 
@@ -1063,17 +1165,19 @@ const initialNodes = [];
 				});
 			}
 
+			// Build all model parameters dynamically
+			const modelParameters = buildModelParameters();
+
 			const generationData = {
 				type: data.type,
-				prompt,
-				duration: data.type === 'video' ? duration : undefined,
 				model,
 				connectedImages: allImages,
 				uploadedImage,
-				aspect_ratio: selectedAspectRatio // Use the selected aspect ratio
+				...modelParameters // Spread all model-specific parameters
 			};
 
 			console.log('📤 Sending generation data:', generationData);
+			console.log('📋 Model parameters:', modelParameters);
 
 			// Clear the prompt immediately after sending
 			setPrompt('');
@@ -1145,7 +1249,7 @@ const initialNodes = [];
 
 	// Calculate node dimensions based on aspect ratio
 	const getNodeDimensions = () => {
-		const aspectRatio = formData?.aspect_ratio || '3:4';
+		const aspectRatio = formData?.aspect_ratio || '3:5';
 		
 		// Base dimensions: 1:1 = 320x320 (square as reference)
 		const squareSize = 320;
@@ -1159,6 +1263,8 @@ const initialNodes = [];
 				return { width: squareSize * (4/3), height: squareSize }; // ~427x320
 			case '3:4':
 				return { width: squareSize, height: squareSize * (4/3) }; // 320x427
+			case '3:5':
+				return { width: squareSize, height: squareSize * (5/3) }; // 320x533
 			case '9:16':
 				return { width: squareSize, height: squareSize * (16/9) }; // 320x568
 			case '3:2':
@@ -1170,7 +1276,7 @@ const initialNodes = [];
 			case '9:21':
 				return { width: squareSize, height: squareSize * (21/9) }; // 320x747
 			default:
-				return { width: squareSize, height: squareSize * (16/9) }; // Default to 9:16
+				return { width: squareSize, height: squareSize * (5/3) }; // Default to 3:5
 		}
 	};
 	
@@ -1208,7 +1314,14 @@ const initialNodes = [];
 			</div>
 
 			{/* Inner frame */}
-			<div className="bg-neutral-900 w-full h-full" style={{ borderRadius: '30px' }}>
+			<div className="bg-neutral-900 w-full h-full relative" style={{ borderRadius: '30px' }}>
+				
+				{/* Generating Animation - Full Frame Overlay */}
+				{isGenerating && (
+					<div className="absolute inset-0 bg-neutral-900 z-50" style={{ borderRadius: '30px' }}>
+						<SquareGridLoadingAnimation />
+					</div>
+				)}
 
 			{/* Handles */}
 			{/* Target Handle */}
@@ -1393,7 +1506,23 @@ const initialNodes = [];
 										<label className="text-[10px] text-neutral-500 block px-1 mb-1">Duration</label>
 										<select
 											value={duration}
-											onChange={(e) => setDuration(parseInt(e.target.value))}
+											onChange={(e) => {
+												const newDuration = parseInt(e.target.value);
+												setDuration(newDuration);
+												
+												// Handle Hailuo model constraint: 10s only available for 768p
+												if (model === 'minimax/hailuo-02' && newDuration === 10) {
+													const currentFormData = formData || {};
+													const currentResolution = currentFormData.resolution || '768p';
+													
+													// If duration is 10s, force resolution to 768p
+													if (currentResolution === '1080p') {
+														onUpdateNode(id, { 
+															formData: { ...currentFormData, resolution: '768p', duration: newDuration }
+														});
+													}
+												}
+											}}
 											onFocus={() => onDropdownStateChange?.(true)}
 											onBlur={() => onDropdownStateChange?.(false)}
 											className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
@@ -1417,8 +1546,22 @@ const initialNodes = [];
 												value={formData?.resolution || getModelById(model).options.resolution[0]}
 												onChange={(e) => {
 													const currentFormData = formData || {};
+													const newResolution = e.target.value;
+													const updatedFormData = { ...currentFormData, resolution: newResolution };
+													
+													// Handle Hailuo model constraint: 10s only available for 768p
+													if (model === 'minimax/hailuo-02') {
+														const currentDuration = duration || currentFormData.duration || 6;
+														
+														// If switching to 1080p and duration is 10s, change to 6s
+														if (newResolution === '1080p' && currentDuration === 10) {
+															updatedFormData.duration = 6;
+															setDuration(6);
+														}
+													}
+													
 													onUpdateNode(id, { 
-														formData: { ...currentFormData, resolution: e.target.value }
+														formData: updatedFormData
 													});
 												}}
 												onFocus={() => onDropdownStateChange?.(true)}
@@ -1477,6 +1620,147 @@ const initialNodes = [];
 											</select>
 										</div>
 									)}
+
+									{/* FPS for models that support it */}
+									{getModelById(model)?.params?.fps && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">FPS</label>
+											<input
+												type="number"
+												value={formData?.fps || getModelById(model).params.fps?.default || 24}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, fps: parseInt(e.target.value) }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+												min="1"
+												max="60"
+											/>
+										</div>
+									)}
+
+									{/* Camera Fixed for models that support it */}
+									{getModelById(model)?.options?.camera_fixed && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Camera</label>
+											<select
+												value={formData?.camera_fixed !== undefined ? formData.camera_fixed : getModelById(model).params.camera_fixed?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, camera_fixed: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Moving</option>
+												<option value="true">Fixed</option>
+											</select>
+										</div>
+									)}
+								</div>
+							)}
+
+							{/* Additional Image Settings */}
+							{data.type === 'image' && (
+								<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
+									{/* Safety Filter Level for models that support it */}
+									{getModelById(model)?.options?.safety_filter_level && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Safety</label>
+											<select
+												value={formData?.safety_filter_level || getModelById(model).params.safety_filter_level?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, safety_filter_level: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.safety_filter_level.map((level) => (
+													<option key={level} value={level}>
+														{level.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+													</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Output Format for models that support it */}
+									{getModelById(model)?.options?.output_format && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Format</label>
+											<select
+												value={formData?.output_format || getModelById(model).params.output_format?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, output_format: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.output_format.map((format) => (
+													<option key={format} value={format}>{format.toUpperCase()}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Prompt Upsampling for models that support it */}
+									{getModelById(model)?.params?.prompt_upsampling && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Upsampling</label>
+											<select
+												value={formData?.prompt_upsampling !== undefined ? formData.prompt_upsampling : getModelById(model).params.prompt_upsampling?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, prompt_upsampling: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Off</option>
+												<option value="true">On</option>
+											</select>
+										</div>
+									)}
+
+									{/* Safety Tolerance for models that support it */}
+									{getModelById(model)?.params?.safety_tolerance && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Tolerance</label>
+											<input
+												type="number"
+												value={formData?.safety_tolerance || getModelById(model).params.safety_tolerance?.default || 2}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, safety_tolerance: parseInt(e.target.value) }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+												min="1"
+												max="5"
+											/>
+										</div>
+									)}
 								</div>
 							)}
 						</div>
@@ -1484,6 +1768,37 @@ const initialNodes = [];
 					</div>
 				)}
 
+
+				{/* Negative Prompt for video models that support it */}
+				{data.type === 'video' && getModelById(model)?.params?.negative_prompt && (
+					<div 
+						className="relative bg-neutral-800/30 border border-neutral-700/50 rounded-2xl flex-shrink-0"
+						style={{
+							minHeight: '50px'
+						}}
+					>
+						<textarea
+							value={formData?.negative_prompt || ''}
+							onChange={(e) => {
+								const currentFormData = formData || {};
+								onUpdateNode(id, { 
+									formData: { ...currentFormData, negative_prompt: e.target.value }
+								});
+							}}
+							onFocus={() => onDropdownStateChange?.(true)}
+							onBlur={() => onDropdownStateChange?.(false)}
+							placeholder="What to avoid in the video..."
+							rows={1}
+							className="w-full bg-transparent border-none text-neutral-500 text-xs p-2.5 focus:outline-none resize-none"
+							style={{
+								lineHeight: '1.4'
+							}}
+						/>
+						<div className="absolute top-1 right-2 text-[8px] text-neutral-600 font-medium">
+							NEGATIVE
+						</div>
+					</div>
+				)}
 
 				{/* Spacer */}
 				<div className="flex-1"></div>
@@ -1504,15 +1819,7 @@ const initialNodes = [];
 						borderRadius: '30px'
 					}}
 				>
-					{isGenerating ? (
-						<div className="p-2">
-							<div className="h-12 flex items-center justify-center bg-neutral-700/50 border border-neutral-600 rounded-lg">
-								<div className="text-neutral-400 text-[10px]">Generating...</div>
-							</div>
-						</div>
-					) : (
-						<>
-							<textarea
+					<textarea
 								value={prompt}
 								onChange={(e) => setPrompt(e.target.value)}
 								onFocus={() => {
@@ -1542,8 +1849,6 @@ const initialNodes = [];
 									<ArrowUp size={14} weight="bold" />
 								</button>
 							</div>
-						</>
-					)}
 					{/* Hidden file input */}
 					<input
 						ref={fileInputRef}
@@ -1854,17 +2159,47 @@ const ImageUpload = React.memo(({ data, selected, id, onUpdateNode }) => {
 		}
 	}, [imageUrl]);
 
-	const handleImageUpload = (file) => {
+	const handleImageUpload = async (file) => {
 		if (file && file.type.startsWith('image/')) {
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				const result = e.target.result;
-				setImageUrl(result);
+			try {
+				// First show local preview
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					setImageUrl(e.target.result);
+				};
+				reader.readAsDataURL(file);
+
+				// Upload to Firebase Storage
+				const { storage } = await import('../firebase.js');
+				const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+				const { auth } = await import('../firebase.js');
+				
+				const user = auth.currentUser;
+				if (!user) throw new Error('User not authenticated');
+
+				const fileName = `${user.uid}/${Date.now()}_${file.name}`;
+				const storageRef = ref(storage, `user-uploads/${fileName}`);
+				
+				const snapshot = await uploadBytes(storageRef, file);
+				const downloadURL = await getDownloadURL(snapshot.ref);
+				
+				// Update with Firebase Storage URL
+				setImageUrl(downloadURL);
 				if (onUpdateNode) {
-					onUpdateNode(id, { imageUrl: result, fileName: file.name });
+					onUpdateNode(id, { imageUrl: downloadURL, fileName: file.name, storageUrl: downloadURL });
 				}
-			};
-			reader.readAsDataURL(file);
+			} catch (error) {
+				console.error('Error uploading image:', error);
+				// Fallback to local preview
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					setImageUrl(e.target.result);
+					if (onUpdateNode) {
+						onUpdateNode(id, { imageUrl: e.target.result, fileName: file.name });
+					}
+				};
+				reader.readAsDataURL(file);
+			}
 		}
 	};
 
@@ -2290,8 +2625,8 @@ const GeneratedFrame = ({ data, id, selected }) => {
 				className={`relative overflow-hidden generated-image-frame transition-all duration-300 ease-in-out w-full h-full ${selected ? 'selected' : ''} ${isGenerating ? 'generating' : ''}`}
 			>
 				{isGenerating ? (
-					<div className="w-full h-full flex items-center justify-center bg-neutral-900 p-4">
-						<LoadingAnimation className="!h-full !w-full !bg-neutral-800 !border-neutral-700" />
+					<div className="w-full h-full bg-neutral-900">
+						<SquareGridLoadingAnimation />
 					</div>
 				) : error ? (
 					<div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900 text-red-400">
@@ -2713,6 +3048,9 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		setShowTutorial(true);
 	};
 
+	// Generation queue state
+	const [generationQueue, setGenerationQueue] = useState([]);
+
 			// Edit mode state
 	const [editModeNodes, setEditModeNodes] = useState(new Set());
 
@@ -2743,7 +3081,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		if (sourceHasMedia && targetAcceptsMedia) {
 			const newAsset = {
 				id: `connected-${source.id}-${Date.now()}`,
-				url: source.data.imageUrl || source.data.videoUrl,
+				url: source.data.storageUrl || source.data.imageUrl || source.data.videoUrl,
 				fileName: source.data.fileName || 'Connected Asset',
 				type: source.data.imageUrl ? 'image' : 'video',
 				sourceNodeId: source.id
@@ -3148,10 +3486,24 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		console.log('🎯 Main handleGenerate called:', { sourceNodeId, generationData });
 		
 		const timestamp = Date.now();
+		const queueId = `${sourceNodeId}-${timestamp}`;
 
-		// Mark node as generating but keep original type
+		// Add to generation queue
+		setGenerationQueue(prev => [...prev, {
+			id: queueId,
+			nodeId: sourceNodeId,
+			data: generationData,
+			status: 'generating',
+			startedAt: timestamp
+		}]);
+
+		// Immediately clear existing content and mark as generating
 		updateNodeData(sourceNodeId, { 
 			isGenerating: true,
+			imageUrl: null,
+			videoUrl: null,
+			error: null,
+			queueId: queueId,
 			generatedContent: {
 				prompt: generationData.prompt,
 				type: generationData.type,
@@ -3181,27 +3533,77 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 					connectedImagesCount: generationData.connectedImages?.length || 0
 				});
 				
-				// Handle Lungo Vibe model specially
+				// Handle Lungo Vibe model specially (use Google Imagen 4 config)
 				if (generationData.model === 'lungo-vibe') {
-					result = await generateImage({
-						originalPrompt: generationData.prompt,
-						subtype: 'ugc_character',
-						selectedFrame: generationData.selectedFrame || 'late_night_lofi',
-						model: 'google/imagen-4', // Use Imagen 4 behind the scenes
-						style: 'photorealistic',
-						quality: 'high',
-						connectedImages: generationData.connectedImages || []
-					});
-				} else {
-					result = await generateImage({
+					const imagenConfig = getModelById('google/imagen-4');
+					const imageRequestData = {
 						prompt: generationData.prompt,
-						subtype: generationData.subtype,
-						selectedFrame: generationData.selectedFrame,
-						model: generationData.model,
-						style: 'photorealistic',
-						quality: 'high',
-						connectedImages: generationData.connectedImages || []
-					});
+						model: 'google/imagen-4'
+					};
+					
+					// Add Imagen 4 parameters
+					if (imagenConfig?.params) {
+						Object.keys(imagenConfig.params).forEach(paramName => {
+							const paramConfig = imagenConfig.params[paramName];
+							if (paramName === 'prompt') return;
+							
+							if (paramName === 'aspect_ratio') {
+								imageRequestData.aspect_ratio = generationData.aspect_ratio || paramConfig.default || '1:1';
+							} else if (paramConfig.default !== undefined) {
+								imageRequestData[paramName] = paramConfig.default;
+							}
+						});
+					}
+					
+					imageRequestData.style = 'photorealistic';
+					imageRequestData.quality = 'high';
+					imageRequestData.connectedImages = generationData.connectedImages || [];
+					
+					result = await generateImage(imageRequestData);
+				} else {
+					// Get model config to build proper parameters
+					const modelConfig = getModelById(generationData.model);
+					
+					// Build base request with required fields
+					const imageRequestData = {
+						prompt: generationData.prompt,
+						model: generationData.model
+					};
+					
+					// Add all model-specific parameters
+					if (modelConfig?.params) {
+						Object.keys(modelConfig.params).forEach(paramName => {
+							const paramConfig = modelConfig.params[paramName];
+							
+							// Skip prompt as it's already added
+							if (paramName === 'prompt') return;
+							
+							// Handle different parameter types
+							if (paramName === 'aspect_ratio') {
+								imageRequestData.aspect_ratio = generationData.aspect_ratio || paramConfig.default || '1:1';
+							}
+							else if (paramName.includes('image') || paramName === 'input_image') {
+								// Handle image inputs from connected images
+								if (generationData.connectedImages?.[0]?.url) {
+									imageRequestData[paramName] = generationData.connectedImages[0].url;
+								}
+							}
+							else if (paramConfig.default !== undefined) {
+								// Add parameter with default value
+								imageRequestData[paramName] = paramConfig.default;
+							}
+						});
+					}
+					
+					// Add legacy fields for compatibility
+					imageRequestData.style = 'photorealistic';
+					imageRequestData.quality = 'high';
+					imageRequestData.connectedImages = generationData.connectedImages || [];
+					
+					console.log('🚨 DEBUG: Sending to backend:', imageRequestData);
+					console.log('🚨 DEBUG: Model config:', modelConfig);
+					
+					result = await generateImage(imageRequestData);
 				}
 				console.log('🖼️ Image generation result:', result);
 			} else if (generationData.type === 'video') {
@@ -3222,7 +3624,6 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 				// Build parameters object based on what the model supports
 				const videoParams = {
 					prompt: generationData.prompt,
-					subtype: generationData.subtype,
 					duration: generationData.duration,
 					model: generationData.model,
 					imageUrl: generationData.connectedImages?.[0]?.url || generationData.uploadedImage?.url || null,
@@ -3233,7 +3634,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 					videoParams.negative_prompt = formData.negative_prompt;
 				}
 				if (supportedParams.includes('aspect_ratio') || modelOptions.aspect_ratio) {
-					videoParams.aspectRatio = formData.aspect_ratio || '3:4';
+					videoParams.aspect_ratio = generationData.aspect_ratio || formData.aspect_ratio || '16:9';
 				}
 				if (supportedParams.includes('resolution') || modelOptions.resolution) {
 					videoParams.resolution = formData.resolution || (modelOptions.resolution?.[0] || '1080p');
@@ -3254,26 +3655,61 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			}
 
 			if (result && result.success) {
-				// Transform to generated content node and update with results
-				updateNodeData(sourceNodeId, {
-					type: 'generatedFrame',
-					imageUrl: result.imageUrl,
-					videoUrl: result.videoUrl || result.data?.videoUrl,
-					prompt: generationData.prompt,
-					isGenerating: false,
-					error: null
-				});
+				// Update queue status to completed
+				setGenerationQueue(prev => prev.map(item => 
+					item.id === queueId 
+						? { ...item, status: 'completed', completedAt: Date.now() }
+						: item
+				));
+
+				// Transform node to generated content and update with results
+				const sourceNode = reactFlowInstance.getNode(sourceNodeId);
+				if (sourceNode) {
+					// Update node type and data completely
+					updateNodeData(sourceNodeId, {
+						type: 'generatedFrame',
+						imageUrl: result.imageUrl,
+						videoUrl: result.videoUrl || result.data?.videoUrl,
+						prompt: generationData.prompt,
+						isGenerating: false,
+						error: null,
+						queueId: null,
+						formData: {
+							aspect_ratio: generationData.aspect_ratio
+						}
+					});
+				}
 
 				console.log('✅ Generation completed successfully');
+				
+				// Remove from queue after 3 seconds
+				setTimeout(() => {
+					setGenerationQueue(prev => prev.filter(item => item.id !== queueId));
+				}, 3000);
 			} else {
 				throw new Error(result?.error || 'Generation failed');
 			}
 		} catch (error) {
 			console.error('❌ Generation failed:', error);
+			
+			// Update queue status to failed
+			setGenerationQueue(prev => prev.map(item => 
+				item.id === queueId 
+					? { ...item, status: 'failed', error: error.message, failedAt: Date.now() }
+					: item
+			));
+			
 			updateNodeData(sourceNodeId, { 
 				isGenerating: false, 
-				error: error.message 
+				error: error.message,
+				queueId: null
 			});
+			
+			// Remove from queue after 5 seconds for errors
+			setTimeout(() => {
+				setGenerationQueue(prev => prev.filter(item => item.id !== queueId));
+			}, 5000);
+			
 			alert(`Generation failed: ${error.message}`);
 		}
 	}, [updateNodeData]);
@@ -3708,8 +4144,29 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 
 	return (
 		<div className="w-full h-screen relative overflow-hidden" ref={reactFlowWrapper}>
-
-
+			
+			{/* Generation Queue Indicator */}
+			{generationQueue.length > 0 && (
+				<div className="fixed top-4 left-4 z-50 bg-neutral-900/95 backdrop-blur-sm border border-neutral-700 rounded-xl shadow-xl px-4 py-3 max-w-xs">
+					<div className="flex items-center gap-3 mb-2">
+						<div className="w-2 h-2 bg-lime-400 rounded-full animate-pulse"></div>
+						<span className="text-sm font-medium text-white">
+							Generating ({generationQueue.filter(q => q.status === 'generating').length})
+						</span>
+					</div>
+					<div className="space-y-1">
+						{generationQueue.slice(-3).map(item => (
+							<div key={item.id} className="text-xs text-neutral-300 truncate">
+								<span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+									item.status === 'generating' ? 'bg-yellow-400 animate-pulse' :
+									item.status === 'completed' ? 'bg-green-400' : 'bg-red-400'
+								}`}></span>
+								{item.data.prompt.slice(0, 30)}...
+							</div>
+						))}
+					</div>
+				</div>
+			)}
 
 			<ReactFlow
 				nodes={nodes}

@@ -15,6 +15,23 @@ export const models = {
         aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
       }
     },
+    
+    "google/imagen-4-ultra": {
+      name: "Google Imagen 4 Ultra",
+      type: "image",
+      credits: 2,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        safety_filter_level: { required: false, type: "string", default: "block_only_high" },
+        output_format: { required: false, type: "string", default: "jpg" }
+      },
+      options: {
+        aspect_ratio: ["1:1", "9:16", "16:9", "3:4", "4:3"],
+        safety_filter_level: ["block_low_and_above", "block_medium_and_above", "block_only_high"],
+        output_format: ["jpg", "png"]
+      }
+    },
    "imagen/imagen-4-fast": {
   name: "Imagen 4 Fast",
   type: "image",
@@ -44,6 +61,46 @@ export const models = {
         aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
       }
     },
+    
+    "ideogram-ai/ideogram-v3-balanced": {
+      name: "Ideogram V3 Balanced",
+      type: "image",
+      credits: 2,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        resolution: { required: false, type: "string", default: "None" },
+        magic_prompt_option: { required: false, type: "string", default: "Auto" },
+        seed: { required: false, type: "integer" }
+      },
+      options: {
+        aspect_ratio: [
+          "1:3", "3:1", "1:2", "2:1", "9:16", "16:9", "10:16", "16:10", 
+          "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "1:1"
+        ],
+        magic_prompt_option: ["Auto", "On", "Off"],
+        style_type: ["None", "Auto", "General", "Realistic", "Design"]
+      }
+    },
+    
+    "minimax/image-01": {
+      name: "MiniMax Image 01",
+      type: "image",
+      credits: 0.25,
+      params: {
+        prompt: { required: true, type: "string" },
+        aspect_ratio: { required: false, type: "string", default: "1:1" },
+        number_of_images: { required: false, type: "integer", default: 1 },
+        prompt_optimizer: { required: false, type: "boolean", default: true },
+        subject_reference: { required: false, type: "string", description: "An optional character reference image (human face) to use as the subject in the generated image(s)." }
+      },
+      options: {
+        aspect_ratio: ["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"],
+        number_of_images: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        prompt_optimizer: [true, false]
+      }
+    },
+    
 "black-forest-labs/flux-kontext-max": {
   name: "Flux Kontext Max",
   type: "image",
@@ -151,9 +208,60 @@ export const models = {
         prompt_optimizer: { required: false, type: "boolean", default: true }
       },
       options: {
-        duration: [6, 10],
+        duration: [6, 10], // 10 seconds only available for 768p resolution
         resolution: ["768p", "1080p"],
         prompt_optimizer: [true, false]
+      },
+      constraints: {
+        // 10 second duration is only available for 768p resolution
+        duration_resolution: {
+          10: ["768p"], // 10 seconds only works with 768p
+          6: ["768p", "1080p"] // 6 seconds works with both resolutions
+        }
+      }
+    },
+
+    "leonardoai/motion-2.0": {
+      name: "Leonardo Motion 2.0",
+      type: "both", // Supports both text-to-video and image-to-video
+      credits: 3, // $0.30 = ~3 credits
+      params: {
+        prompt: { required: true, type: "string" },
+        image: { required: false, type: "string", description: "Image to use for the first frame of the video" },
+        aspect_ratio: { required: false, type: "string", default: "16:9" },
+        frame_interpolation: { required: false, type: "boolean", default: true },
+        prompt_enhance: { required: false, type: "boolean", default: true },
+        negative_prompt: { required: false, type: "string" },
+        vibe_style: { required: false, type: "string", default: "None" },
+        lighting_style: { required: false, type: "string", default: "None" },
+        shot_type_style: { required: false, type: "string", default: "None" },
+        color_theme_style: { required: false, type: "string", default: "None" }
+      },
+      options: {
+        aspect_ratio: ["9:16", "16:9", "2:3", "4:5"],
+        vibe_style: ["None", "clay", "color_sketch", "logo", "papercraft", "pro_photo", "sci_fi", "sketch", "stock_footage", "streetshot"],
+        lighting_style: ["None", "backlight", "candle_lit", "chiaroscuro", "film_haze", "foggy", "golden_hour", "hardlight", "lens_flare", "light_art", "low_key", "luminous", "mystical", "rainy", "soft_light", "volumetric"],
+        shot_type_style: ["None", "bokeh", "cinematic", "close_up", "overhead", "spiritual", "spooky"],
+        color_theme_style: ["None", "autumn", "complimentary", "cool", "dark", "earthy", "electric", "iridescent", "pastel", "split", "terracotta_teal", "ultraviolet", "vibrant", "warm"],
+        frame_interpolation: [true, false],
+        prompt_enhance: [true, false]
+      }
+    },
+
+    "runwayml/gen4-turbo": {
+      name: "Runway Gen4 Turbo", 
+      type: "image_to_video", // Requires image input
+      creditsPerSecond: 15, // Expensive model
+      params: {
+        prompt: { required: true, type: "string" },
+        image: { required: true, type: "string", description: "Initial image for video generation (first frame)" },
+        aspect_ratio: { required: false, type: "string", default: "16:9" },
+        duration: { required: false, type: "integer", default: 5 },
+        seed: { required: false, type: "integer" }
+      },
+      options: {
+        aspect_ratio: ["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+        duration: [5, 10]
       }
     }
   }

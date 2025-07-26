@@ -1,1120 +1,142 @@
-const functions = require('firebase-functions'); // <-- ADD THIS LINE
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onRequest } = require("firebase-functions/v2/https"); // Keep for the new task handler
-const { onSchedule } = require("firebase-functions/v2/scheduler"); // <-- Import onSchedule
-const { onObjectFinalized } = require("firebase-functions/v2/storage"); // <<< ADDED THIS LINE
+const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { logger } = require("firebase-functions");
-const { OpenAI, toFile } = require("openai");
+const { OpenAI } = require("openai");
 const Replicate = require("replicate");
-// const { GoogleGenerativeAI } = require("@google/generative-ai"); // Removed - using Vertex AI instead
-// Using direct API calls instead of VertexAI constructor
 const admin = require("firebase-admin");
 const { getStorage } = require('firebase-admin/storage');
-const { FieldValue } = require('firebase-admin/firestore');
 const axios = require('axios');
-const { CloudTasksClient } = require('@google-cloud/tasks'); // <-- ADD Cloud Tasks Client
-const fs = require('fs').promises; // For async file operations
-const path = require('path'); // For path manipulation
-const os = require('os'); // Added for tmpdir access in renderAndReplaceGenerationImage
-const ffmpeg = require('fluent-ffmpeg'); // MOVED TO GLOBAL SCOPE
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path; // MOVED TO GLOBAL SCOPE
-ffmpeg.setFfmpegPath(ffmpegPath); // MOVED TO GLOBAL SCOPE
-// const stripe = require('stripe')(process.env.STRIPE_SECRET); // <-- REMOVE Global Stripe import and initialize
 
 // Initialize Firebase Admin SDK (once)
 admin.initializeApp();
 const db = admin.firestore(); // Firestore instance
 const bucket = getStorage().bucket(); // Default Firebase Storage bucket
-const tasksClient = new CloudTasksClient(); // <-- Initialize Tasks Client
-
-// --- Models Configuration (CommonJS version matching frontend) ---
-const models = {
-  image: {
-    "google/imagen-4": {
-      name: "Google Imagen 4",
-      type: "image",
-      credits: 1,
-      params: {
-        prompt: { required: true, type: "string" },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        image: { required: false, type: "string", description: "Input image for img2img" }
-      },
-      options: {
-        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
-      }
-    },
-    "imagen/imagen-4-fast": {
-      name: "Imagen 4 Fast",
-      type: "image",
-      credits: 1,
-      params: {
-        prompt: { required: true, type: "string" },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        safety_filter_level: { required: false, type: "string", default: "block_only_high" },
-        output_format: { required: false, type: "string", default: "jpg" }
-      },
-      options: {
-        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"],
-        safety_filter_level: ["block_low_and_above", "block_medium_and_above", "block_only_high"],
-        output_format: ["jpg", "png"]
-      }
-    },
-    "black-forest-labs/flux-1.1-pro": {
-      name: "Flux 1.1 Pro",
-      type: "image", 
-      credits: 1,
-      params: {
-        prompt: { required: true, type: "string" },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        image: { required: false, type: "string", description: "Input image for img2img" }
-      },
-      options: {
-        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
-      }
-    },
-    "black-forest-labs/flux-kontext-max": {
-      name: "Flux Kontext Max",
-      type: "image",
-      credits: 2,
-      params: {
-        prompt: { required: true, type: "string" },
-        input_image: { required: false, type: "string", description: "Image to use as reference. Must be jpeg, png, gif, or webp." },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        prompt_upsampling: { required: false, type: "boolean", default: false },
-        seed: { required: false, type: "integer" },
-        output_format: { required: false, type: "string", default: "png" },
-        safety_tolerance: { required: false, type: "integer", default: 2 }
-      },
-      options: {
-        aspect_ratio: [
-          "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
-          "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2"
-        ],
-        output_format: ["jpg", "png"]
-      }
-    }
-  },
-  
-  video: {
-    "google/veo-3-fast": {
-      name: "Google Veo 3 Fast",
-      type: "text_to_video",
-      creditsPerSecond: 10,
-      params: {
-        prompt: { required: true, type: "string" },
-        negative_prompt: { required: false, type: "string" },
-        duration: { required: false, type: "number", default: 8 },
-        aspect_ratio: { required: false, type: "string", default: "9:16" },
-      },
-      options: {
-        duration: [8],
-        aspect_ratio: ["9:16", "16:9", "1:1"]
-      }
-    },
-    
-    "google/veo-3": {
-      name: "Google Veo 3",
-      type: "text_to_video",
-      creditsPerSecond: 20,
-      params: {
-        prompt: { required: true, type: "string" },
-        negative_prompt: { required: false, type: "string" },
-        duration: { required: false, type: "number", default: 8 },
-        aspect_ratio: { required: false, type: "string", default: "9:16" },
-      },
-      options: {
-        duration: [8],
-        aspect_ratio: ["9:16", "16:9", "1:1"]
-      }
-    },
-
-    "bytedance/seedance-1-pro": {
-      name: "ByteDance Seedance Pro",
-      type: "both",
-      creditsPerSecond: { "480p": 1, "1080p": 4 },
-      params: {
-        fps: { required: false, type: "number", default: 24 },
-        prompt: { required: true, type: "string" },
-        duration: { required: false, type: "number", default: 5 },
-        resolution: { required: false, type: "string", default: "480p" },
-        aspect_ratio: { required: false, type: "string", default: "16:9" },
-        camera_fixed: { required: false, type: "boolean", default: false },
-        image: { required: false, type: "string", description: "Input image for image-to-video generation" }
-      },
-      options: {
-        duration: [5,10],
-        resolution: ["480p", "1080p"],
-        aspect_ratio: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "9:21"],
-        camera_fixed: [true, false]
-      }
-    },
-
-    "kwaivgi/kling-v2.1": {
-      name: "KwaiVGI Kling v2.1",
-      type: "image_to_video",
-      creditsPerSecond: { "standard": 2, "pro": 3 },
-      params: {
-        prompt: { required: true, type: "string" },
-        negative_prompt: { required: false, type: "string" },
-        start_image: { required: true, type: "string", description: "Starting image for video generation" },
-        mode: { required: false, type: "string", default: "standard" },
-        duration: { required: false, type: "number", default: 5 }
-      },
-      options: {
-        mode: ["standard", "pro"],
-        duration: [5, 10]
-      }
-    },
-
-    "minimax/hailuo-02": {
-      name: "MiniMax Hailuo 02",
-      type: "both",
-      creditsPerSecond: { "768p": 1, "1080p": 2 },
-      params: {
-        prompt: { required: true, type: "string" },
-        first_frame_image: { required: false, type: "string", description: "First frame image for video generation" },
-        duration: { required: false, type: "number", default: 6 },
-        resolution: { required: false, type: "string", default: "768p" },
-        prompt_optimizer: { required: false, type: "boolean", default: true }
-      },
-      options: {
-        duration: [6, 10],
-        resolution: ["768p", "1080p"],
-        prompt_optimizer: [true, false]
-      }
-    }
-  }
-};
-
-// Helper functions for models
-const getModelById = (modelId) => {
-  for (const category in models) {
-    if (models[category][modelId]) {
-      return { ...models[category][modelId], id: modelId, category };
-    }
-  }
-  return null;
-};
-
-const getModelsByCategory = (category) => {
-  return models[category] || {};
-};
-
-const requiresImage = (modelId) => {
-  const model = getModelById(modelId);
-  if (!model) return false;
-  
-  for (const paramName in model.params) {
-    const param = model.params[paramName];
-    if (param.required && (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image')) {
-      return true;
-    }
-  }
-  return false;
-};
-
-const supportsImageInput = (modelId) => {
-  const model = getModelById(modelId);
-  if (!model) return false;
-  
-  for (const paramName in model.params) {
-    if (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image') {
-      return true;
-    }
-  }
-  return false;
-};
-
-const getModelType = (modelId) => {
-  const model = getModelById(modelId);
-  return model?.type || null;
-};
-// --- End Models Configuration ---
-
-// Helper function to get model version for Replicate
-async function getModelVersion(modelName) {
-    // Model versions for Replicate API
-    const modelVersions = {
-        'google/veo-3-fast': 'google/veo-3-fast:latest',
-        'google/veo-3': 'google/veo-3:latest',
-        'bytedance/seedance-1-pro': 'bytedance/seedance-1-pro:latest',
-        'kwaivgi/kling-v2.1': 'kwaivgi/kling-v2.1:latest',
-        'minimax/hailuo-02': 'minimax/hailuo-02:latest'
-    };
-    
-    return modelVersions[modelName] || `${modelName}:latest`;
-}
-
-// Helper function to poll prediction status
-async function pollPrediction(replicate, predictionId, generationRef, maxAttempts = 60) {
-    let attempts = 0;
-    
-    while (attempts < maxAttempts) {
-        try {
-            const prediction = await replicate.predictions.get(predictionId);
-            
-            logger.info(`[pollPrediction] Attempt ${attempts + 1}: Status = ${prediction.status}`);
-            
-            // Update Firestore with current status
-            await generationRef.update({
-                status: prediction.status,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-            
-            if (prediction.status === 'succeeded' || prediction.status === 'failed' || prediction.status === 'canceled') {
-                return prediction;
-            }
-            
-            // Wait 5 seconds before next poll
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            attempts++;
-            
-        } catch (error) {
-            logger.error(`[pollPrediction] Error polling prediction ${predictionId}:`, error);
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-    }
-    
-    throw new Error(`Prediction polling timed out after ${maxAttempts} attempts`);
-}
-
-// --- OpenAI and Google AI Initialization ---
-// Vertex AI API configuration
-const VERTEX_AI_PROJECT = process.env.GCLOUD_PROJECT || 'lungoai-39982';
-const VERTEX_AI_LOCATION = 'us-central1';
-const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06';
 // --- NEW: Plan Credit Allocations (Backend) ---
 const planCreditAllocations = {
-  // Starter Plan ($14)
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 200 }, // Monthly Starter
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 200 }, // Yearly Starter
-  // Creator Plan ($30)
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { general_credits: 500 }, // Monthly Creator
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { general_credits: 500 }, // Yearly Creator
-  // Pro Plan ($150)
-  "price_1RMqHgDf8kAOBAT3m6kthIND": { general_credits: 3000 }, // Monthly Pro
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { general_credits: 3000 }  // Yearly Pro
+  // Basic Plan ($9)
+  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { general_credits: 100 }, // Monthly Basic
+  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { general_credits: 100 }, // Yearly Basic
+  // Pro Plan ($29)
+  "price_1RY4EwDf8kAOBAT3qMaIMcdO": { general_credits: 600 }, // Monthly Pro
+  "price_1RY4F6Df8kAOBAT34O2CKeCM": { general_credits: 600 }, // Yearly Pro
+  // Business Plan ($49)
+  "price_1RY4JdDf8kAOBAT3AWlBbEx3": { general_credits: 1200 }, // Monthly Business
+  "price_1RY4JuDf8kAOBAT3lrADc9fO": { general_credits: 1200 }  // Yearly Business
 };
-// --- End Plan Credit Allocations ---
 
-// --- Cloud Tasks Configuration ---
-// TODO: Replace with your actual project ID, location, and queue name if different
-const tasksProjectId = process.env.GCLOUD_PROJECT || 'lungoai-39982'; // Use environment variable or verify hardcoded ID
-const tasksLocation = 'us-central1'; // Match your function region
-const runwayTasksQueueName = 'runway-polling-queue'; // The queue you created in Cloud Console for Runway polling
-const runwayTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/handleVideoPollingTask`; // URL of the Runway polling function
-const MAX_POLLING_DURATION_SECONDS = 10 * 60; // 10 minutes
-const POLLING_INTERVAL_SECONDS = 60; // 1 minute
-
-// --- NEW: Missing constants for polling ---
-const RUNWAY_POLLING_TIMEOUT_MS = MAX_POLLING_DURATION_SECONDS * 1000; // Convert to milliseconds
-const MAX_POLLING_ATTEMPTS = 5; // Max polling attempts for a task
-const MAX_POLLING_BACKOFF_SECONDS = 300; // 5 minutes max backoff
-// --- END NEW ---
-
-// --- NEW: Cloud Tasks Configuration for Image Generation ---
-const imageGenTasksQueueName = 'image-generation-queue'; // New queue for image generation tasks
-const imageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performImageGenerationTask`; // URL for the new image generation handler
-const IMAGE_GEN_TIMEOUT_SECONDS = 540; // 8 minutes for image generation, adjust as needed
-
-// --- NEW: Cloud Tasks Configuration for Video Concatenation ---
-const concatTasksQueueName = 'video-concatenation-queue'; // New queue for concatenation tasks
-const concatTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performVideoConcatenation`; // URL for the new concatenation handler
-const VIDEO_CONCAT_TIMEOUT_SECONDS = 15 * 60; // 15 minutes for concatenation, adjust as needed
-
-// --- NEW: Cloud Tasks Configuration for Video Pipeline Initiation ---
-const videoPipelineTasksQueueName = 'video-pipeline-queue'; // New queue for starting video pipeline
-const videoPipelineTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/startVideoPipeline`;
-const VIDEO_PIPELINE_TIMEOUT_SECONDS = 540; // Timeout for the pipeline initiation function
-
-// --- NEW: Cloud Tasks Configuration for Direct Image Generation ---
-const directImageGenTasksQueueName = 'direct-image-gen-queue';
-const directImageGenTaskHandlerUrl = `https://${tasksLocation}-${tasksProjectId}.cloudfunctions.net/performDirectImageGenerationTask`;
-const DIRECT_IMAGE_GEN_TIMEOUT_SECONDS = IMAGE_GEN_TIMEOUT_SECONDS; // Reuse existing timeout
-
-// --- NEW: Enhanced Prompt Generation Using Image Rules ---
-async function enhancePromptWithRules(originalPrompt, subtype, selectedFrame, openaiInstance) {
-    try {
-        logger.info(`[enhancePromptWithRules] Processing: "${originalPrompt}" for subtype=${subtype}, frame=${selectedFrame}`);
-        
-        // Get the image rules from imageRules.json
-        const imageRules = getImageSetRulesByFrameId(selectedFrame);
-        if (!imageRules) {
-            logger.warn(`[enhancePromptWithRules] No rules found for frame: ${selectedFrame}, using original prompt`);
-            return originalPrompt;
-        }
-        
-        // Apply general rules for UGC images
-        const generalRules = getGeneralRulesForUGC();
-        
-        let enhancedPrompt;
-        
-        if (subtype === 'ugc_character') {
-            // Use AI to enhance the prompt based on the selected frame rules
-            enhancedPrompt = await generateEnhancedUGCPrompt(originalPrompt, imageRules, generalRules, openaiInstance);
-        } else if (subtype === 'background') {
-            // For background images, apply background-specific rules
-            enhancedPrompt = await generateEnhancedBackgroundPrompt(originalPrompt, imageRules, openaiInstance);
-        } else {
-            // For general images, basic enhancement
-            enhancedPrompt = await generateEnhancedGeneralPrompt(originalPrompt, imageRules, openaiInstance);
-        }
-        
-        logger.info(`[enhancePromptWithRules] Enhanced prompt generated. Length: ${enhancedPrompt?.length}`);
-        return enhancedPrompt;
-        
-    } catch (error) {
-        logger.error(`[enhancePromptWithRules] Error enhancing prompt:`, error);
-        return originalPrompt; // Fallback to original prompt
-    }
-}
-
-function getImageSetRulesByFrameId(frameId) {
-    logger.info(`[getImageSetRulesByFrameId] Looking for frameId: "${frameId}", type: ${typeof frameId}`);
-    
-    // Your detailed image rules from imageRules.json
-    const frameMapping = {
-
-         'late_night_lofi': {
-             name: 'Late Night Lo-Fi Vibes',
-             rules: {
-                 must_have: [
-                     "35mm film camera with direct flash or digital compact camera aesthetic",
-                     "Nighttime or late evening setting with artificial lighting",
-                     "Lo-fi, grainy texture and slightly soft focus",
-                     "Direct flash creating harsh shadows and bright foreground",
-                     "Casual, everyday clothing: t-shirts, sweatshirts, pajamas",
-                     "Indoor settings: bedrooms, living rooms, kitchens",
-                     "Spontaneous, candid poses and expressions",
-                     "Vintage early 2000s camera quality with visible grain"
-                 ],
-                 must_not_have: [
-                     "Professional DSLR quality or modern smartphone clarity",
-                     "Bright daytime lighting or natural outdoor light",
-                     "Formal clothing or overly styled outfits",
-                     "Professional studio lighting or soft ambient lighting",
-                     "High-resolution or pristine image quality",
-                     "Posed or overly artistic compositions",
-                     "Outdoor or professional settings"
-                 ]
-             }
-         },
-         
-         'japanese_night_drive': {
-             name: 'Japanese Night Drive',
-             rules: {
-                 must_have: [
-                     "Focus on Japanese cars",
-                     "Vibrant color filters (especially yellow and blue tones)",
-                     "Nighttime setting with artificial lighting",
-                     "Urban street backdrop with neon signs and store signs in Japanese/Kanji",
-                     "Streetwear style clothing with edgy, casual vibe",
-                     "Vehicles with sporty, customized designs",
-                     "Elements that emphasize an energetic, youthful vibe"
-                 ],
-                 must_not_have: [
-                     "Non-Japanese cars",
-                     "Bright, daytime lighting",
-                     "Minimal or natural lighting without neon or artificial effects",
-                     "Relaxed or formal clothing styles",
-                     "Rural or non-urban backgrounds",
-                     "Classic or vintage cars that don't align with the sporty, customized aesthetic"
-                 ]
-             }
-         }
-    };
-    
-    const result = frameMapping[frameId] || null;
-    logger.info(`[getImageSetRulesByFrameId] Available frames: ${Object.keys(frameMapping).join(', ')}`);
-    logger.info(`[getImageSetRulesByFrameId] Result for "${frameId}": ${result ? 'FOUND' : 'NOT FOUND'}`);
-    
-    return result;
-}
-
-function getGeneralRulesForUGC() {
-    return {
-        color_palette: "Images MUST use only natural, rich, and vivid color tones. Clothing base colors MUST be beige, cream, tan, olive, muted blue, navy, charcoal, washed denim, off-white, grey, or black—these colors MUST look punchy, deep, and lively. Clothing MAY include a single, small pop of bold color (e.g. red, yellow, green) in accessories ONLY. Neon tones, overly saturated colors, flat or washed-out colors MUST NEVER appear anywhere in the image. The overall color mood MUST be crisp and balanced, NEVER faded, NEVER pale, NEVER with color shifts.",
-        
-        clothing_colors: "Wardrobe colors MUST follow the above palette STRICTLY. Main pieces (tops, bottoms, jackets) MUST use only muted or deep primary tones. Bright accents are ALLOWED only as shoes, glasses, bags, or jewelry—and MUST NOT dominate the outfit.",
-        
-        skin_tones: "Skin tones MUST ALWAYS be true-to-life, healthy, and vibrant. Skin MUST NEVER be washed out, desaturated, pastel, flat, or over-edited. Skin details MUST remain visible and realistic, regardless of lighting.",
-        
-        white_balance: "White balance MUST ALWAYS be neutral or slightly warm. There MUST NOT be any artificial coldness, blue tones, or color casts. Clothes and skin colors MUST look exactly as they would in real, neutral daylight. NO tinted or colored lighting is allowed.",
-        
-        contrast: "Contrast MUST ALWAYS be strong and clear, with crisp edges and bold separation between dark and light areas. LOW contrast, haze, faded images, or clipped blacks/highlights are NEVER allowed.",
-        
-        lighting: "Lighting MUST be bright, even, and natural. The ENTIRE photo MUST be perfectly and uniformly lit—NO part of the scene can be dark, shadowy, or unevenly exposed. Studio flashes, colored lights, artificial low-light, or visible lighting rigs are STRICTLY FORBIDDEN.",
-        
-        camera: "Photo MUST be shot with a modern digital camera or a smartphone of high caliber. The ENTIRE image—foreground AND background—MUST be 100% sharp and in focus. ANY blur, bokeh, motion blur, depth blur, soft focus, or out-of-focus area is FORBIDDEN and NOT ALLOWED under ANY condition.",
-        
-        composition: "Subject MUST be visible and clearly the focus, but must share the frame naturally with the background/environment. Cropping MUST be tight and intentional, with subject filling much of the image. Minimal negative space. Overly wide or empty compositions are NOT ALLOWED. Dynamic angles are ONLY allowed if the subject is fully visible and not distorted. No abstract, artsy, or experimental framing.",
-        
-        background: "Background MUST be a real, context-rich, urban or upscale setting: cafes, streets, stores, beaches, cars, apartments, elevators. The background MUST be 100% sharp and in perfect focus AT ALL TIMES—NO bokeh, NO blur, NO fake depth. Every background object MUST be clearly recognizable and contribute to the authentic vibe. Cluttered, dirty, or generic backgrounds are NOT allowed.",
-        
-        style_and_pose: "Poses MUST be relaxed, candid, and effortless. Acting, fake expressions, exaggerated smiles, or fashion-model postures are NOT allowed. Activities MUST look real and spontaneous—eating, walking, sitting, skateboarding, shopping, using a phone, etc. Outfits and accessories MUST be visible and the main part of the visual story.",
-        
-        clothing: "ALL clothing MUST be modern, upscale, Gen Z streetwear or relaxed chic from the following brands ONLY: Adidas, Nike, Tom Ford, Nude Project, Jacquemus, Casablanca, Balenciaga, Off-White, AMI Paris, Axel Arigato, Acne Studios, Maison Kitsuné, Palm Angels, Aimé Leon Dore, Stussy, Kenzo, Dior, Louis Vuitton, Burberry, Prada, Hermès, Fear of God, Moncler, The Kooples, Sandro, Comme des Garçons, Loewe. Outfits MUST consist of oversized fits, premium joggers, loose denim, branded sweatshirts, statement tees, knits, bombers, and sportswear. NO vintage, retro, Y2K, boho, costume, fast fashion, or formalwear is allowed.",
-        
-        post_processing: "Editing MUST be minimal and ONLY for very slight vibrancy or clarity. NO heavy filters, face retouch, smoothing, HDR, or artistic effects are EVER permitted. Skin texture MUST NEVER be airbrushed. NOTHING in the image may look studio-edited or manipulated.",
-        
-        overall_aesthetic: "Photo MUST look urban, rich, modern, and high-energy, reflecting real life and real youth. Studio/campaign/commercial, heavily staged or fake images are NEVER accepted. Vibe MUST ALWAYS be documentary, premium, and aspirational."
-    };
-}
-
-async function generateEnhancedUGCPrompt(originalPrompt, frameRules, generalRules, openaiInstance) {
-    try {
-        // Extract all rules into a comprehensive prompt
-        const rules = frameRules.rules;
-        
-        const systemPrompt = `You are an expert at creating detailed image prompts for UGC (User Generated Content) style photographs. 
-
-You will enhance the user's basic prompt with detailed visual specifications while keeping the original subject.
-
-Original prompt: "${originalPrompt}"
-
-INSTRUCTIONS:
-1. Keep the original subject/person exactly as described
-2. Add detailed visual specifications based on the style rules below
-3. Create a comprehensive, single-paragraph prompt that includes camera, lighting, pose, clothing, and setting details
-4. Make it sound natural and specific, not like a technical manual
-5. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
-
-CRITICAL STYLE RULES - THESE ARE ABSOLUTE AND NON-NEGOTIABLE:
-
-MUST HAVE (These elements are absolutely required and cannot be changed or ignored):
-${rules.must_have?.map(rule => `- ${rule}`).join('\n')}
-
-MUST NOT HAVE (These elements are absolutely forbidden and impossible to include):
-${rules.must_not_have?.map(rule => `- ${rule}`).join('\n')}
-
-IMPORTANT ENFORCEMENT RULES:
-- The MUST HAVE and MUST NOT HAVE rules are ABSOLUTE and cannot be modified, softened, or ignored
-- If the user's original prompt conflicts with these rules, prioritize the MUST HAVE/MUST NOT HAVE requirements
-- If the user asks for something that violates the MUST NOT HAVE rules, completely ignore that request
-- These rules override any conflicting instructions from the user's prompt
-
-General UGC Aesthetic Rules:
-- Color palette: ${generalRules.color_palette}
-- Skin tones: ${generalRules.skin_tones}
-- White balance: ${generalRules.white_balance}
-- Contrast: ${generalRules.contrast}
-- Lighting style: ${generalRules.lighting}
-- Camera style: ${generalRules.camera}
-- Composition: ${generalRules.composition}
-- Background: ${generalRules.background}
-- Style and pose: ${generalRules.style_and_pose}
-- Clothing: ${generalRules.clothing}
-- Post processing: ${generalRules.post_processing}
-- Overall aesthetic: ${generalRules.overall_aesthetic}
-
-Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original subject`;
-
-        const userPrompt = `Please create an enhanced, detailed prompt for "${originalPrompt}" using the ${frameRules.name} style. 
-
-Make it a natural, single paragraph that includes specific camera settings, lighting conditions, pose details, clothing, and environment while keeping the original subject exactly as described.
-
-CRITICAL: Do not include any cameras, phones, or recording equipment visible in the image.`;
-
-        const completion = await openaiInstance.chat.completions.create({
-            model: "gpt-4.1-nano-2025-04-14",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userPrompt }
-            ],
-            max_tokens: 2500,
-            temperature: 0.7
-        });
-
-        const enhancedPrompt = completion.choices[0]?.message?.content?.trim();
-        if (!enhancedPrompt) {
-            logger.error('[generateEnhancedUGCPrompt] OpenAI returned empty response');
-            return originalPrompt;
-        }
-
-        logger.info(`[generateEnhancedUGCPrompt] Enhanced prompt generated successfully`);
-        return enhancedPrompt;
-
-    } catch (error) {
-        logger.error('[generateEnhancedUGCPrompt] Error calling OpenAI:', error);
-        return originalPrompt;
-    }
-}
-
-async function generateEnhancedBackgroundPrompt(originalPrompt, frameRules, openaiInstance) {
-    try {
-        logger.info(`[generateEnhancedBackgroundPrompt] Enhancing background prompt: "${originalPrompt}"`);
-        
-        const rules = frameRules.rules;
-        
-        const systemPrompt = `You are an expert at creating detailed prompts for background/environment images.
-
-You will enhance the user's basic prompt with detailed visual specifications for creating atmospheric, cinematic backgrounds.
-
-Original prompt: "${originalPrompt}"
-Style: ${frameRules.name}
-
-INSTRUCTIONS:
-1. Keep the original scene/environment exactly as described
-2. Add detailed visual specifications based on the style rules below
-3. Create a comprehensive, single-paragraph prompt that includes camera settings, lighting, composition, and atmospheric details
-4. Make it sound natural and cinematic, not like a technical manual
-5. Focus on creating a compelling background/environment scene
-6. IMPORTANT: Never include the camera itself in the image - no visible cameras, phones, or recording equipment should appear in the scene
-
-CRITICAL STYLE RULES - THESE ARE ABSOLUTE AND NON-NEGOTIABLE:
-
-MUST HAVE (These elements are absolutely required and cannot be changed or ignored):
-${rules.must_have?.map(rule => `- ${rule}`).join('\n')}
-
-MUST NOT HAVE (These elements are absolutely forbidden and impossible to include):
-${rules.must_not_have?.map(rule => `- ${rule}`).join('\n')}
-
-IMPORTANT ENFORCEMENT RULES:
-- The MUST HAVE and MUST NOT HAVE rules are ABSOLUTE and cannot be modified, softened, or ignored
-- If the user's original prompt conflicts with these rules, prioritize the MUST HAVE/MUST NOT HAVE requirements
-- If the user asks for something that violates the MUST NOT HAVE rules, completely ignore that request
-- These rules override any conflicting instructions from the user's prompt
-
-Generate a single, detailed prompt that naturally incorporates these elements while maintaining the original scene`;
-
-        const userPrompt = `Please create an enhanced, detailed prompt for "${originalPrompt}" using the ${frameRules.name} style. 
-
-Make it a natural, single paragraph that includes specific camera settings, lighting conditions, atmospheric details, and environmental elements while keeping the original scene exactly as described.
-
-CRITICAL: Do not include any cameras, phones, or recording equipment visible in the image.`;
-
-        const completion = await openaiInstance.chat.completions.create({
-            model: "gpt-4.1-nano-2025-04-14",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userPrompt }
-            ],
-            max_tokens: 2500,
-            temperature: 0.7
-        });
-
-        const enhancedPrompt = completion.choices[0]?.message?.content?.trim();
-        if (!enhancedPrompt) {
-            logger.error('[generateEnhancedBackgroundPrompt] OpenAI returned empty response');
-            return originalPrompt;
-        }
-
-        logger.info(`[generateEnhancedBackgroundPrompt] Enhanced prompt generated successfully. Length: ${enhancedPrompt.length}`);
-        return enhancedPrompt;
-
-    } catch (error) {
-        logger.error('[generateEnhancedBackgroundPrompt] Error calling OpenAI:', error);
-        return originalPrompt;
-    }
-}
-
-async function generateEnhancedGeneralPrompt(originalPrompt, frameRules, openaiInstance) {
-    // For general images, basic enhancement
-    return originalPrompt;
-}
-
-
-// Helper function to download files from URLs
-async function downloadFile(url, destPath) {
-    const fs = require('fs'); // Make sure fs is available
-    const writer = fs.createWriteStream(destPath);
-    const response = await axios({
-        url,
-        method: 'GET',
-        responseType: 'stream',
-    });
-
-    return new Promise((resolve, reject) => {
-        response.data.pipe(writer);
-        writer.on('finish', resolve);
-        writer.on('error', (err) => {
-            writer.close(() => { // Ensure writer is closed
-                fs.unlink(destPath, (unlinkErr) => { // Attempt to delete partial file
-                    if (unlinkErr && unlinkErr.code !== 'ENOENT') { // Ignore if file already gone
-                        logger.error(`Error unlinking partial file ${destPath} after download write error:`, unlinkErr);
-                    }
-                });
-                reject(new Error(`Failed to write ${url} to ${destPath}: ${err.message}`));
-            });
-        });
-        response.data.on('error', (err) => { // Handle errors on the response stream itself
-             writer.close(() => {
-                fs.unlink(destPath, (unlinkErr) => {
-                    if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-                        logger.error(`Error unlinking partial file ${destPath} after response stream error:`, unlinkErr);
-                    }
-                });
-                reject(new Error(`Stream error during download of ${url}: ${err.message}`));
-            });
-        });
-    });
-}
 
 // --- generateImage Function (Updated for Replicate API) ---
-exports.generateImage = onCall({region: 'us-central1', timeoutSeconds: 540}, async (request) => {
-    logger.info("[generateImage ENTRY] Received request. Auth:", JSON.stringify(request.auth), "Data:", JSON.stringify(request.data));
+exports.generateImage = onCall(async (request) => {
     const userId = request.auth?.uid;
+    
     if (!userId) {
-        logger.error("[generateImage] Called without authentication.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+        throw new HttpsError('unauthenticated', 'You must be logged in to generate images.');
     }
 
-    const data = request.data;
+    const { model, ...parameters } = request.data;
     
-    // --- Dynamic Credit Check Based on Model ---
-    const userRef = db.collection('users').doc(userId);
-    const selectedModel = data.model || 'google/imagen-4';
-    let requiredCredits = getImageCredits(selectedModel);
-    
+    if (!model) {
+        throw new HttpsError('invalid-argument', 'Model is required.');
+    }
+
+    if (!parameters.prompt) {
+        throw new HttpsError('invalid-argument', 'Prompt is required.');
+    }
+
     try {
-        logger.info(`[generateImage User: ${userId}] Performing credit check for model ${selectedModel} (${requiredCredits} credits).`);
-        let userDoc = await userRef.get();
+        // Initialize Replicate
+        const replicate = new Replicate({
+            auth: process.env.REPLICATE_API_TOKEN,
+        });
+
+        logger.info(`Starting image generation for user ${userId} with model ${model}`, { parameters });
+
+        // Check user credits first
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        
         if (!userDoc.exists) {
-            logger.info(`[generateImage User: ${userId}] User profile not found, creating default profile.`);
-            // Create default user profile
-            const defaultProfile = {
-                general_credits: 50, // Give some starting credits
-                createdAt: admin.firestore.Timestamp.now(),
-                onboardingCompleted: true
-            };
-            await userRef.set(defaultProfile);
-            userDoc = await userRef.get(); // Refetch the document
+            throw new HttpsError('not-found', 'User not found.');
         }
-        const currentCredits = parseInt(userDoc.data()?.general_credits, 10) || 0;
-        if (currentCredits < requiredCredits) {
-            logger.warn(`[generateImage User: ${userId}] Insufficient general_credits (${currentCredits}) for ${selectedModel} image generation (needs ${requiredCredits}).`);
-            throw new HttpsError('resource-exhausted', `Insufficient general credits for ${selectedModel} image generation. You need at least ${requiredCredits} credits. You have ${currentCredits}.`);
-        }
-        logger.info(`[generateImage User: ${userId}] Credit check passed. Credits: ${currentCredits}, Required: ${requiredCredits}.`);
-    } catch (error) {
-        logger.error(`[generateImage User: ${userId}] Error during credit check:`, error);
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', 'Failed to perform credit check.');
-    }
-    
-    if (!data || !data.commandCode) {
-        logger.error(`[generateImage User: ${userId}] Missing commandCode in request data.`);
-        throw new HttpsError('invalid-argument', 'Missing commandCode in request.');
-    }
 
-    logger.info(`[generateImage User: ${userId}] Initialized. Command code: ${data.commandCode}.`);
-
-    // Initialize OpenAI for prompt generation (still needed for UGC prompts)
-    let openai;
-    try {
-        const apiKey = process.env.OPENAI_KEY;
-        if (!apiKey) {
-            logger.error("[generateImage] OpenAI API Key not found (OPENAI_KEY).");
-            throw new HttpsError('internal', 'OpenAI service configuration error.');
-        }
-        openai = new OpenAI({ apiKey: apiKey });
-        logger.info(`[generateImage User: ${userId}] OpenAI client initialized for prompt generation.`);
-    } catch (error) {
-        logger.error(`[generateImage User: ${userId}] Failed to initialize OpenAI service:`, error);
-        throw new HttpsError('internal', 'Failed to initialize OpenAI service.');
-    }
-
-    // Initialize Replicate
-    let replicate;
-    try {
-        const replicateToken = process.env.REPLICATE_API_TOKEN;
-        if (!replicateToken) {
-            logger.error("[generateImage] Replicate API Token not found. Set REPLICATE_API_TOKEN environment variable.");
-            throw new HttpsError('internal', 'Replicate service configuration error.');
-        }
-        replicate = new Replicate({ auth: replicateToken });
-        logger.info(`[generateImage User: ${userId}] Replicate client initialized.`);
-    } catch (error) {
-        logger.error(`[generateImage User: ${userId}] Failed to initialize Replicate service:`, error);
-        throw new HttpsError('internal', 'Failed to initialize Replicate service.');
-    }
-
-    try {
-        const commandCode = data.commandCode;
-        let finalPromptToUse;
-        let imageStyle = data.style;
-        let detectedGender = null;
-
-        logger.info(`[generateImage User: ${userId}] Processing command code: ${commandCode}, Params:`, data);
-
-        // NEW: Check for new flow with simple prompt and selectedFrame
-        if (data.originalPrompt && data.subtype && data.selectedFrame) {
-            logger.info(`[generateImage User: ${userId}] ====== NEW FLOW WITH PROMPT ENHANCEMENT ======`);
-            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Prompt: "${data.originalPrompt}"`);
-            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Subtype: ${data.subtype}`);
-            logger.info(`[generateImage User: ${userId}] ORIGINAL INPUT - Selected Frame: ${data.selectedFrame}`);
-            
-            finalPromptToUse = await enhancePromptWithRules(data.originalPrompt, data.subtype, data.selectedFrame, openai);
-            imageStyle = imageStyle || 'photorealistic';
-            
-            logger.info(`[generateImage User: ${userId}] ====== PROMPT ENHANCEMENT COMPLETED ======`);
-            logger.info(`[generateImage User: ${userId}] ENHANCED PROMPT (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
-            logger.info(`[generateImage User: ${userId}] ====== END PROMPT ENHANCEMENT ======`);
-        }
-        // Check if enhanced prompt is provided from frontend (using image rules)
-        else if (data.enhancedPrompt) {
-            logger.info(`[generateImage User: ${userId}] Using enhanced prompt from frontend with image rules. Length: ${data.enhancedPrompt.length}`);
-            finalPromptToUse = data.enhancedPrompt;
-            imageStyle = imageStyle || 'photorealistic';
-        } else {
-            // Fallback to original prompt generation logic
-            if (commandCode === 202) {
-                logger.info(`[generateImage User: ${userId}] Command 202 (UGC Image). Using enhancePromptWithRules...`);
-                logger.info(`[generateImage User: ${userId}] Data received:`, {
-                    originalPrompt: data.originalPrompt,
-                    prompt: data.prompt,
-                    subtype: data.subtype,
-                    selectedFrame: data.selectedFrame
-                });
-                
-                if (!data.originalPrompt && !data.prompt && !data.subject_description) {
-                    logger.error(`[generateImage User: ${userId}] Missing originalPrompt/prompt or subject_description for command 202.`);
-                    throw new HttpsError('invalid-argument', "Please provide a prompt or description for the UGC image.");
-                }
-                
-                // Use the new enhancement flow if we have the required data
-                const promptToEnhance = data.originalPrompt || data.prompt;
-                if (promptToEnhance && data.subtype && data.selectedFrame) {
-                    logger.info(`[generateImage User: ${userId}] Enhancing prompt: "${promptToEnhance}" with subtype: ${data.subtype}, frame: ${data.selectedFrame}`);
-                    finalPromptToUse = await enhancePromptWithRules(promptToEnhance, data.subtype, data.selectedFrame, openai);
-                } else {
-                    // Fallback to basic prompt if enhancement data is missing
-                    logger.info(`[generateImage User: ${userId}] Missing enhancement data, using basic prompt. originalPrompt: ${!!data.originalPrompt}, prompt: ${!!data.prompt}, subtype: ${data.subtype}, selectedFrame: ${data.selectedFrame}`);
-                    finalPromptToUse = promptToEnhance || data.subject_description;
-                }
-                
-                logger.info(`[generateImage User: ${userId}] Enhanced prompt generated. Length: ${finalPromptToUse?.length}`);
-                imageStyle = imageStyle || 'ultra-realistic photograph, UGC style';
-                logger.info(`[generateImage User: ${userId}] Detailed prompt generated for command 202. Length: ${finalPromptToUse?.length}`);
-            } else if (commandCode === 201) {
-                if (!data.scene_description) {
-                    throw new HttpsError('invalid-argument', "Please describe the scene for the background image.");
-                }
-                finalPromptToUse = data.scene_description;
-                imageStyle = imageStyle || 'photorealistic'; 
-                logger.info(`[generateImage User: ${userId}] Using direct prompt for command 201: "${finalPromptToUse}"`);
-            } else if (commandCode === 203) {
-                if (!data.image_subject) {
-                    throw new HttpsError('invalid-argument', "Please provide a subject for the image.");
-                }
-                finalPromptToUse = data.image_subject;
-                imageStyle = imageStyle || 'photorealistic';
-                logger.info(`[generateImage User: ${userId}] Using direct prompt for command 203: "${finalPromptToUse}"`);
-            } else {
-                logger.error(`[generateImage User: ${userId}] Unsupported command code: ${commandCode}`);
-                throw new HttpsError('invalid-argument', `Unsupported command code (${commandCode}) for direct image generation.`);
-            }
-        }
+        const userData = userDoc.data();
+        const currentCredits = userData.general_credits || 0;
         
-        logger.info(`[generateImage User: ${userId}] Preparing to call Replicate API. Prompt length: ${finalPromptToUse?.length}, Style: ${imageStyle}`);
-
-        // Determine model and prepare input
-        let selectedModel = data.model || 'google/imagen-4'; // Default to Imagen 4
+        // Calculate credits needed based on model
+        const creditsNeeded = getImageModelCredits(model);
         
-        let modelInput;
-        let modelName = selectedModel;
-
-        // Get model configuration
-        const modelConfig = getModelById(selectedModel);
-        
-        if (modelConfig && modelConfig.category === 'image') {
-            // Build model input based on model configuration
-            modelInput = {
-                prompt: finalPromptToUse
-            };
-            
-            // Add parameters based on model config with defaults
-            const params = modelConfig.params;
-            
-            // Handle aspect_ratio parameter
-            if (params.aspect_ratio) {
-                modelInput.aspect_ratio = data.aspectRatio || params.aspect_ratio.default || "9:16";
-            }
-            
-            // Handle image input parameters (different names for different models)
-            if (data.imageUrl) {
-                if (params.image) {
-                    modelInput.image = data.imageUrl;
-                } else if (params.input_image) {
-                    modelInput.input_image = data.imageUrl;
-                } else if (params.image_url) {
-                    modelInput.image_url = data.imageUrl;
-                }
-            }
-            
-            // Add model-specific parameters
-            if (selectedModel === 'google/imagen-4' || selectedModel === 'google/imagen-4-ultra') {
-                modelInput.output_format = "png";
-                modelInput.safety_tolerance = 2;
-            } else if (selectedModel === 'ideogram-ai/ideogram-v3-quality') {
-                modelInput.model = "V_3_QUALITY";
-                modelInput.magic_prompt_option = "AUTO";
-            } else if (selectedModel === 'black-forest-labs/flux-kontext-max') {
-                // Add any flux-specific parameters if needed
-                if (params.safety_tolerance) {
-                    modelInput.safety_tolerance = params.safety_tolerance.default || 2;
-                }
-                if (params.output_format) {
-                    modelInput.output_format = params.output_format.default || "png";
-                }
-            } else if (selectedModel === 'imagen/imagen-4-fast') {
-                modelInput.safety_filter_level = params.safety_filter_level?.default || "block_only_high";
-                modelInput.output_format = params.output_format?.default || "jpg";
-            }
-            
-        } else {
-            // Fallback for unknown models - default to Imagen 4 format
-            logger.warn(`[generateImage User: ${userId}] Unknown model ${selectedModel}, using default format`);
-            modelName = 'google/imagen-4';
-            modelInput = {
-                prompt: finalPromptToUse,
-                aspect_ratio: data.aspectRatio || "9:16",
-                output_format: "png",
-                safety_tolerance: 2
-            };
+        if (currentCredits < creditsNeeded) {
+            throw new HttpsError('resource-exhausted', 'Insufficient credits for image generation.');
         }
 
-        logger.info(`[generateImage User: ${userId}] ====== SENDING TO REPLICATE ${modelName.toUpperCase()} ======`);
-        logger.info(`[generateImage User: ${userId}] Model: ${modelName}`);
-        logger.info(`[generateImage User: ${userId}] Aspect Ratio: ${modelInput.aspect_ratio}`);
-        logger.info(`[generateImage User: ${userId}] FINAL PROMPT TO REPLICATE (Length: ${finalPromptToUse?.length}): "${finalPromptToUse}"`);
-        logger.info(`[generateImage User: ${userId}] Input:`, JSON.stringify(modelInput, null, 2));
+        // Prepare input for Replicate
+        const input = {
+            prompt: parameters.prompt
+        };
 
-        // Run Replicate prediction
-        const output = await replicate.run(modelName, { input: modelInput });
+        // Add all other parameters dynamically
+        Object.keys(parameters).forEach(key => {
+            if (key !== 'prompt' && parameters[key] !== undefined && parameters[key] !== null) {
+                input[key] = parameters[key];
+            }
+        });
 
-        logger.info(`[generateImage User: ${userId}] ====== REPLICATE RESPONSE RECEIVED ======`);
-        logger.info(`[generateImage User: ${userId}] Output:`, JSON.stringify(output, null, 2));
+        logger.info(`Replicate input for model ${model}:`, input);
 
-        let imageUrl;
-        
-        // Handle different response formats from different models
-        if (Array.isArray(output) && output.length > 0) {
-            // SDXL format: ["url"]
-            imageUrl = output[0];
-        } else if (typeof output === 'string' && output.startsWith('http')) {
-            // Imagen 4 / Ideogram v3 format: "url"
-            imageUrl = output;
-        } else {
-            logger.error(`[generateImage User: ${userId}] No valid output from Replicate. Output:`, output);
-            throw new HttpsError('internal', "Replicate did not return any images.");
-        }
-        logger.info(`[generateImage User: ${userId}] Image URL from Replicate: ${imageUrl}`);
+        // Create prediction instead of running synchronously
+        const prediction = await replicate.predictions.create({
+            version: await getModelVersion(model),
+            input: input
+        });
 
-        // Download image and upload to Firebase Storage
-        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-        const imageBuffer = Buffer.from(imageResponse.data);
-        logger.info(`[generateImage User: ${userId}] Image downloaded. Buffer length: ${imageBuffer.length}`);
+        logger.info(`Image prediction created for user ${userId}`, { 
+            predictionId: prediction.id, 
+            model, 
+            status: prediction.status 
+        });
 
-        const fileName = `replicate_generations/${userId}/${Date.now()}_${commandCode}.png`; 
-        const file = bucket.file(fileName);
-        logger.info(`[generateImage User: ${userId}] Firebase Storage file object created for: ${fileName}`);
+        // Deduct credits immediately upon prediction creation
+        await userRef.update({
+            general_credits: currentCredits - creditsNeeded
+        });
 
-        logger.info(`[generateImage User: ${userId}] Uploading image to Storage: ${fileName}`);
-        await file.save(imageBuffer, { metadata: { contentType: 'image/png' }, public: true });
-        logger.info(`[generateImage User: ${userId}] file.save call completed for ${fileName}.`);
+        // Store prediction info in Firestore
+        await db.collection('predictions').doc(prediction.id).set({
+            userId: userId,
+            type: 'image',
+            model: model,
+            status: prediction.status,
+            input: input,
+            creditsUsed: creditsNeeded,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
 
-        const publicUrl = file.publicUrl();
-        logger.info(`[generateImage User: ${userId}] Image uploaded successfully. Public URL: ${publicUrl}`);
+        logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
 
-        // Save generation metadata to Firestore
-        try {
-            logger.info(`[generateImage User: ${userId}] Attempting to save generation metadata to Firestore.`);
-            const generationDocRef = db.collection('users').doc(userId).collection('generations').doc();
-            let typeString = 'image';
-
-            const generationData = {
-                userId: userId,
-                type: typeString,
-                prompt: finalPromptToUse,
-                originalPrompt: data.originalPrompt || null, // Store original prompt if available
-                enhancedPrompt: finalPromptToUse, // Store enhanced prompt
-                selectedFrame: data.selectedFrame || null, // Store selected frame
-                subtype: data.subtype || null, // Store subtype
-                imageStyle: imageStyle,
-                imageUrl: publicUrl,
-                originalParameters: data,
-                commandCode: commandCode,
-                quality: data.quality || "high",
-                source: `direct_generateImage_call_replicate_${selectedModel.replace('/', '_').replace('-', '_')}`,
-                model: modelName,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                gender: commandCode === 202 ? detectedGender : null
-            };
-            
-            await db.runTransaction(async (transaction) => {
-                logger.info(`[generateImage User: ${userId}] Starting Firestore transaction for doc ${generationDocRef.id}.`);
-                const userSnapshot = await transaction.get(userRef);
-                const creditsInTransaction = parseInt(userSnapshot.data()?.general_credits, 10) || 0;
-                if (creditsInTransaction < requiredCredits) {
-                    logger.warn(`[generateImage User: ${userId}] Insufficient credits in transaction (${creditsInTransaction}). Needed ${requiredCredits}.`);
-                    throw new HttpsError('resource-exhausted', `Insufficient general credits at time of transaction (needs ${requiredCredits}). You have ${creditsInTransaction}.`);
-                }
-                transaction.update(userRef, { general_credits: admin.firestore.FieldValue.increment(-requiredCredits) });
-                transaction.set(generationDocRef, generationData);
-                logger.info(`[generateImage User: ${userId}] Firestore transaction committed for doc ${generationDocRef.id}.`);
-            });
-
-            logger.info(`[generateImage User: ${userId}] Successfully wrote to generations collection (ID: ${generationDocRef.id}) and decremented general_credits by ${requiredCredits}.`);
-            
-            return {
-                success: true,
-                message: `Image generated and uploaded successfully using ${modelName}.`,
-                imageUrl: publicUrl,
-                firestoreDocId: generationDocRef.id,
-                finalPrompt: finalPromptToUse,
-                originalParameters: data,
-                model: modelName
-            };
-
-        } catch (firestoreError) {
-            logger.error(`[generateImage User: ${userId}] Failed to write to generations collection or run transaction:`, firestoreError);
-            return { 
-                success: true, 
-                message: `Image generated using ${modelName}, but failed to save metadata to Firestore.`,
-                imageUrl: publicUrl,
-                firestoreDocId: null,
-                finalPrompt: finalPromptToUse,
-                originalParameters: data,
-                model: modelName,
-                errorSavingMetadata: true
-            };
-        }
+        // Return prediction info immediately
+        return {
+            success: true,
+            predictionId: prediction.id,
+            status: prediction.status,
+            creditsUsed: creditsNeeded,
+            remainingCredits: currentCredits - creditsNeeded
+        };
 
     } catch (error) {
-        logger.error(`[generateImage User: ${userId}] Error in main try block of generateImage:`, error);
-        if (error.message && error.message.includes('Replicate')) {
-            logger.error(`[generateImage User: ${userId}] Replicate Error:`, error);
-            throw new HttpsError('internal', `Replicate Error: ${error.message}`);
+        logger.error(`Image generation failed for user ${userId}:`, error);
+        
+        if (error instanceof HttpsError) {
+            throw error;
         }
-        throw new HttpsError('internal', `Failed to generate image with ${selectedModel || 'Replicate'}: ${error.message}`);
+        
+        throw new HttpsError('internal', `Image generation failed: ${error.message}`);
     }
 });
 
 
 // --- NEW: generateImageForVideo Function --- // RENAMED TO requestImageGeneration
-exports.requestImageGeneration = onCall({ region: 'us-central1', timeoutSeconds: 60 }, async (request) => { // Shorter timeout
-    // Get user ID via context for callables
-    const userId = request.auth?.uid;
-    if (!userId) {
-        logger.error("requestImageGeneration: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-
-    let generationParams = { ...request.data }; // Make a mutable copy
-    let baseImageUrlFromCreator = null;
-
-    // --- NEW: Fetch creator image URL if mentionedCreatorId is present ---
-    if (generationParams.mentionedCreatorId) {
-        try {
-            const creatorRef = db.collection('users').doc(userId).collection('creators').doc(generationParams.mentionedCreatorId);
-            const creatorDoc = await creatorRef.get();
-            if (creatorDoc.exists && creatorDoc.data().imageUrl) {
-                baseImageUrlFromCreator = creatorDoc.data().imageUrl;
-                logger.info(`requestImageGeneration: Found creator ${generationParams.mentionedCreatorId} with imageUrl: ${baseImageUrlFromCreator}`);
-                // Add this to generationParams so it's passed to the task payload
-                generationParams.baseImageUrl = baseImageUrlFromCreator;
-            } else {
-                logger.warn(`requestImageGeneration: Creator ${generationParams.mentionedCreatorId} not found or has no imageUrl. Proceeding without base image.`);
-            }
-        } catch (error) {
-            logger.error(`requestImageGeneration: Error fetching creator ${generationParams.mentionedCreatorId}:`, error);
-            // Proceed without base image if fetch fails
-        }
-    }
-    // --- END NEW ---
-
-    // --- Handle missing subject_description with a random default if NO creator was specified/found ---
-    // If a creator was specified (and baseImageUrlFromCreator is set), subject_description might be less critical or constructed differently later.
-    if (!baseImageUrlFromCreator && !generationParams.subject_description) {
-        const randomSubjectDescriptions = [
-             "a redheadwoman 22 y.o, in university, wearing a t-shirt and jeans",
-             "a brunette man, muscular, in a car",
-             "a young brunette woman, 20s, in a park",
-             "a man, 30s, in a home office",
-             "a woman blonde, late 20s, in a kitchen, preparing food",
-             "a man, around 25, walking on a city street, listening to music",
-             "a young woman, 18 y.o, at a beach, smiling at the camera"
-        ];
-        const randomIndex = Math.floor(Math.random() * randomSubjectDescriptions.length);
-        generationParams.subject_description = randomSubjectDescriptions[randomIndex];
-        logger.info(`requestImageGeneration: subject_description was missing (and no creator image). Using random default: "${generationParams.subject_description}"`);
-    } else if (baseImageUrlFromCreator && !generationParams.subject_description) {
-        // If we have a creator image, but no explicit subject_description (e.g. user just said "@creator make video with blue shirt"),
-        // we can set a generic one, or rely on the edit prompt to be sufficient.
-        // For now, let's ensure it exists for consistency in performImageGenerationTask, even if less used.
-        generationParams.subject_description = "person from base image"; 
-        logger.info(`requestImageGeneration: Using creator image. Set placeholder subject_description: "${generationParams.subject_description}"`);
-    }
-  // --- END NEW ---
-
-    // Original check is now implicitly handled by the default assignment above,
-    // but we can keep it for explicitness if needed, or remove it.
-    // For now, the logic above ensures subject_description will always exist.
-    // if (!generationParams || !generationParams.subject_description) {
-    //     logger.error("requestImageGeneration: Missing required generation parameters."); // This should not be hit now
-    //     throw new HttpsError('invalid-argument', 'Missing required generation parameters.');
-    // }
-
-    logger.info(`requestImageGeneration called by user: ${userId} with params:`, generationParams);
-
-    try {
-        // --- 1. Create Initial Firestore Record ---
-        const postData = {
-            userId: userId,
-            status: 'image_generation_pending', // Initial status
-            initialImageUrl: null, // URL will be added by the task
-            generatedImagePrompt: null,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            originalParameters: generationParams // Save original params for the task
-        };
-        const docRef = await db.collection('users').doc(userId).collection('tiktok-posts').add(postData);
-        const firestoreDocId = docRef.id;
-        logger.info(`Initial tiktok-post record created with ID: ${firestoreDocId}. Status: image_generation_pending`);
-
-        // --- 2. Enqueue the Image Generation Task ---
-        const taskPayload = {
-            userId: userId,
-            firestoreDocId: firestoreDocId,
-            generationParams: generationParams // Pass all received parameters
-        };
-
-        const task = {
-            httpRequest: {
-                httpMethod: 'POST',
-                url: imageGenTaskHandlerUrl, // Use the new handler URL
-                headers: { 'Content-Type': 'application/json' },
-                body: Buffer.from(JSON.stringify(taskPayload)).toString('base64'),
-            },
-            // Schedule immediately (or with a small delay)
-            scheduleTime: {
-                seconds: Math.floor(Date.now() / 1000) + 2 // Schedule a few seconds out
-            },
-        };
-
-        const parent = tasksClient.queuePath(tasksProjectId, tasksLocation, imageGenTasksQueueName); // Use the new queue name
-        await tasksClient.createTask({ parent: parent, task: task });
-        logger.info(`Image generation task enqueued for doc ${firestoreDocId} to queue ${imageGenTasksQueueName}.`);
-
-        // --- 3. Return Firestore Doc ID Immediately ---
-        return {
-            success: true,
-            message: "Image generation request received.",
-            data: {
-                firestoreDocId: firestoreDocId
-                // DO NOT return imageUrl here, it's not ready yet
-            }
-        };
-
-    } catch (error) {
-        logger.error(`Error in requestImageGeneration for user ${userId}:`, error);
-        // Attempt to update Firestore doc if created?
-        // For simplicity, just log and throw.
-        if (error instanceof HttpsError) throw error;
-        throw new HttpsError('internal', `We couldn\'t request the image generation due to an internal error: ${error.message}. Please try again. If the issue persists, our team is working on it.`);
-    }
-});
 
 
 // --- NEW: Function to Create Stripe Checkout Session ---
@@ -1203,71 +225,6 @@ exports.createStripePortalSession = onCall(async (request) => { // Removed secre
   }
 });
 
-exports.generateImageDescription = onCall({ region: 'us-central1', timeoutSeconds: 120 }, async (request) => {
-  const userId = request.auth?.uid;
-  if (!userId) {
-    throw new HttpsError('unauthenticated', 'Authentication required to generate image description.');
-  }
-
-  const imageUrl = request.data.imageUrl;
-  if (!imageUrl || typeof imageUrl !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing or invalid imageUrl parameter.');
-  }
-
-  let openai;
-  try {
-    const apiKey = process.env.OPENAI_KEY;
-    if (!apiKey) {
-      logger.error("generateImageDescription: OpenAI API Key not found.");
-      throw new HttpsError('internal', 'OpenAI service configuration error for description generation.');
-    }
-    openai = new OpenAI({ apiKey: apiKey });
-  } catch (error) {
-    logger.error("generateImageDescription: Error initializing OpenAI:", error);
-    throw new HttpsError('internal', 'Failed to initialize OpenAI service for description generation.');
-  }
-
-  const prompt = `Provide a concise, factual description of this image in 5-10 words (e.g., 'serene beach at sunset with palm trees', 'modern office desk with laptop and plant'). Focus on key objects and the overall scene. Image URL: ${imageUrl} Description:`;
-  
-  logger.info(`Generating description for image URL: ${imageUrl} by user ${userId}`);
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // or "gpt-4-turbo" if vision capabilities via URL are confirmed for your setup
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Provide a concise, factual description of this image in 5-10 words (e.g., 'serene beach at sunset with palm trees', 'modern office desk with laptop and plant'). Focus on key objects and the overall scene. Description:" },
-            { type: "image_url", image_url: { "url": imageUrl, "detail": "low" } }
-          ]
-        }
-      ],
-      temperature: 0.2,
-      max_tokens: 60
-    });
-
-    const description = completion.choices[0]?.message?.content?.trim();
-
-    if (!description) {
-      logger.error("AI failed to generate a description for the image.", { imageUrl });
-      throw new HttpsError('internal', 'AI could not generate a description for the image.');
-    }
-
-    logger.info(`Generated description: "${description}" for image: ${imageUrl}`);
-    return { success: true, description: description };
-
-  } catch (error) {
-    logger.error(`Error calling OpenAI for image description for ${imageUrl}:`, error);
-    if (error instanceof OpenAI.APIError) {
-      logger.error('OpenAI API Error for description:', error.status, error.name, error.message);
-      throw new HttpsError('internal', `OpenAI API Error generating description: ${error.name}`);
-    }
-        if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', `Failed to generate image description: ${error.message}`);
-  }
-});
-// --- End generateImageDescription Function ---
 
 // --- RE-ADD Stripe Webhook Handler ---
 exports.stripeWebhookHandler = onRequest(
@@ -1622,384 +579,385 @@ exports.refreshMonthlyCredits = onSchedule(
 );
 // --- END Scheduled Function ---
 
-exports.performImageGenerationTask = onRequest(
-    { region: 'us-central1', timeoutSeconds: IMAGE_GEN_TIMEOUT_SECONDS, memory: '2GiB' },
-    async (request, response) => {
-        logger.info("performImageGenerationTask request received:", request.body);
-
-        const { userId, firestoreDocId, generationParams } = request.body;
-        const { originalPrompt, subtype, selectedFrame, ...legacyParams } = generationParams || {};
-
-        const docRef = db.collection('generations').doc(firestoreDocId);
-
-        if (!userId || !firestoreDocId || !generationParams) {
-            logger.error("performImageGenerationTask: Missing required parameters.", request.body);
-            await docRef.set({ status: 'failed', error: 'Internal error: Missing crucial task parameters.' }, { merge: true });
-            response.status(400).send("Missing required parameters.");
-            return;
-        }
-
-        let openai;
-        try {
-            const openAIKey = await getOpenAIKeyForUser(userId);
-            openai = new OpenAI({ apiKey: openAIKey });
-        } catch (error) {
-            logger.error("performImageGenerationTask: Failed to initialize OpenAI service:", error);
-            await docRef.set({ status: 'failed', error: `Failed to initialize AI service: ${error.message}` }, { merge: true });
-            response.status(500).send("Failed to initialize OpenAI service.");
-            return;
-        }
-
-        try {
-            await docRef.set({ status: 'image_generation_in_progress' }, { merge: true });
-            
-            let finalPromptToUse = '';
-
-            // --- New Prompt Enhancement Flow ---
-            if (originalPrompt && subtype && selectedFrame) {
-                logger.info(`[Task ${firestoreDocId}] Using new enhancement flow with frame: ${selectedFrame}`);
-                finalPromptToUse = await enhancePromptWithRules(originalPrompt, subtype, selectedFrame, openai);
-            } 
-            // --- Legacy Flow (Fallback) ---
-            else if (legacyParams.subject_description) {
-                logger.info(`[Task ${firestoreDocId}] Using legacy flow with subject_description.`);
-                const { detailedPrompt } = await generateDetailedUgcPrompt(legacyParams, openai);
-                finalPromptToUse = detailedPrompt;
-            } 
-            // --- Error Case ---
-            else {
-                throw new Error("Not enough parameters for any generation flow.");
-            }
-            
-            logger.info(`[Task ${firestoreDocId}] Final prompt for generation (length: ${finalPromptToUse.length}): "${finalPromptToUse}"`);
-            await docRef.set({ status: 'generating_image', finalPrompt: finalPromptToUse }, { merge: true });
-            
-            // ... (rest of the image generation logic using finalPromptToUse)
-            // Example call to the image generation model:
-            const imageResponse = await openai.images.generate({
-                model: "dall-e-3", // or your preferred model
-                prompt: finalPromptToUse,
-                n: 1,
-                size: "1024x1024",
-                quality: legacyParams.quality || 'standard',
-                style: legacyParams.style || 'vivid'
-            });
-
-            const imageUrl = imageResponse.data[0].url;
-
-            if (!imageUrl) {
-                throw new Error("Image generation API did not return a URL.");
-            }
-
-            // ... (logic to save image to bucket if needed) ...
-
-            await docRef.set({
-                status: 'completed',
-                imageUrl: imageUrl,
-                completedAt: FieldValue.serverTimestamp()
-            }, { merge: true });
-
-            logger.info(`[Task ${firestoreDocId}] Task completed successfully. Image URL: ${imageUrl}`);
-            response.status(200).send("Image generation completed successfully.");
-
-        } catch (error) {
-            const errorMessage = error.message || "An unknown error occurred.";
-            logger.error(`[Task ${firestoreDocId}] Overall error in performImageGenerationTask: ${errorMessage}`, error);
-            await docRef.set({ status: 'failed', error: errorMessage }, { merge: true });
-            response.status(500).send(`Task failed: ${errorMessage}`);
-        }
-    }
-);
 
 // --- NEW: Video Generation Function ---
-exports.generateVideo = onCall({ region: 'us-central1', timeoutSeconds: 540, memory: '2GB' }, async (request) => {
+exports.generateVideo = onCall(async (request) => {
     const userId = request.auth?.uid;
-    let generationRef; // Declare here to be accessible in catch block
-
+    
     if (!userId) {
-        logger.error("generateVideo: Authentication Error.");
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+        throw new HttpsError('unauthenticated', 'You must be logged in to generate videos.');
     }
 
-    const {
-        prompt,
-        duration = 5,
-        model = 'google/veo-3-fast',
-        type = 'video',
-        // All model-specific parameters from frontend
-        negative_prompt,
-        seed,
-        resolution,
-        aspect_ratio = '9:16',
-        fps,
-        camera_fixed,
-        mode,
-        prompt_optimizer,
-        // Image parameters with different names per model
-        image,           // ByteDance uses 'image'
-        start_image,     // Kling uses 'start_image'  
-        first_frame_image, // Hailuo uses 'first_frame_image'
-        // Legacy support
-        imageUrl = null,
-        aspectRatio = '9:16',
-        subtype = 'text_to_video'
-    } = request.data;
-
-    if (!prompt && !image && !start_image && !first_frame_image && !imageUrl) {
-        throw new HttpsError('invalid-argument', 'Either prompt or an image must be provided.');
+    const { model, duration = 5, ...parameters } = request.data;
+    
+    if (!model) {
+        throw new HttpsError('invalid-argument', 'Model is required.');
     }
 
-    logger.info(`generateVideo called by user: ${userId}`, {
-        prompt: prompt?.substring(0, 100) + '...',
-        hasAnyImage: !!(image || start_image || first_frame_image || imageUrl),
-        imageTypes: {
-            image: !!image,
-            start_image: !!start_image, 
-            first_frame_image: !!first_frame_image,
-            imageUrl: !!imageUrl
-        },
-        aspect_ratio,
-        duration,
-        model,
-        subtype,
-        negative_prompt: negative_prompt?.substring(0, 50) + '...',
-        resolution,
-        mode,
-        camera_fixed,
-        prompt_optimizer,
-        fps,
-        seed
-    });
+    if (!parameters.prompt) {
+        throw new HttpsError('invalid-argument', 'Prompt is required.');
+    }
 
     try {
         // Initialize Replicate
-        const replicateToken = process.env.REPLICATE_API_TOKEN;
-        if (!replicateToken) {
-            throw new Error('Replicate API token not found');
-        }
-        
-        const Replicate = require('replicate');
-        const replicate = new Replicate({ auth: replicateToken });
-
-        // Build model input based on model configuration
-        const data = request.data; // Get all data from frontend
-        const modelConfig = getModelById(model);
-        
-        if (!modelConfig || modelConfig.category !== 'video') {
-            throw new HttpsError('invalid-argument', `Unsupported or invalid video model: ${model}`);
-        }
-        
-        // Build model input based on model configuration
-        let modelInput = {
-            prompt: prompt
-        };
-        
-        const params = modelConfig.params;
-        
-        // Add parameters based on model config
-        for (const paramName in params) {
-            const param = params[paramName];
-            let value = data[paramName];
-            
-            // Handle parameter defaults and data conversion
-            if (value !== undefined) {
-                // Convert data types as needed
-                if (param.type === 'number' || param.type === 'integer') {
-                    value = param.type === 'integer' ? parseInt(value) : parseFloat(value);
-                } else if (param.type === 'boolean') {
-                    value = Boolean(value);
-                }
-                modelInput[paramName] = value;
-            } else if (param.default !== undefined) {
-                modelInput[paramName] = param.default;
-            }
-        }
-        
-        // Model-specific validations and requirements
-        if (model === 'kwaivgi/kling-v2.1') {
-            // Kling v2.1 requires start_image
-            if (!data.start_image) {
-                throw new HttpsError('invalid-argument', 'Kling v2.1 requires an input image (start_image)');
-            }
-            // Kling v2.1 only supports duration of 5 or 10
-            if (duration !== 5 && duration !== 10) {
-                throw new HttpsError('invalid-argument', 'Kling v2.1 only supports duration of 5 or 10 seconds');
-            }
-        }
-        
-        // Handle image parameters specifically
-        if (data.image && params.image) {
-            modelInput.image = data.image;
-        }
-        if (data.start_image && params.start_image) {
-            modelInput.start_image = data.start_image;
-        }
-        if (data.first_frame_image && params.first_frame_image) {
-            modelInput.first_frame_image = data.first_frame_image;
-        }
-
-        // Create generation record in Firestore
-        const generationId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        generationRef = db.collection('users').doc(userId).collection('generations').doc(generationId);
-        
-        const firestoreData = {
-            type: 'video',
-            subtype: subtype,
-            prompt: prompt,
-            model: model,
-            aspect_ratio: aspect_ratio,
-            duration: duration,
-            status: 'processing',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            creditsUsed: getVideoCredits(model, duration, resolution, mode),
-            error: null,
-            // Store model input for debugging
-            modelInput: modelInput
-        };
-
-        // Conditionally add optional fields to avoid storing undefined/null
-        if (image) firestoreData.image = image;
-        if (start_image) firestoreData.start_image = start_image;
-        if (first_frame_image) firestoreData.first_frame_image = first_frame_image;
-        if (imageUrl) firestoreData.imageUrl = imageUrl; // Legacy support
-        if (negative_prompt) firestoreData.negative_prompt = negative_prompt;
-        if (resolution) firestoreData.resolution = resolution;
-        if (mode) firestoreData.mode = mode;
-        if (camera_fixed !== undefined) firestoreData.camera_fixed = camera_fixed;
-        if (prompt_optimizer !== undefined) firestoreData.prompt_optimizer = prompt_optimizer;
-        if (fps) firestoreData.fps = fps;
-        if (seed) firestoreData.seed = seed;
-
-        await generationRef.set(firestoreData);
-
-        logger.info(`generateVideo: Starting generation with model ${model} for user ${userId}`);
-        logger.info(`generateVideo: Model input:`, modelInput);
-        
-        // Create prediction on Replicate (async)
-        const prediction = await replicate.predictions.create({
-            version: await getModelVersion(model),
-            input: modelInput
+        const replicate = new Replicate({
+            auth: process.env.REPLICATE_API_TOKEN,
         });
 
-        logger.info(`generateVideo: Created prediction ${prediction.id} for user ${userId}`);
+        logger.info(`Starting video generation for user ${userId} with model ${model}`, { parameters, duration });
 
-        // Update generation record with prediction ID
-        await generationRef.update({
-            status: 'processing',
-            predictionId: prediction.id,
+        // Check user credits first
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            throw new HttpsError('not-found', 'User not found.');
+        }
+
+        const userData = userDoc.data();
+        const currentCredits = userData.general_credits || 0;
+        
+        // Calculate credits needed based on duration and model
+        // Video models typically cost credits per second
+        const creditsPerSecond = getVideoModelCreditsPerSecond(model);
+        const creditsNeeded = Math.ceil(creditsPerSecond * duration);
+        
+        if (currentCredits < creditsNeeded) {
+            throw new HttpsError('resource-exhausted', `Insufficient credits for video generation. Need ${creditsNeeded}, have ${currentCredits}.`);
+        }
+
+        // Prepare input for Replicate
+        const input = {
+            prompt: parameters.prompt
+        };
+
+        // Add duration if provided
+        if (duration !== undefined) {
+            input.duration = duration;
+        }
+
+        // Add all other parameters dynamically
+        Object.keys(parameters).forEach(key => {
+            if (key !== 'prompt' && parameters[key] !== undefined && parameters[key] !== null) {
+                input[key] = parameters[key];
+            }
+        });
+
+        logger.info(`Replicate input for video model ${model}:`, input);
+
+        // Create prediction instead of running synchronously
+        const prediction = await replicate.predictions.create({
+            version: await getModelVersion(model),
+            input: input
+        });
+
+        logger.info(`Video prediction created for user ${userId}`, { 
+            predictionId: prediction.id, 
+            model, 
+            status: prediction.status,
+            duration 
+        });
+
+        // Deduct credits immediately upon prediction creation
+        await userRef.update({
+            general_credits: currentCredits - creditsNeeded
+        });
+
+        // Store prediction info in Firestore
+        await db.collection('predictions').doc(prediction.id).set({
+            userId: userId,
+            type: 'video',
+            model: model,
+            status: prediction.status,
+            input: input,
+            duration: duration,
+            creditsUsed: creditsNeeded,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Start polling the prediction status
-        const finalPrediction = await pollPrediction(replicate, prediction.id, generationRef);
-        
-        if (finalPrediction.status === 'succeeded') {
-            let videoUrl;
-            const output = finalPrediction.output;
-            
-            if (typeof output === 'string' && output.startsWith('http')) {
-                videoUrl = output;
-            } else if (Array.isArray(output) && output.length > 0) {
-                videoUrl = output[0];
-            } else if (output && output.video) {
-                videoUrl = output.video;
-            } else if (output && output.url) {
-                videoUrl = output.url;
-            } else {
-                throw new Error('Invalid output format from Replicate');
-            }
+        logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
 
-            logger.info(`generateVideo: Successfully generated video: ${videoUrl}`);
-
-            // Update generation record with success
-            await generationRef.update({
-                status: 'completed',
-                videoUrl: videoUrl,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                error: null
-            });
-        } else {
-            throw new Error(`Video generation failed: ${finalPrediction.error || 'Unknown error'}`);
-        }
-
+        // Return prediction info immediately
         return {
             success: true,
-            message: "Video generation completed successfully",
-            data: {
-                videoUrl: videoUrl,
-                generationId: generationId,
-                model: model,
-                duration: duration,
-                aspectRatio: aspectRatio,
-                creditsUsed: getVideoCredits(model, duration, resolution, mode)
-            }
+            predictionId: prediction.id,
+            status: prediction.status,
+            creditsUsed: creditsNeeded,
+            remainingCredits: currentCredits - creditsNeeded,
+            duration: duration
         };
 
     } catch (error) {
-        logger.error(`Error in generateVideo for user ${userId}:`, error);
+        logger.error(`Video generation failed for user ${userId}:`, error);
         
-        // Update generation record with error
-        if (generationRef) {
-            try {
-                await generationRef.update({
-                    status: 'failed',
-                    error: error.message,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } catch (updateError) {
-                logger.error(`Failed to update generation record:`, updateError);
-            }
+        if (error instanceof HttpsError) {
+            throw error;
         }
         
-        if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', `Video generation failed: ${error.message}`);
     }
 });
 
-// Helper function to calculate video generation credits
-function getVideoCredits(modelId, duration, resolution = '1080p', mode = 'standard') {
-    const model = getModelById(modelId);
-    if (model && model.category === 'video' && model.creditsPerSecond) {
-        const creditsPerSecond = model.creditsPerSecond;
-        
-        if (typeof creditsPerSecond === 'number') {
-            // Simple number (like google/veo-3-fast: 10)
-            return duration * creditsPerSecond;
-        } else if (typeof creditsPerSecond === 'object') {
-            // Object with different rates (like bytedance/seedance-1-pro: {"480p": 1, "1080p": 4})
-            if (modelId === 'bytedance/seedance-1-pro') {
-                return duration * (creditsPerSecond[resolution] || creditsPerSecond['480p']);
-            } else if (modelId === 'kwaivgi/kling-v2.1') {
-                return Math.ceil(duration * (creditsPerSecond[mode] || creditsPerSecond['standard']));
-            } else if (modelId === 'minimax/hailuo-02') {
-                return Math.ceil(duration * (creditsPerSecond[resolution] || creditsPerSecond['768p']));
-            }
-        }
-    }
+// Helper function to get model version for Replicate API
+async function getModelVersion(model) {
+    // Model versions for Replicate API
+    const modelVersions = {
+        'google/imagen-4': 'latest',
+        'google/imagen-4-ultra': 'latest',
+        'imagen/imagen-4-fast': 'latest', 
+        'ideogram-ai/ideogram-v3-balanced': 'latest',
+        'minimax/image-01': 'latest',
+        'black-forest-labs/flux-1.1-pro': 'latest',
+        'black-forest-labs/flux-kontext-max': 'latest',
+        'google/veo-3-fast': 'latest',
+        'google/veo-3': 'latest',
+        'bytedance/seedance-1-pro': 'latest',
+        'kwaivgi/kling-v2.1': 'latest',
+        'minimax/hailuo-02': 'latest',
+        'leonardoai/motion-2.0': 'latest',
+        'runwayml/gen4-turbo': 'latest'
+    };
     
-    return duration * 10; // Default fallback
+    return modelVersions[model] || 'latest';
 }
 
-// Helper function to calculate image generation credits
-function getImageCredits(modelId) {
-    const model = getModelById(modelId);
-    if (model && model.category === 'image' && model.credits) {
-        return model.credits;
-    }
+// Helper function to get credits for image models
+function getImageModelCredits(model) {
+    // Model-specific credit costs
+    const modelCosts = {
+        'google/imagen-4': 1,
+        'google/imagen-4-ultra': 2,
+        'imagen/imagen-4-fast': 1,
+        'ideogram-ai/ideogram-v3-balanced': 2,
+        'minimax/image-01': 0.25,
+        'black-forest-labs/flux-1.1-pro': 1,
+        'black-forest-labs/flux-kontext-max': 2
+    };
     
-    return 1; // Default to 1 credit if model not found
+    return modelCosts[model] || 1; // Default fallback
 }
+
+// Helper function to get credits per second for video models
+function getVideoModelCreditsPerSecond(model) {
+    // Model-specific credit costs (credits per second)
+    const modelCosts = {
+        'google/veo-3-fast': 10,
+        'google/veo-3': 20,
+        'bytedance/seedance-1-pro': 2, // Average between 480p (1) and 1080p (4)
+        'kwaivgi/kling-v2.1': 2.5, // Average between standard (2) and pro (3)
+        'minimax/hailuo-02': 1.5, // Average between 768p (1) and 1080p (2)
+        'leonardoai/motion-2.0': 3, // Fixed cost for Leonardo
+        'runwayml/gen4-turbo': 15
+    };
+    
+    return modelCosts[model] || 5; // Default fallback
+}
+
+// Polling function to check prediction status and update Firestore
+exports.pollPredictions = onCall(async (request) => {
+    const userId = request.auth?.uid;
+    
+    if (!userId) {
+        throw new HttpsError('unauthenticated', 'You must be logged in.');
+    }
+
+    const { predictionId } = request.data;
+    
+    if (!predictionId) {
+        throw new HttpsError('invalid-argument', 'Prediction ID is required.');
+    }
+
+    try {
+        // Initialize Replicate
+        const replicate = new Replicate({
+            auth: process.env.REPLICATE_API_TOKEN,
+        });
+
+        // Get prediction from Replicate
+        const prediction = await replicate.predictions.get(predictionId);
+        
+        // Get prediction doc from Firestore
+        const predictionRef = db.collection('predictions').doc(predictionId);
+        const predictionDoc = await predictionRef.get();
+        
+        if (!predictionDoc.exists) {
+            throw new HttpsError('not-found', 'Prediction not found in database.');
+        }
+
+        const predictionData = predictionDoc.data();
+        
+        // Verify user owns this prediction
+        if (predictionData.userId !== userId) {
+            throw new HttpsError('permission-denied', 'You can only check your own predictions.');
+        }
+
+        // Update Firestore with current status
+        const updateData = {
+            status: prediction.status,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        // If prediction is completed, add output
+        if (prediction.status === 'succeeded' && prediction.output) {
+            updateData.output = prediction.output;
+            updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+
+        // If prediction failed, add error info
+        if (prediction.status === 'failed' && prediction.error) {
+            updateData.error = prediction.error;
+            updateData.failedAt = admin.firestore.FieldValue.serverTimestamp();
+            
+            // Refund credits on failure
+            const userRef = db.collection('users').doc(userId);
+            const userDoc = await userRef.get();
+            const currentCredits = userDoc.data()?.general_credits || 0;
+            const creditsToRefund = predictionData.creditsUsed || 0;
+            
+            await userRef.update({
+                general_credits: currentCredits + creditsToRefund
+            });
+            
+            updateData.creditsRefunded = creditsToRefund;
+            logger.info(`Refunded ${creditsToRefund} credits to user ${userId} for failed prediction ${predictionId}`);
+        }
+
+        await predictionRef.update(updateData);
+
+        logger.info(`Updated prediction ${predictionId} status: ${prediction.status} for user ${userId}`);
+
+        return {
+            success: true,
+            predictionId: predictionId,
+            status: prediction.status,
+            output: prediction.output || null,
+            error: prediction.error || null
+        };
+
+    } catch (error) {
+        logger.error(`Failed to poll prediction ${predictionId} for user ${userId}:`, error);
+        
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        
+        throw new HttpsError('internal', `Failed to check prediction status: ${error.message}`);
+    }
+});
+
+// Scheduled function to auto-poll active predictions
+exports.autoPollPredictions = onSchedule(
+    { 
+        schedule: "every 1 minutes",
+        timeZone: "UTC",
+        timeoutSeconds: 540,
+        memory: "512MiB"
+    },
+    async (event) => {
+        logger.info("Running auto prediction polling...");
+        
+        try {
+            const replicate = new Replicate({
+                auth: process.env.REPLICATE_API_TOKEN,
+            });
+
+            // Get active predictions (not completed/failed)
+            const activeStatuses = ['starting', 'processing'];
+            const predictionsRef = db.collection('predictions');
+            const activeQuery = await predictionsRef
+                .where('status', 'in', activeStatuses)
+                .where('createdAt', '>', admin.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))) // Only last 24 hours
+                .limit(50) // Process max 50 at a time to avoid timeouts
+                .get();
+
+            if (activeQuery.empty) {
+                logger.info("No active predictions to poll.");
+                return null;
+            }
+
+            const batch = db.batch();
+            let updatedCount = 0;
+
+            for (const doc of activeQuery.docs) {
+                const predictionData = doc.data();
+                const predictionId = doc.id;
+
+                try {
+                    // Get current status from Replicate
+                    const prediction = await replicate.predictions.get(predictionId);
+                    
+                    // Only update if status changed
+                    if (prediction.status !== predictionData.status) {
+                        const updateData = {
+                            status: prediction.status,
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        if (prediction.status === 'succeeded' && prediction.output) {
+                            updateData.output = prediction.output;
+                            updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+                        }
+
+                        if (prediction.status === 'failed' && prediction.error) {
+                            updateData.error = prediction.error;
+                            updateData.failedAt = admin.firestore.FieldValue.serverTimestamp();
+                            
+                            // Refund credits on failure - but do this outside batch
+                            setTimeout(async () => {
+                                try {
+                                    const userRef = db.collection('users').doc(predictionData.userId);
+                                    const userDoc = await userRef.get();
+                                    const currentCredits = userDoc.data()?.general_credits || 0;
+                                    const creditsToRefund = predictionData.creditsUsed || 0;
+                                    
+                                    await userRef.update({
+                                        general_credits: currentCredits + creditsToRefund
+                                    });
+                                    
+                                    logger.info(`Auto-refunded ${creditsToRefund} credits to user ${predictionData.userId} for failed prediction ${predictionId}`);
+                                } catch (refundError) {
+                                    logger.error(`Failed to refund credits for prediction ${predictionId}:`, refundError);
+                                }
+                            }, 100);
+                        }
+
+                        batch.update(doc.ref, updateData);
+                        updatedCount++;
+                        
+                        logger.info(`Auto-updated prediction ${predictionId}: ${predictionData.status} -> ${prediction.status}`);
+                    }
+                } catch (predictionError) {
+                    logger.error(`Failed to poll individual prediction ${predictionId}:`, predictionError);
+                }
+            }
+
+            if (updatedCount > 0) {
+                await batch.commit();
+                logger.info(`Auto-polling completed: Updated ${updatedCount} predictions`);
+            } else {
+                logger.info("Auto-polling completed: No predictions needed updates");
+            }
+
+            return null;
+        } catch (error) {
+            logger.error("Auto-polling failed:", error);
+            return null;
+        }
+    }
+);
+
 
 // --- NEW: Function to Create One-Time Credit Purchase Session ---
 exports.createOneTimeCheckoutSession = onCall(async (request) => {
   const { creditPackage, userId, userEmail } = request.data;
   
-  // Credit packages with tiered pricing: decreasing cost per 100 credits
+  // Credit packages with new pricing: $6 per 100 credits
   const creditPackages = {
-    200: { credits: 200, price: 2000 }, // $20.00 for 200 credits (in cents) - $10 per 100
-    600: { credits: 600, price: 5400 }, // $54.00 for 600 credits (in cents) - $9 per 100  
-    1000: { credits: 1000, price: 8000 }, // $80.00 for 1000 credits (in cents) - $8 per 100
-    1800: { credits: 1800, price: 12600 } // $126.00 for 1800 credits (in cents) - $7 per 100
+    200: { credits: 200, price: 1200 }, // $12.00 for 200 credits (in cents)
+    300: { credits: 300, price: 1800 }, // $18.00 for 300 credits (in cents)  
+    500: { credits: 500, price: 3000 }, // $30.00 for 500 credits (in cents)
+    1000: { credits: 1000, price: 6000 } // $60.00 for 1000 credits (in cents)
   };
 
   if (!creditPackages[creditPackage]) {

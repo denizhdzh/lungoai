@@ -129,6 +129,54 @@
   }
 }
 
+/* Gradient Animation Keyframes */
+@keyframes gradient-xy {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg);
+  }
+  25% {
+    transform: translate(10%, -10%) rotate(90deg);
+  }
+  50% {
+    transform: translate(-5%, 15%) rotate(180deg);
+  }
+  75% {
+    transform: translate(-10%, -5%) rotate(270deg);
+  }
+}
+
+/* Animation Delay Utilities */
+.animation-delay-1000 {
+  animation-delay: 1s;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+/* Gradient Animation Class */
+.animate-gradient-xy {
+  animation: gradient-xy 8s ease infinite;
+  background-size: 400% 400%;
+}
+
+/* Square Fade Animation */
+@keyframes square-fade {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-square-fade {
+  animation: square-fade 2s ease-in-out infinite;
+}
+
 /* Custom Cursors for React Flow - Soft & Natural */
 .react-flow__pane {
   cursor: default !important;

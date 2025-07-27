@@ -17,6 +17,7 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { motion } from 'framer-motion';
 import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
+import GenerationPage from './pages/GenerationPage.jsx';
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -392,18 +393,9 @@ function AppRouter() {
         <Route path="pricing" element={<PricingSection id="pricing" />} />
         <Route path="aiguide" element={<CommandInfo />} />
         <Route path="admin" element={<Admin />} />
-        <Route path="studio" element={<CanvasWorkspace preloadedCanvasData={canvasData} />} />
+        <Route path="studio" element={<GenerationPage/>} />
       </Route>
 
-      {/* --- REMOVE STANDALONE STUDIO ROUTE --- */}
-      {/* <Route 
-        path="/studio" 
-        element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <CanvasWorkspace /> 
-          </ProtectedRoute>
-        }
-      /> */}
 
       {/* Fallback Route - Simplified (ProtectedRoute handles logic) */}
       <Route 

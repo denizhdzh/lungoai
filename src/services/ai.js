@@ -184,24 +184,26 @@ const enhancePromptWithBackgroundRules = (basePrompt) => {
 };
 
 // Image Generation Service (using Firebase Functions)
-export const generateImage = async ({ 
-  style, 
-  quality = 'high', 
-  prompt, // New simple prompt parameter
-  subtype, // New subtype parameter (ugc_character, background, general)
-  selectedFrame = null, // Selected frame for style rules
-  connectedImages = [], // Array of connected image URLs
-  model = 'google/imagen-4', // AI model to use
-  aspectRatio = '9:16', // Aspect ratio for the image
-  // Legacy parameters for backward compatibility
-  image_subject, 
-  subject_description, 
-  clothing_description, 
-  setting_description, 
-  scene_description
-}) => {
+export const generateImage = async (params) => {
+  // Handle both old and new parameter formats
+  const { 
+    prompt, 
+    model = 'google/imagen-4',
+    // Extract any additional parameters passed dynamically
+    ...otherParams 
+  } = params;
+  
   try {
-    console.log('REQUESTING image generation with params:', { prompt, subtype, selectedFrame, quality });
+    console.log('REQUESTING image generation with params:', params);
+
+    // Validate required parameters
+    if (!prompt) {
+      throw new Error('Prompt is required for image generation.');
+    }
+
+    if (!model) {
+      throw new Error('Model is required for image generation.');
+    }
 
     // Get current user and force token refresh before calling the function
     const auth = getAuth();
@@ -216,55 +218,32 @@ export const generateImage = async ({
     const functions = getFunctions();
     const generateImageFn = httpsCallable(functions, 'generateImage');
 
-    // Determine commandCode for logging/legacy purposes, though the new flow
-    // primarily relies on subtype.
-    let commandCode;
-    if (subtype === 'ugc_character') commandCode = 202;
-    else if (subtype === 'background') commandCode = 201;
-    else if (subtype === 'general') commandCode = 203;
-    else if (subject_description) commandCode = 202; // Legacy fallback
-    else if (scene_description) commandCode = 201;   // Legacy fallback
-    else if (image_subject) commandCode = 203;     // Legacy fallback
-
+    // Prepare request data - pass all parameters dynamically to backend
     const requestData = {
-      style,
-      quality,
-      connectedImages,
-      commandCode, // Pass for potential routing/logging in the backend
-      // --- New, clean parameters for the modern enhancement flow ---
-      originalPrompt: prompt,
-      subtype: subtype,
-      selectedFrame: selectedFrame,
-      model: model,
-      aspectRatio: aspectRatio,
-      // Add legacy fallback parameters if needed
-      ...(subtype === 'ugc_character' && !subject_description && { 
-        subject_description: prompt || 'person' 
-      }),
-      ...(subtype === 'background' && !scene_description && { 
-        scene_description: prompt || 'background scene' 
-      }),
-      ...(subtype === 'general' && !image_subject && { 
-        image_subject: prompt || 'general image' 
-      }),
+      model,
+      prompt,
+      ...otherParams // This includes all dynamic parameters like aspect_ratio, safety_filter_level, etc.
     };
 
     console.log('Sending request to `generateImage` with data:', requestData);
     const result = await generateImageFn(requestData);
 
-    // The backend returns the direct result (synchronous)
+    // The backend returns the direct result (async prediction system)
     if (!result.data.success) {
         throw new Error(result.data.message || 'Backend failed to generate image.');
     }
 
-    console.log('✅ Image generation completed. Result:', result.data);
+    console.log('✅ Image generation started. Result:', result.data);
 
-    // Return the direct result with imageUrl
+    // Return the direct result with prediction info
     return {
       success: true,
-      imageUrl: result.data.imageUrl, // Firebase Function returns imageUrl directly
+      predictionId: result.data.predictionId,
+      status: result.data.status,
+      creditsUsed: result.data.creditsUsed,
+      remainingCredits: result.data.remainingCredits,
       data: result.data,
-      message: "Image generation completed."
+      message: "Image generation started."
     };
 
   } catch (error) {
@@ -274,34 +253,27 @@ export const generateImage = async ({
 };
 
 // Video Generation Service (using Firebase Functions)
-export const generateVideo = async ({ 
-  prompt, 
-  subtype = 'text_to_video',
-  model = 'google/veo-3-fast',
-  duration = 5,
-  imageUrl = null,
-  // Model-specific parameters
-  negative_prompt = null,
-  aspect_ratio = '9:16',
-  resolution = '1080p',
-  mode = 'standard',
-  camera_fixed = false,
-  prompt_optimizer = true
-}) => {
+export const generateVideo = async (params) => {
+  // Handle both old and new parameter formats
+  const { 
+    prompt, 
+    model = 'google/veo-3-fast',
+    duration = 5,
+    // Extract any additional parameters passed dynamically
+    ...otherParams 
+  } = params;
+  
   try {
-    console.log('Generating video with Firebase Functions:', { 
-      prompt, 
-      subtype, 
-      model, 
-      duration, 
-      imageUrl, 
-      negative_prompt, 
-      aspect_ratio, 
-      resolution, 
-      mode, 
-      camera_fixed, 
-      prompt_optimizer 
-    });
+    console.log('Generating video with Firebase Functions:', params);
+
+    // Validate required parameters
+    if (!prompt) {
+      throw new Error('Prompt is required for video generation.');
+    }
+
+    if (!model) {
+      throw new Error('Model is required for video generation.');
+    }
 
     // Get current user and force token refresh before calling the function
     const auth = getAuth();
@@ -316,70 +288,38 @@ export const generateVideo = async ({
     const functions = getFunctions();
     const generateVideoFn = httpsCallable(functions, 'generateVideo');
 
+    // Prepare request data - pass all parameters dynamically to backend
     const requestData = {
-      prompt,
-      subtype,
       model,
-      duration: parseInt(duration)
+      prompt,
+      duration: parseInt(duration),
+      ...otherParams // This includes all dynamic parameters like aspect_ratio, resolution, etc.
     };
-
-    // Add parameters based on specific model requirements
-    switch (model) {
-      case 'google/veo-3-fast':
-      case 'google/veo-3':
-        if (negative_prompt) requestData.negative_prompt = negative_prompt;
-        break;
-        
-      case 'google/veo-2':
-        if (imageUrl && subtype === 'image_to_video') requestData.image = imageUrl;
-        requestData.aspect_ratio = aspect_ratio;
-        break;
-        
-      case 'bytedance/seedance-1-pro':
-        if (imageUrl && subtype === 'image_to_video') requestData.image = imageUrl;
-        requestData.resolution = resolution;
-        requestData.aspect_ratio = aspect_ratio;
-        requestData.camera_fixed = camera_fixed;
-        break;
-        
-      case 'kwaivgi/kling-v2.1':
-        if (negative_prompt) requestData.negative_prompt = negative_prompt;
-        if (imageUrl && subtype === 'image_to_video') requestData.start_image = imageUrl;
-        requestData.mode = mode;
-        break;
-        
-      case 'minimax/hailuo-02':
-        if (imageUrl && subtype === 'image_to_video') requestData.first_frame_image = imageUrl;
-        requestData.resolution = resolution;
-        requestData.prompt_optimizer = prompt_optimizer;
-        break;
-        
-      default:
-        // For any other models, include common parameters
-        if (imageUrl) requestData.imageUrl = imageUrl;
-        if (aspect_ratio) requestData.aspectRatio = aspect_ratio;
-    }
 
     console.log('Sending request to `generateVideo` with data:', requestData);
     const result = await generateVideoFn(requestData);
 
-    if (!result.data.success || !result.data.data.videoUrl) {
-        throw new Error(result.data.message || 'Backend returned an error for video generation.');
+    // The backend returns the direct result (async prediction system)
+    if (!result.data.success) {
+        throw new Error(result.data.message || 'Backend failed to generate video.');
     }
+    
+    console.log('✅ Video generation started. Result:', result.data);
     
     return {
       success: true,
-      videoUrl: result.data.data.videoUrl,
-      data: result.data.data
+      predictionId: result.data.predictionId,
+      status: result.data.status,
+      creditsUsed: result.data.creditsUsed,
+      remainingCredits: result.data.remainingCredits,
+      duration: result.data.duration,
+      data: result.data,
+      message: "Video generation started."
     };
 
   } catch (error) {
-    console.error('Video generation error:', error);
-    const errorMessage = error.details?.message || error.message;
-    return {
-      success: false,
-      error: errorMessage
-    };
+    console.error('Error requesting video generation:', error);
+    throw new Error(error.message || 'Failed to start video generation task.');
   }
 };
 

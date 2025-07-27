@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Generation from './pages/Generation';
+import GenerationPage from './pages/GenerationPage';
 import CampaignCreator from './pages/CampaignCreator';
 import CanvasWorkspace from './pages/CanvasWorkspace';
 import CreativeStudio from './pages/CreativeStudio';
@@ -50,6 +51,7 @@ function App() {
             }>
               <Route index element={<Dashboard />} />
               <Route path="generation" element={<Generation />} />
+              <Route path="gen" element={<GenerationPage />} />
               <Route path="campaigns" element={<CampaignCreator />} />
               <Route path="studio" element={<CanvasWorkspace />} />
               <Route path="creative" element={<CreativeStudio />} />

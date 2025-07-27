@@ -27,7 +27,7 @@ import {
   PenNib, Timer, Package, Gauge, 
   Slideshow as SlideshowIcon, // Aliased
   Check, Calendar,
-  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple, GearSix
+  ListNumbers, ArrowsClockwise, Steps, Question, ChatCircle, Lightbulb, UploadSimple
 } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion'; // Import framer-motion
 import { commandDefinitions } from '../command'; 
@@ -1256,136 +1256,32 @@ function Layout() {
       <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
         
         {/* --- Top Navigation Bar --- */}
-        <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl border-b border-stone-200/50 dark:border-stone-700/50 transition-colors duration-200">
-            <div className="flex items-center justify-between h-16 px-6 max-w-screen-2xl mx-auto">
-            {/* Left: Logo and Navigation */}
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-4">
-              <button 
-                onClick={() => navigate('/')}
-                className="flex items-center group"
-              >
-                <span className="text-lg font-bold text-stone-900 dark:text-stone-100 group-hover:text-stone-700 dark:group-hover:text-stone-300 transition-colors duration-200">
-                  Lungo
-                </span>
-                <span className="ml-1 text-xs text-lime-500 font-medium">AI</span>
-              </button>
-              
-              {/* Creation Mode Button */}
-              <button
-                onClick={() => navigate(isCanvasPage ? '/' : '/studio')}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                  isCanvasPage 
-                    ? 'text-white hover:text-white' 
-                    : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                }`}
-              >
-                <Sparkle size={16} className={isCanvasPage ? 'text-white' : ''} />
-                <span className="flex items-center gap-1">
-                  Creation Mode
-                  <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-md font-semibold ${
-                    isCanvasPage 
-                      ? 'bg-lime-500/20 text-lime-500' 
-                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400'
-                  }`}>
-                    {isCanvasPage ? 'ON' : 'OFF'}
-                  </span>
-                </span>
-              </button>
-              </div>
-            </div>
-              
-
-              
-            {/* Right: Action Icons */}
-            <div className="flex items-center gap-3">
-                {/* Canvas Status - Only show on canvas page */}
-                {isCanvasPage && (
-                <>
-                    {/* Save Status */}
-                  <div className="relative group">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs cursor-default">
-                      {canvasStatus.isAutoSaving ? (
-                        <>
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
-                            Saving...
-                          </span>
-                        </>
-                      ) : canvasStatus.lastSaved ? (
-                        <>
-                          <div className="w-2 h-2 bg-lime-500 rounded-full"></div>
-                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
-                            Saved {canvasStatus.lastSaved.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-2 h-2 bg-neutral-500 rounded-full"></div>
-                          <span className="text-stone-700 dark:text-stone-300 font-medium hidden sm:inline">
-                            Ready
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      {canvasStatus.isAutoSaving 
-                        ? 'Auto-saving your canvas...' 
-                        : canvasStatus.lastSaved 
-                          ? `Last saved at ${canvasStatus.lastSaved.toLocaleTimeString()}`
-                          : 'Canvas ready for editing'
-                      }
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
-                    </div>
-                    </div>
-                    
-                    {/* Clear Canvas Button */}
-                  <div className="relative group">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      onClick={() => {
-                        if (window.confirm('Clear entire canvas? This cannot be undone.')) {
-                          window.dispatchEvent(new CustomEvent('clearCanvas'));
-                        }
-                      }}
-                      className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-lime-50 dark:hover:bg-lime-950/30 transition-colors"
-                    >
-                      <X size={18} />
-                    </motion.button>
-                    {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                      Clear Canvas
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
-                  </div>
-                  </div>
-                </>
-                )}
-                
-
-                
-              <div className="relative group">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  onClick={() => navigate('/settings')}
-                  className="p-2 rounded-full text-stone-600 dark:text-stone-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
-                  aria-label="Settings"
-                >
-                  <GearSix size={20} />
-                </motion.button>
-                {/* Tooltip */}
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  Settings
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-neutral-900 dark:border-b-neutral-100"></div>
-                </div>
-              </div>
-              </div>
-            </div>
-          </header>
+        <header className="fixed top-0 left-0 z-40 bg-neutral-900 backdrop-blur-xl transition-colors duration-200 w-80 mt-2 ml-2 rounded-lg h-12">
+          <div className="flex items-center justify-between h-full px-4">
+            {/* Left: Logo */}
+            <button 
+              onClick={() => navigate('/')}
+              className="flex items-center group"
+            >
+              <img 
+                src="/logonaked.png"
+                alt="Lungo AI Logo"
+                className="h-4 w-auto"
+              />
+            </button>
+            
+            {/* Right: Settings */}
+            <button
+              onClick={() => navigate('/settings')}
+              className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
+              aria-label="Settings"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </header>
         {/* --- End Top Navigation Bar --- */}
 
         {/* Render the child route's component */}

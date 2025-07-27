@@ -51,39 +51,6 @@ function LoadingAnimation({ className = "", variant = "default" }) {
   );
 }
 
-// Square Grid Loading Animation Component
-function SquareGridLoadingAnimation({ className = "" }) {
-  const gridSize = 10; // 10x10 grid for 1:1 squares
-  const totalSquares = gridSize * gridSize;
-  
-  const randomDelays = React.useMemo(() => {
-    return [...Array(totalSquares)].map(() => Math.random() * 3);
-  }, [totalSquares]);
-  
-  return (
-    <div className={`w-full h-full ${className}`} style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
-      gridTemplateRows: `repeat(${gridSize}, 1fr)`,
-      gap: '1px',
-      backgroundColor: '#262626'
-    }}>
-      {[...Array(totalSquares)].map((_, index) => (
-        <div
-          key={index}
-          className="bg-neutral-600 animate-square-fade"
-          style={{
-            aspectRatio: '1/1',
-            animationDelay: `${randomDelays[index]}s`,
-            animationDuration: '2s',
-            animationIterationCount: 'infinite',
-            animationTimingFunction: 'ease-in-out'
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 import {
 	Image, 
 	VideoCamera, 
@@ -245,7 +212,7 @@ const NodeWrapper = ({
 					justifyContent: 'center',
 					color: 'white',
 					left: '-18px',
-					opacity: showHandles ? 1 : 0,
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -272,7 +239,7 @@ const NodeWrapper = ({
 					justifyContent: 'center',
 					color: 'white',
 					right: '-18px',
-					opacity: showHandles ? 1 : 0,
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -896,7 +863,7 @@ const initialNodes = [];
 
 	// Local state for form fields
 	const [prompt, setPrompt] = useState(formData.prompt || '');
-	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4'));
+	const [model, setModel] = useState(formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'black-forest-labs/flux-1.1-pro'));
 	const modelConfig = getModelById(model);
 	const [duration, setDuration] = useState(formData.duration || (data.type === 'video' ? (modelConfig?.params?.duration?.default || 8) : 3));
 	const [selectedAspectRatio, setSelectedAspectRatio] = useState(formData.aspect_ratio || '3:5');
@@ -909,7 +876,7 @@ const initialNodes = [];
 	// It's crucial for when data is loaded or updated externally, preventing "stale state".
 	useEffect(() => {
 		if (formData) {
-			const newModel = formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'google/imagen-4');
+			const newModel = formData.model || (data.type === 'video' ? 'google/veo-3-fast' : 'black-forest-labs/flux-1.1-pro');
 			const newModelConfig = getModelById(newModel);
 			const defaultDuration = data.type === 'video' ? (newModelConfig?.params?.duration?.default || 8) : 3;
 			
@@ -1284,7 +1251,7 @@ const initialNodes = [];
 
 	return (
 		<div 
-			className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 ${
+			className={`group bg-transparent p-4 transition-all duration-300 ease-in-out text-neutral-200 overflow-hidden ${
 				isConnectionDragOver 
 					? 'ring-2 ring-lime-400/30 bg-lime-500/5' 
 					: ''
@@ -1310,7 +1277,7 @@ const initialNodes = [];
 
 			{/* Media type label */}
 			<div className="absolute -top-2 left-14 text-xs text-neutral-400 font-bold duration-200 z-10">
-				{data.type === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION'}
+				{data.type === 'video' ? 'VIDEO' : 'IMAGE'} | {getCreditsForType()} credit
 			</div>
 
 			{/* Inner frame */}
@@ -1318,8 +1285,7 @@ const initialNodes = [];
 				
 				{/* Generating Animation - Full Frame Overlay */}
 				{isGenerating && (
-					<div className="absolute inset-0 bg-neutral-900 z-50" style={{ borderRadius: '30px' }}>
-						<SquareGridLoadingAnimation />
+					<div className="absolute inset-0 bg-gradient-to-br from-neutral-700 via-neutral-800 to-neutral-900 animate-gradient-xy z-50" style={{ borderRadius: '30px' }}>
 					</div>
 				)}
 
@@ -1338,8 +1304,8 @@ const initialNodes = [];
 					alignItems: 'center',
 					justifyContent: 'center',
 					color: 'white',
-					left: '-18px',
-					opacity: showHandles ? 1 : 0,
+					left: '-32px',
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -1365,8 +1331,8 @@ const initialNodes = [];
 					alignItems: 'center',
 					justifyContent: 'center',
 					color: 'white',
-					right: '-18px',
-					opacity: showHandles ? 1 : 0,
+					right: '-32px',
+					opacity: 1,
 					transition: 'opacity 0.2s ease'
 				}}
 			>
@@ -1384,21 +1350,6 @@ const initialNodes = [];
 						padding: nodeHeight > nodeWidth ? '8px' : '6px'
 					}}
 				>
-				{/* Header - Credit only */}
-				<div className="flex justify-center items-center flex-shrink-0">
-					<div className="flex items-center px-3 py-1.5 bg-neutral-700 rounded-xl border border-neutral-600">
-						<LogoNaked className="w-4 h-4 mr-2 text-neutral-300" />
-						<span className="text-sm text-neutral-300 font-medium">
-							{getCreditsForType()}
-						</span>
-					</div>
-				</div>
-
-
-
-
-
-
 				{/* Connected Images Display - clean */}
 				{(connectedImages.length > 0 || uploadedImage) && (
 					<div className="flex items-center gap-2 flex-shrink-0">
@@ -1451,7 +1402,14 @@ const initialNodes = [];
 								<ModelDropdown
 									value={model}
 									options={getAvailableModels()}
-									onChange={setModel}
+									onChange={(newModel) => {
+										setModel(newModel);
+										// Save to formData immediately
+										const currentFormData = formData || {};
+										onUpdateNode(id, { 
+											formData: { ...currentFormData, model: newModel }
+										});
+									}}
 									hasImageInput={connectedImages.length > 0 || uploadedImage}
 									onDropdownStateChange={onDropdownStateChange}
 								/>
@@ -1486,8 +1444,13 @@ const initialNodes = [];
 										<select
 											value={selectedAspectRatio}
 											onChange={(e) => {
-												setSelectedAspectRatio(e.target.value);
-												// Don't update the node immediately - only on generate
+												const newAspectRatio = e.target.value;
+												setSelectedAspectRatio(newAspectRatio);
+												// Save to formData immediately
+												const currentFormData = formData || {};
+												onUpdateNode(id, { 
+													formData: { ...currentFormData, aspect_ratio: newAspectRatio }
+												});
 											}}
 											onFocus={() => onDropdownStateChange?.(true)}
 											onBlur={() => onDropdownStateChange?.(false)}
@@ -1510,9 +1473,10 @@ const initialNodes = [];
 												const newDuration = parseInt(e.target.value);
 												setDuration(newDuration);
 												
+												const currentFormData = formData || {};
+												
 												// Handle Hailuo model constraint: 10s only available for 768p
 												if (model === 'minimax/hailuo-02' && newDuration === 10) {
-													const currentFormData = formData || {};
 													const currentResolution = currentFormData.resolution || '768p';
 													
 													// If duration is 10s, force resolution to 768p
@@ -1520,8 +1484,14 @@ const initialNodes = [];
 														onUpdateNode(id, { 
 															formData: { ...currentFormData, resolution: '768p', duration: newDuration }
 														});
+														return;
 													}
 												}
+												
+												// Always save duration to formData
+												onUpdateNode(id, { 
+													formData: { ...currentFormData, duration: newDuration }
+												});
 											}}
 											onFocus={() => onDropdownStateChange?.(true)}
 											onBlur={() => onDropdownStateChange?.(false)}
@@ -1667,6 +1637,288 @@ const initialNodes = [];
 								</div>
 							)}
 
+							{/* Additional Video Settings */}
+							{data.type === 'video' && (
+								<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
+									{/* Resolution for video models that support it */}
+									{getModelById(model)?.options?.resolution && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Resolution</label>
+											<select
+												value={formData?.resolution || getModelById(model).params.resolution?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, resolution: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.resolution.map((res) => (
+													<option key={res} value={res}>{res}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* FPS for video models that support it */}
+									{getModelById(model)?.params?.fps && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">FPS</label>
+											<input
+												type="number"
+												value={formData?.fps || getModelById(model).params.fps?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, fps: parseInt(e.target.value) }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+												min="12"
+												max="60"
+											/>
+										</div>
+									)}
+
+									{/* Camera Fixed for video models that support it */}
+									{getModelById(model)?.options?.camera_fixed && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Camera</label>
+											<select
+												value={formData?.camera_fixed !== undefined ? formData.camera_fixed : getModelById(model).params.camera_fixed?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, camera_fixed: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Dynamic</option>
+												<option value="true">Fixed</option>
+											</select>
+										</div>
+									)}
+
+									{/* Mode for video models that support it */}
+									{getModelById(model)?.options?.mode && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Mode</label>
+											<select
+												value={formData?.mode || getModelById(model).params.mode?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, mode: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.mode.map((mode) => (
+													<option key={mode} value={mode}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Frame Interpolation for video models that support it */}
+									{getModelById(model)?.options?.frame_interpolation && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Interpolation</label>
+											<select
+												value={formData?.frame_interpolation !== undefined ? formData.frame_interpolation : getModelById(model).params.frame_interpolation?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, frame_interpolation: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Off</option>
+												<option value="true">On</option>
+											</select>
+										</div>
+									)}
+
+									{/* Prompt Enhance for video models that support it */}
+									{getModelById(model)?.options?.prompt_enhance && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Enhance</label>
+											<select
+												value={formData?.prompt_enhance !== undefined ? formData.prompt_enhance : getModelById(model).params.prompt_enhance?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, prompt_enhance: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Off</option>
+												<option value="true">On</option>
+											</select>
+										</div>
+									)}
+
+									{/* Vibe Style for video models that support it */}
+									{getModelById(model)?.options?.vibe_style && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Vibe</label>
+											<select
+												value={formData?.vibe_style || getModelById(model).params.vibe_style?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, vibe_style: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.vibe_style.map((style) => (
+													<option key={style} value={style}>
+														{style === 'None' ? 'None' : style.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+													</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Lighting Style for video models that support it */}
+									{getModelById(model)?.options?.lighting_style && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Lighting</label>
+											<select
+												value={formData?.lighting_style || getModelById(model).params.lighting_style?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, lighting_style: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.lighting_style.map((style) => (
+													<option key={style} value={style}>
+														{style === 'None' ? 'None' : style.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+													</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Shot Type Style for video models that support it */}
+									{getModelById(model)?.options?.shot_type_style && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Shot Type</label>
+											<select
+												value={formData?.shot_type_style || getModelById(model).params.shot_type_style?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, shot_type_style: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.shot_type_style.map((style) => (
+													<option key={style} value={style}>
+														{style === 'None' ? 'None' : style.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+													</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Color Theme Style for video models that support it */}
+									{getModelById(model)?.options?.color_theme_style && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Color Theme</label>
+											<select
+												value={formData?.color_theme_style || getModelById(model).params.color_theme_style?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, color_theme_style: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.color_theme_style.map((style) => (
+													<option key={style} value={style}>
+														{style === 'None' ? 'None' : style.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+													</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Seed for video models that support it (shared with image) */}
+									{data.type === 'video' && getModelById(model)?.params?.seed && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Seed</label>
+											<input
+												type="number"
+												value={formData?.seed || ''}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, seed: e.target.value ? parseInt(e.target.value) : undefined }
+													});
+												}}
+												placeholder="Random"
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											/>
+										</div>
+									)}
+
+									{/* Prompt Optimizer for video models that support it (shared with image) */}
+									{data.type === 'video' && getModelById(model)?.options?.prompt_optimizer && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Optimizer</label>
+											<select
+												value={formData?.prompt_optimizer !== undefined ? formData.prompt_optimizer : getModelById(model).params.prompt_optimizer?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, prompt_optimizer: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Off</option>
+												<option value="true">On</option>
+											</select>
+										</div>
+									)}
+								</div>
+							)}
+
 							{/* Additional Image Settings */}
 							{data.type === 'image' && (
 								<div className={`${nodeWidth > nodeHeight ? 'flex gap-1.5 w-full' : 'space-y-1.5'}`}>
@@ -1758,6 +2010,95 @@ const initialNodes = [];
 												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 												min="1"
 												max="5"
+											/>
+										</div>
+									)}
+
+									{/* Magic Prompt Option for ideogram models */}
+									{getModelById(model)?.options?.magic_prompt_option && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Magic Prompt</label>
+											<select
+												value={formData?.magic_prompt_option || getModelById(model).params.magic_prompt_option?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, magic_prompt_option: e.target.value }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.magic_prompt_option.map((option) => (
+													<option key={option} value={option}>{option}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Number of Images for models that support it */}
+									{getModelById(model)?.options?.number_of_images && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Count</label>
+											<select
+												value={formData?.number_of_images || getModelById(model).params.number_of_images?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, number_of_images: parseInt(e.target.value) }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												{getModelById(model).options.number_of_images.map((num) => (
+													<option key={num} value={num}>{num}</option>
+												))}
+											</select>
+										</div>
+									)}
+
+									{/* Prompt Optimizer for models that support it */}
+									{getModelById(model)?.options?.prompt_optimizer && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Optimizer</label>
+											<select
+												value={formData?.prompt_optimizer !== undefined ? formData.prompt_optimizer : getModelById(model).params.prompt_optimizer?.default}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, prompt_optimizer: e.target.value === 'true' }
+													});
+												}}
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
+											>
+												<option value="false">Off</option>
+												<option value="true">On</option>
+											</select>
+										</div>
+									)}
+
+									{/* Seed for models that support it */}
+									{getModelById(model)?.params?.seed && (
+										<div className="flex-1 min-w-0">
+											<label className="text-[10px] text-neutral-500 block px-1 mb-1">Seed</label>
+											<input
+												type="number"
+												value={formData?.seed || ''}
+												onChange={(e) => {
+													const currentFormData = formData || {};
+													onUpdateNode(id, { 
+														formData: { ...currentFormData, seed: e.target.value ? parseInt(e.target.value) : undefined }
+													});
+												}}
+												placeholder="Random"
+												onFocus={() => onDropdownStateChange?.(true)}
+												onBlur={() => onDropdownStateChange?.(false)}
+												className="w-full bg-neutral-800/70 border border-neutral-700/50 rounded-xl px-2 py-2 text-xs text-neutral-200 focus:outline-none focus:border-neutral-500 focus:bg-neutral-800 transition-all"
 											/>
 										</div>
 									)}
@@ -2625,8 +2966,7 @@ const GeneratedFrame = ({ data, id, selected }) => {
 				className={`relative overflow-hidden generated-image-frame transition-all duration-300 ease-in-out w-full h-full ${selected ? 'selected' : ''} ${isGenerating ? 'generating' : ''}`}
 			>
 				{isGenerating ? (
-					<div className="w-full h-full bg-neutral-900">
-						<SquareGridLoadingAnimation />
+					<div className="w-full h-full bg-gradient-to-br from-neutral-700 via-neutral-800 to-neutral-900 animate-gradient-xy">
 					</div>
 				) : error ? (
 					<div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900 text-red-400">
@@ -2898,6 +3238,7 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 	const [showTutorial, setShowTutorial] = useState(false);
 	const [isAnyDropdownOpen, setIsAnyDropdownOpen] = useState(false);
 	const [isInputFocused, setIsInputFocused] = useState(false);
+	const [clipboardNodes, setClipboardNodes] = useState([]);
 	
 	// Feedback menu states
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -3075,8 +3416,8 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		if (!source || !target) return;
 	
 		const sourceHasMedia = source.data.imageUrl || source.data.videoUrl;
-		// Images can connect to video nodes for image-to-video generation
-		const targetAcceptsMedia = ['video'].includes(target.type);
+		// Images can connect to both video and image generation nodes
+		const targetAcceptsMedia = ['video', 'image'].includes(target.type);
 	
 		if (sourceHasMedia && targetAcceptsMedia) {
 			const newAsset = {
@@ -3515,142 +3856,18 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 			let result = null;
 
 			if (generationData.type === 'image') {
-				console.log('🖼️ Calling generateImage...');
-				console.log('🖼️ Generation data:', {
-					prompt: generationData.prompt,
-					subtype: generationData.subtype,
-					selectedFrame: generationData.selectedFrame,
-				});
+				console.log('🖼️ Calling generateImage with all dynamic parameters...');
+				console.log('🚨 DEBUG: Sending to ai.js:', generationData);
 				
-				// Simple approach: just send prompt, subtype and selectedFrame
-				// AI service will handle the rest based on rules
-				console.log('🖼️ About to call generateImage with:', {
-					prompt: generationData.prompt,
-					subtype: generationData.subtype,
-					selectedFrame: generationData.selectedFrame,
-					style: 'photorealistic',
-					quality: 'high',
-					connectedImagesCount: generationData.connectedImages?.length || 0
-				});
-				
-				// Handle Lungo Vibe model specially (use Google Imagen 4 config)
-				if (generationData.model === 'lungo-vibe') {
-					const imagenConfig = getModelById('google/imagen-4');
-					const imageRequestData = {
-						prompt: generationData.prompt,
-						model: 'google/imagen-4'
-					};
-					
-					// Add Imagen 4 parameters
-					if (imagenConfig?.params) {
-						Object.keys(imagenConfig.params).forEach(paramName => {
-							const paramConfig = imagenConfig.params[paramName];
-							if (paramName === 'prompt') return;
-							
-							if (paramName === 'aspect_ratio') {
-								imageRequestData.aspect_ratio = generationData.aspect_ratio || paramConfig.default || '1:1';
-							} else if (paramConfig.default !== undefined) {
-								imageRequestData[paramName] = paramConfig.default;
-							}
-						});
-					}
-					
-					imageRequestData.style = 'photorealistic';
-					imageRequestData.quality = 'high';
-					imageRequestData.connectedImages = generationData.connectedImages || [];
-					
-					result = await generateImage(imageRequestData);
-				} else {
-					// Get model config to build proper parameters
-					const modelConfig = getModelById(generationData.model);
-					
-					// Build base request with required fields
-					const imageRequestData = {
-						prompt: generationData.prompt,
-						model: generationData.model
-					};
-					
-					// Add all model-specific parameters
-					if (modelConfig?.params) {
-						Object.keys(modelConfig.params).forEach(paramName => {
-							const paramConfig = modelConfig.params[paramName];
-							
-							// Skip prompt as it's already added
-							if (paramName === 'prompt') return;
-							
-							// Handle different parameter types
-							if (paramName === 'aspect_ratio') {
-								imageRequestData.aspect_ratio = generationData.aspect_ratio || paramConfig.default || '1:1';
-							}
-							else if (paramName.includes('image') || paramName === 'input_image') {
-								// Handle image inputs from connected images
-								if (generationData.connectedImages?.[0]?.url) {
-									imageRequestData[paramName] = generationData.connectedImages[0].url;
-								}
-							}
-							else if (paramConfig.default !== undefined) {
-								// Add parameter with default value
-								imageRequestData[paramName] = paramConfig.default;
-							}
-						});
-					}
-					
-					// Add legacy fields for compatibility
-					imageRequestData.style = 'photorealistic';
-					imageRequestData.quality = 'high';
-					imageRequestData.connectedImages = generationData.connectedImages || [];
-					
-					console.log('🚨 DEBUG: Sending to backend:', imageRequestData);
-					console.log('🚨 DEBUG: Model config:', modelConfig);
-					
-					result = await generateImage(imageRequestData);
-				}
+				// Send all generationData directly (includes all buildModelParameters)
+				result = await generateImage(generationData);
 				console.log('🖼️ Image generation result:', result);
 			} else if (generationData.type === 'video') {
-				console.log('🎬 Calling generateVideo...');
+				console.log('🎬 Calling generateVideo with all dynamic parameters...');
+				console.log('🚨 DEBUG: Sending to ai.js:', generationData);
 				
-				// Get current node form data for additional parameters
-				if (!reactFlowInstance) {
-					throw new Error("React Flow instance not available.");
-				}
-				const sourceNode = reactFlowInstance.getNode(sourceNodeId);
-				const formData = sourceNode?.data?.formData || {};
-				
-				// Get model configuration to determine which parameters to send
-				const modelConfig = getModelById(generationData.model);
-				const supportedParams = modelConfig?.params ? Object.keys(modelConfig.params) : [];
-				const modelOptions = modelConfig?.options || {};
-				
-				// Build parameters object based on what the model supports
-				const videoParams = {
-					prompt: generationData.prompt,
-					duration: generationData.duration,
-					model: generationData.model,
-					imageUrl: generationData.connectedImages?.[0]?.url || generationData.uploadedImage?.url || null,
-				};
-
-				// Add model-specific parameters only if supported
-				if (supportedParams.includes('negative_prompt')) {
-					videoParams.negative_prompt = formData.negative_prompt;
-				}
-				if (supportedParams.includes('aspect_ratio') || modelOptions.aspect_ratio) {
-					videoParams.aspect_ratio = generationData.aspect_ratio || formData.aspect_ratio || '16:9';
-				}
-				if (supportedParams.includes('resolution') || modelOptions.resolution) {
-					videoParams.resolution = formData.resolution || (modelOptions.resolution?.[0] || '1080p');
-				}
-				if (supportedParams.includes('mode') || modelOptions.mode) {
-					videoParams.mode = formData.mode || (modelOptions.mode?.[0] || 'standard');
-				}
-				if (supportedParams.includes('camera_fixed') || modelOptions.camera_fixed) {
-					videoParams.camera_fixed = formData.camera_fixed || false;
-				}
-				if (supportedParams.includes('prompt_optimizer') || modelOptions.prompt_optimizer) {
-					videoParams.prompt_optimizer = formData.prompt_optimizer !== false;
-				}
-				
-				console.log('🎬 Video generation parameters:', videoParams);
-				result = await generateVideo(videoParams);
+				// Send all generationData directly (includes all buildModelParameters)
+				result = await generateVideo(generationData);
 				console.log('🎬 Video generation result:', result);
 			}
 
@@ -3730,6 +3947,108 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 		);
 	}, [setEdges]);
 
+	// Update edge animations based on generation state
+	useEffect(() => {
+		setEdges(eds =>
+			eds.map(edge => {
+				// Check if target node is currently generating
+				const isTargetGenerating = generationQueue.some(item => item.nodeId === edge.target);
+				
+				// Check if target node has generated content (success state)
+				const targetNode = reactFlowInstance?.getNode(edge.target);
+				const hasGeneratedContent = targetNode?.data?.generatedContent?.length > 0;
+				
+				let className = '';
+				if (isTargetGenerating) {
+					className = 'generation-edge';
+				} else if (hasGeneratedContent) {
+					className = 'generated-edge';
+				}
+				
+				return {
+					...edge,
+					className: className
+				};
+			})
+		);
+	}, [generationQueue, setEdges, reactFlowInstance, nodes]);
+
+	// Copy selected nodes to clipboard
+	const copySelectedNodes = useCallback(() => {
+		if (!reactFlowInstance) return;
+		
+		const selectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+		if (selectedNodes.length === 0) return;
+		
+		// Store the nodes in clipboard state
+		setClipboardNodes(selectedNodes);
+		console.log(`Copied ${selectedNodes.length} node(s) to clipboard`);
+	}, [reactFlowInstance]);
+
+	// Paste nodes from clipboard
+	const pasteNodes = useCallback(() => {
+		if (clipboardNodes.length === 0) return;
+		
+		const duplicateOffset = 450; // Pixels to the right
+		const newNodes = [];
+		const nodeIdMap = new Map(); // Map old IDs to new IDs
+		
+		clipboardNodes.forEach(originalNode => {
+			const newId = `${originalNode.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+			nodeIdMap.set(originalNode.id, newId);
+			
+			const newNode = {
+				...originalNode,
+				id: newId,
+				position: {
+					x: originalNode.position.x + duplicateOffset,
+					y: originalNode.position.y
+				},
+				selected: true, // Select the new nodes
+				data: {
+					...originalNode.data,
+					// Clear generated content for duplicate nodes
+					generatedContent: [],
+					imageUrl: originalNode.data.imageUrl, // Keep uploaded images
+					videoUrl: originalNode.data.videoUrl, // Keep uploaded videos
+					connectedImages: [], // Clear connected images (will need to be reconnected)
+				}
+			};
+			
+			newNodes.push(newNode);
+		});
+		
+		// Add new nodes to the canvas
+		setNodes(prevNodes => [
+			...prevNodes.map(node => ({ ...node, selected: false })), // Deselect existing nodes
+			...newNodes
+		]);
+		
+		console.log(`Pasted ${newNodes.length} node(s)`);
+	}, [clipboardNodes]);
+
+	// Keyboard shortcuts for copy-paste
+	useEffect(() => {
+		const handleKeyDown = (event) => {
+			// Only handle shortcuts when not focused on input/textarea
+			if (isInputFocused || isAnyDropdownOpen) return;
+			
+			const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+			const modifier = isMac ? event.metaKey : event.ctrlKey;
+			
+			if (modifier && event.key === 'c') {
+				event.preventDefault();
+				copySelectedNodes();
+			} else if (modifier && event.key === 'v') {
+				event.preventDefault();
+				pasteNodes();
+			}
+		};
+
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [isInputFocused, isAnyDropdownOpen, copySelectedNodes, pasteNodes]);
+
 	// Connection state object to pass to components (simplified to avoid infinite re-renders)
 	const connectionState = useMemo(() => ({
 		connectionNodeId,
@@ -3800,9 +4119,9 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 
 			// Rule 2: Generated content can only connect to generation nodes that accept that type
 			if (sourceNode.type === 'generatedFrame') {
-				// Image content can only connect to video generation (for image-to-video)
-				if (sourceNode.data.type === 'image' && targetNode.data.type !== 'video') {
-					console.warn('Images can only be connected to video generation nodes');
+				// Image content can connect to both image and video generation
+				if (sourceNode.data.type === 'image' && !['image', 'video'].includes(targetNode.data.type)) {
+					console.warn('Images can only be connected to image or video generation nodes');
 					return;
 				}
 				// Videos generally can't be used as input for now
@@ -3814,9 +4133,9 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 
 			// Rule 3: Only allow connections that make semantic sense
 			if (sourceNode.type === 'imageUpload') {
-				// Image uploads can only connect to video generation nodes
-				if (targetNode.data.type !== 'video') {
-					console.warn('Image uploads can only be connected to video generation nodes');
+				// Image uploads can connect to both image and video generation nodes
+				if (!['image', 'video'].includes(targetNode.data.type)) {
+					console.warn('Image uploads can only be connected to image or video generation nodes');
 					return;
 				}
 			}
@@ -3829,12 +4148,12 @@ const CanvasWorkspace = ({ preloadedCanvasData }) => {
 
 			// Rule 4: Check if target model actually supports image input
 			if ((sourceNode.type === 'imageUpload' || sourceNode.type === 'generatedFrame') && 
-				targetNode.data.type === 'video') {
-				const targetModel = targetNode.data.formData?.model || 'google/veo-3-fast';
+				['image', 'video'].includes(targetNode.data.type)) {
+				const targetModel = targetNode.data.formData?.model || (targetNode.data.type === 'video' ? 'google/veo-3-fast' : 'black-forest-labs/flux-pro');
 				const modelConfig = getModelById(targetModel);
 				
 				// Check if model supports any image input parameters
-				const imageParams = ['image_input', 'image', 'start_image', 'first_frame_image'];
+				const imageParams = ['image_input', 'image', 'start_image', 'first_frame_image', 'input_image'];
 				const supportsImage = modelConfig?.params ? imageParams.some(param => param in modelConfig.params) : false;
 				
 				if (!supportsImage) {

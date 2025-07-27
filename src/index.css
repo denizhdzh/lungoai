@@ -78,9 +78,9 @@
 /* Generation Edge Animations */
 .react-flow__edge.generation-edge .react-flow__edge-path {
   stroke: #84cc16 !important;
-  stroke-width: 1px !important;
-  stroke-dasharray: 8 4 !important;
-  animation: generationFlow 0.8s linear infinite;
+  stroke-width: 2px !important;
+  stroke-dasharray: 12 6 !important;
+  animation: dataFlow 1.2s linear infinite;
 }
 
 .react-flow__edge.generated-edge .react-flow__edge-path {
@@ -97,17 +97,23 @@
   animation: errorPulse 1s ease-in-out infinite;
 }
 
-@keyframes generationFlow {
+@keyframes dataFlow {
   0% {
     stroke-dashoffset: 0;
-    opacity: 0.8;
+    opacity: 0.9;
+  }
+  25% {
+    opacity: 1;
   }
   50% {
     opacity: 1;
   }
+  75% {
+    opacity: 1;
+  }
   100% {
-    stroke-dashoffset: -12;
-    opacity: 0.8;
+    stroke-dashoffset: -18;
+    opacity: 0.9;
   }
 }
 

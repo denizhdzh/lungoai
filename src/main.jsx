@@ -18,6 +18,7 @@ import { motion } from 'framer-motion';
 import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 import GenerationPage from './pages/GenerationPage.jsx';
+import WelcomePage from './pages/WelcomePage.jsx';
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -386,9 +387,9 @@ function AppRouter() {
         }
       >
         {/* Default child route (Dashboard) */}
-        <Route index element={<Dashboard />} /> 
+        <Route index element={<WelcomePage />} /> 
         {/* Other child routes */}
-        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="dashboard" element={<WelcomePage />} />
         <Route path="settings" element={<Settings />} />
         <Route path="pricing" element={<PricingSection id="pricing" />} />
         <Route path="aiguide" element={<CommandInfo />} />

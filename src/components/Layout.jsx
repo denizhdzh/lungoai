@@ -1247,16 +1247,29 @@ function Layout() {
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
-      {/* --- NEW: Dot Grid Background (Canvas sayfasında gizli) --- */}
-      {!isCanvasPage && (
+      {/* Conditional Background */}
+      {location.pathname === '/' || location.pathname === '/dashboard' ? (
+        // Background image for index/dashboard pages
+        <div className="absolute inset-0 h-full w-full">
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{
+              backgroundImage: 'url(/surreal3.png)',
+              backgroundPosition: 'center left'
+            }}
+          />
+          <div className="absolute inset-0 bg-black/30" />
+        </div>
+      ) : !isCanvasPage ? (
+        // Dot grid background for other pages (except canvas)
         <div className="absolute inset-0 h-full w-full bg-white dark:bg-neutral-950 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
-      )}
+      ) : null}
       
       {/* Main content container with relative positioning */}
       <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
         
         {/* --- Top Navigation Bar --- */}
-        <header className="fixed top-0 left-0 z-40 bg-neutral-900 backdrop-blur-xl transition-colors duration-200 w-80 mt-2 ml-2 rounded-lg h-12">
+        <header className="fixed top-3 left-3 right-3 z-40 bg-neutral-900/40 backdrop-blur-xl transition-colors duration-200 rounded-lg h-12">
           <div className="flex items-center justify-between h-full px-4">
             {/* Left: Logo */}
             <button 
@@ -1270,22 +1283,42 @@ function Layout() {
               />
             </button>
             
-            {/* Right: Settings */}
-            <button
-              onClick={() => navigate('/settings')}
-              className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
-              aria-label="Settings"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-              </svg>
-            </button>
+            {/* Right: Credits and Settings */}
+            <div className="flex items-center gap-3">
+              {/* Credit Display */}
+              {user && firestoreUserData && (
+                <div 
+                  onClick={() => setIsPricingModalOpen(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
+                >
+                  <img 
+                    src="/logonaked.png"
+                    alt="Lungo AI Logo"
+                    className="h-2.5 w-auto"
+                  />
+                  <span className="text-sm font-medium text-white">
+                    {firestoreUserData.general_credits?.toLocaleString() || '0'}
+                  </span>
+                </div>
+              )}
+              
+              {/* Settings */}
+              <button
+                onClick={() => navigate('/settings')}
+                className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
+                aria-label="Settings"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           </div>
         </header>
         {/* --- End Top Navigation Bar --- */}
 
         {/* Render the child route's component */}
-        <main className={`flex-grow w-full ${isCanvasPage ? 'pt-16' : 'max-w-6xl mx-auto px-4 xl:px-0 pt-20'}`}> 
+        <main className={`flex-grow w-full ${isCanvasPage ? 'pt-20' : 'max-w-6xl mx-auto px-4 xl:px-0 pt-24'}`}> 
           <Outlet context={outletContextValue} /> 
         </main>
 
@@ -1449,23 +1482,6 @@ function Layout() {
         </div>
       )}
 
-      {/* --- Fixed Credit Display (Moved from Dashboard) --- */}
-      {user && firestoreUserData && (
-        <div 
-          onClick={() => setIsPricingModalOpen(true)}
-          className="fixed bottom-4 left-4 z-50 flex items-center gap-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-900 backdrop-blur-md rounded-lg shadow-sm border border-stone-200 dark:border-stone-700 cursor-pointer hover:bg-lime-50 dark:hover:bg-lime-900/20 hover:border-lime-200 dark:hover:border-lime-700 transition-colors"
-        >
-          <img 
-            src="/logonaked.png"
-            alt="Lungo AI Logo"
-            className="h-2.5 w-auto"
-          />
-          <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-            {firestoreUserData.general_credits?.toLocaleString() || '0'}
-          </span>
-        </div>
-      )}
-      {/* --- End Fixed Credit Display --- */}
 
       {/* --- Billing Modal (Moved from Dashboard) --- */}
       <AnimatePresence>

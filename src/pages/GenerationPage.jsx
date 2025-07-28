@@ -196,9 +196,9 @@ const GenerationPage = () => {
 	};
 
 	return (
-		<div className="h-[calc(100vh-200px)] bg-neutral-950 text-white relative overflow-hidden flex">
+		<div className="h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden flex">
 			{/* Left Sidebar - Minimal Design */}
-			<div className="fixed left-2 top-15 z-10 w-80">
+			<div className="fixed left-2 top-15 z-10 w-64">
 				<div className="bg-transparent space-y-1 shadow-2xl max-h-[80vh]">
 					
 					{/* Type Selection */}
@@ -400,18 +400,11 @@ const GenerationPage = () => {
 			</div>
 
 			{/* Main content area */}
-			<div className="flex items-center justify-center p-4 h-full w-full">
+			<div className="flex items-center justify-center p-4 h-full w-full ml-64 mr-20">
 				{uploadedImages.length === 0 ? (
 					/* Empty state - Use getAspectRatioClass */
 					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
-						{/* L-shape corners */}
-						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
-						</div>
-						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
-						</div>
-						
+					
 						{/* Inner frame - Drop Area */}
 						<div 
 							ref={dropAreaRef}
@@ -434,93 +427,57 @@ const GenerationPage = () => {
 							</div>
 						</div>
 					</div>
-				) : uploadedImages.length === 1 ? (
-					/* Single image - Use image's aspect ratio for outer container */
-					<div 
-						className="relative bg-transparent p-4 w-full transition-all duration-300 max-w-full max-h-full"
-						style={{
-							aspectRatio: uploadedImages[0].aspectRatio,
-							width: 'auto',
-							height: 'auto',
-							maxWidth: '100%',
-							maxHeight: '100%'
-						}}
-					>
-						{/* L-shape corners */}
-						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
-						</div>
-						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
-						</div>
-						
-						{/* Image fills the entire outer container */}
-						<div className="w-full h-full rounded-[60px] overflow-hidden relative group">
-							<img 
-								src={uploadedImages[0].url} 
-								alt={uploadedImages[0].name}
-								className="w-full h-full object-cover"
-							/>
-							<button
-								onClick={(e) => {
-									e.stopPropagation();
-									removeImage(uploadedImages[0].id);
-								}}
-								className="absolute top-6 right-6 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-							>
-								<X size={16} className="text-white" />
-							</button>
-						</div>
-					</div>
 				) : (
-					/* Multiple images - Use getAspectRatioClass for grid */
-					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
-						{/* L-shape corners */}
-						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
-						</div>
-						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
-							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
-						</div>
+					/* Grid layout for all images */
+					<div className="relative bg-transparent p-4 w-full h-full transition-all duration-300 flex items-center justify-center">
 						
-						{/* Multiple images grid */}
-						<div className="w-full h-full rounded-[60px] overflow-hidden p-4">
-							<div className="grid gap-3 h-full w-full" style={{
-								gridTemplateColumns: uploadedImages.length === 2 ? 'repeat(2, 1fr)' :
-													   uploadedImages.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-								gridTemplateRows: uploadedImages.length <= 2 ? '1fr' : 
-													uploadedImages.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)'
-							}}>
-								{uploadedImages.map((image) => (
-									<div 
-										key={image.id} 
-										className="relative group bg-neutral-800 rounded-2xl overflow-hidden"
-										style={{
-											aspectRatio: image.aspectRatio
-										}}
-									>
+						{/* Grid container */}
+						<div className={` overflow-visible bg-neutral-900/0 p-4 ${
+							uploadedImages.length === 1 ? 'flex items-center justify-center' :
+							uploadedImages.length === 2 ? 'grid grid-cols-2 gap-3 items-center justify-center' :
+							uploadedImages.length === 3 ? 'grid grid-cols-3 gap-3 items-center justify-center' :
+							uploadedImages.length === 4 ? 'grid grid-cols-2 grid-rows-2 gap-3 place-items-center' :
+							'grid grid-cols-3 grid-rows-2 gap-3 place-items-center'
+						}`} style={{
+							width: 'fit-content',
+							maxWidth: '90%'
+						}}>
+							{uploadedImages.map((image) => {
+								const containerSize = uploadedImages.length === 1 ? 500 : 
+													uploadedImages.length <= 3 ? 300 : 250;
+								
+								return (
+								<div 
+									key={image.id}
+									className="relative group bg-neutral-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+									style={{
+										aspectRatio: '3/4',
+										width: `${containerSize}px`,
+										height: `${containerSize * 4/3}px`
+									}}
+								>
 										<img 
 											src={image.url} 
 											alt={image.name}
-											className="w-full h-full object-cover"
+											className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
 										/>
+										{/* Image info overlay */}
+										<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+											<div className="text-white text-sm font-medium truncate">{image.name}</div>
+										</div>
 										<button
 											onClick={(e) => {
 												e.stopPropagation();
 												removeImage(image.id);
 											}}
-											className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+											className="absolute top-3 right-3 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
 										>
-											<X size={14} className="text-white" />
+											<X size={16} className="text-white" />
 										</button>
-										<div className="absolute bottom-2 left-2 right-2">
-											<div className="text-xs text-white bg-black/70 rounded px-2 py-1 truncate">
-												{image.name}
-											</div>
-										</div>
-									</div>
-								))}
-							</div>
+									
+								</div>
+								);
+							})}
 						</div>
 					</div>
 				)}
@@ -537,7 +494,7 @@ const GenerationPage = () => {
 				
 				{/* Add more button - Outside the main area */}
 				{uploadedImages.length > 0 && uploadedImages.length < 5 && (
-					<div className="absolute top-4 right-4 z-50">
+					<div className="fixed top-1/2 right-4 transform -translate-y-1/2 z-50">
 						<button
 							onClick={handleClickUpload}
 							className="w-12 h-12 border-2 border-dashed border-neutral-700 hover:border-lime-400 rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm"

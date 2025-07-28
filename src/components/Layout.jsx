@@ -1260,8 +1260,11 @@ function Layout() {
           />
           <div className="absolute inset-0 bg-black/30" />
         </div>
+      ) : location.pathname === '/studio' ? (
+        // White dot grid background for studio page
+        <div className="absolute inset-0 h-full w-full bg-neutral-950 bg-[radial-gradient(#303030_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
       ) : !isCanvasPage ? (
-        // Dot grid background for other pages (except canvas)
+        // Dot grid background for other pages (except canvas and studio)
         <div className="absolute inset-0 h-full w-full bg-white dark:bg-neutral-950 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
       ) : null}
       

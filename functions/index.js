@@ -82,47 +82,124 @@ exports.generateImage = onCall(async (request) => {
             }
         });
 
-        logger.info(`Replicate input for model ${model}:`, input);
+        logger.info(`=== REPLICATE API CALL ===`);
+        logger.info(`Model: ${model}`);
+        logger.info(`Full input object:`, JSON.stringify(input, null, 2));
+        logger.info(`Full parameters received:`, JSON.stringify(parameters, null, 2));
+        logger.info(`========================`);
 
-        // Create prediction instead of running synchronously
-        const prediction = await replicate.predictions.create({
-            version: await getModelVersion(model),
-            input: input
-        });
+        // Try both sync (run) and async (predictions.create) approaches
+        let output;
+        let isAsync = false;
+        let predictionId = null;
+        
+        try {
+            // First try: synchronous run - fastest for quick models
+            logger.info(`Trying synchronous run approach...`);
+            output = await replicate.run(model, { input: input });
+        } catch (syncError) {
+            logger.warn(`Synchronous run failed: ${syncError.message}`);
+            try {
+                // Second try: async predictions - better for slow models
+                logger.info(`Trying async predictions.create approach...`);
+                const prediction = await replicate.predictions.create({
+                    model: model,
+                    input: input
+                });
+                
+                predictionId = prediction.id;
+                isAsync = true;
+                logger.info(`Created prediction ${predictionId} with status: ${prediction.status}`);
+                
+                // For async, we return immediately and let client poll
+                output = null; // Will be handled differently below
+                
+            } catch (asyncError) {
+                logger.error(`Both sync and async approaches failed:`, {
+                    syncError: syncError.message,
+                    asyncError: asyncError.message
+                });
+                throw asyncError;
+            }
+        }
 
-        logger.info(`Image prediction created for user ${userId}`, { 
-            predictionId: prediction.id, 
+        logger.info(`Image generation result for user ${userId}`, { 
             model, 
-            status: prediction.status 
+            isAsync: isAsync,
+            predictionId: predictionId,
+            output: output ? 'success' : (isAsync ? 'pending' : 'failed'),
+            outputType: typeof output,
+            outputValue: output
         });
 
-        // Deduct credits immediately upon prediction creation
+        // Always deduct credits (even for async)
         await userRef.update({
             general_credits: currentCredits - creditsNeeded
         });
 
-        // Store prediction info in Firestore
-        await db.collection('predictions').doc(prediction.id).set({
-            userId: userId,
-            type: 'image',
-            model: model,
-            status: prediction.status,
-            input: input,
-            creditsUsed: creditsNeeded,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        if (isAsync && predictionId) {
+            // Store async prediction info for polling
+            await db.collection('predictions').doc(predictionId).set({
+                userId: userId,
+                type: 'image',
+                model: model,
+                status: 'starting',
+                input: input,
+                creditsUsed: creditsNeeded,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
 
-        logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
+            logger.info(`Stored async prediction ${predictionId} for polling`);
 
-        // Return prediction info immediately
-        return {
-            success: true,
-            predictionId: prediction.id,
-            status: prediction.status,
-            creditsUsed: creditsNeeded,
-            remainingCredits: currentCredits - creditsNeeded
-        };
+            return {
+                success: true,
+                predictionId: predictionId,
+                status: 'starting',
+                creditsUsed: creditsNeeded,
+                remainingCredits: currentCredits - creditsNeeded,
+                isAsync: true
+            };
+        } else if (output) {
+            // Handle different output formats
+            let imageUrl;
+            if (typeof output === 'string') {
+                imageUrl = output;
+            } else if (Array.isArray(output)) {
+                imageUrl = output[0];
+            } else if (output && typeof output.url === 'function') {
+                imageUrl = output.url();
+            } else if (output && output.url) {
+                imageUrl = output.url;
+            } else {
+                imageUrl = output;
+            }
+
+            // Store generation result in user's generations subcollection
+            const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
+                type: 'image',
+                model: model,
+                prompt: input.prompt,
+                imageUrl: imageUrl,
+                settings: input,
+                creditsUsed: creditsNeeded,
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
+            logger.info(`Final image URL: ${imageUrl}`);
+
+            // Return success with image URL
+            return {
+                success: true,
+                imageUrl: imageUrl,
+                creditsUsed: creditsNeeded,
+                remainingCredits: currentCredits - creditsNeeded
+            };
+        } else {
+            throw new HttpsError('internal', 'Image generation failed - no output received');
+        }
 
     } catch (error) {
         logger.error(`Image generation failed for user ${userId}:`, error);
@@ -643,50 +720,93 @@ exports.generateVideo = onCall(async (request) => {
             }
         });
 
-        logger.info(`Replicate input for video model ${model}:`, input);
+        logger.info(`=== VIDEO REPLICATE API CALL ===`);
+        logger.info(`Model: ${model}`);
+        logger.info(`Full input object:`, JSON.stringify(input, null, 2));
+        logger.info(`Full parameters received:`, JSON.stringify(parameters, null, 2));
+        logger.info(`Duration: ${duration}`);
+        logger.info(`============================`);
 
-        // Create prediction instead of running synchronously
-        const prediction = await replicate.predictions.create({
-            version: await getModelVersion(model),
-            input: input
-        });
+        // Try different Replicate API approaches for video
+        let output;
+        try {
+            // First try: direct input
+            logger.info(`Trying direct input approach for video...`);
+            output = await replicate.run(model, input);
+        } catch (directError) {
+            logger.warn(`Direct input failed: ${directError.message}`);
+            try {
+                // Second try: nested input object
+                logger.info(`Trying nested input approach for video...`);
+                output = await replicate.run(model, { input: input });
+            } catch (nestedError) {
+                logger.warn(`Nested input failed: ${nestedError.message}`);
+                // Third try: simplified input with just prompt
+                logger.info(`Trying simplified prompt-only approach for video...`);
+                output = await replicate.run(model, { 
+                    input: { 
+                        prompt: parameters.prompt,
+                        duration: duration 
+                    }
+                });
+            }
+        }
 
-        logger.info(`Video prediction created for user ${userId}`, { 
-            predictionId: prediction.id, 
+        logger.info(`Video generated for user ${userId}`, { 
             model, 
-            status: prediction.status,
+            output: output ? 'success' : 'failed',
+            outputType: typeof output,
+            outputValue: output,
             duration 
         });
 
-        // Deduct credits immediately upon prediction creation
-        await userRef.update({
-            general_credits: currentCredits - creditsNeeded
-        });
+        // If output is successful, deduct credits
+        if (output) {
+            await userRef.update({
+                general_credits: currentCredits - creditsNeeded
+            });
 
-        // Store prediction info in Firestore
-        await db.collection('predictions').doc(prediction.id).set({
-            userId: userId,
-            type: 'video',
-            model: model,
-            status: prediction.status,
-            input: input,
-            duration: duration,
-            creditsUsed: creditsNeeded,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+            // Handle different output formats for video
+            let videoUrl;
+            if (typeof output === 'string') {
+                videoUrl = output;
+            } else if (Array.isArray(output)) {
+                videoUrl = output[0];
+            } else if (output && typeof output.url === 'function') {
+                videoUrl = output.url();
+            } else if (output && output.url) {
+                videoUrl = output.url;
+            } else {
+                videoUrl = output;
+            }
 
-        logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
+            // Store generation result in user's generations subcollection
+            const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
+                type: 'video',
+                model: model,
+                prompt: input.prompt,
+                videoUrl: videoUrl,
+                settings: input,
+                duration: duration,
+                creditsUsed: creditsNeeded,
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
+            });
 
-        // Return prediction info immediately
-        return {
-            success: true,
-            predictionId: prediction.id,
-            status: prediction.status,
-            creditsUsed: creditsNeeded,
-            remainingCredits: currentCredits - creditsNeeded,
-            duration: duration
-        };
+            logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
+            logger.info(`Final video URL: ${videoUrl}`);
+
+            // Return success with video URL
+            return {
+                success: true,
+                videoUrl: videoUrl,
+                creditsUsed: creditsNeeded,
+                remainingCredits: currentCredits - creditsNeeded,
+                duration: duration
+            };
+        } else {
+            throw new HttpsError('internal', 'Video generation failed - no output received');
+        }
 
     } catch (error) {
         logger.error(`Video generation failed for user ${userId}:`, error);
@@ -699,32 +819,6 @@ exports.generateVideo = onCall(async (request) => {
     }
 });
 
-// Helper function to get model version for Replicate API
-async function getModelVersion(model) {
-    // Real Replicate model versions - these are actual working versions
-    const modelVersions = {
-        // Image Models - Real Replicate versions
-        'black-forest-labs/flux-1.1-pro': 'latest', // This is a real model that works
-        'black-forest-labs/flux-dev': 'latest',
-        'stability-ai/stable-diffusion-3': 'latest',
-        
-        // For testing, let's use a simple model that definitely works
-        'stability-ai/sdxl': 'latest',
-        
-        // Video Models - Real versions
-        'minimax/video-01': 'latest',
-        'runwayml/gen3a-turbo': 'latest'
-    };
-    
-    // For now, fallback to a working model if the requested one isn't available
-    const version = modelVersions[model];
-    if (!version) {
-        logger.warn(`Model ${model} not found, falling back to black-forest-labs/flux-1.1-pro`);
-        return modelVersions['black-forest-labs/flux-1.1-pro'];
-    }
-    
-    return version;
-}
 
 // Helper function to get credits for image models
 function getImageModelCredits(model) {

@@ -51,23 +51,19 @@ const WelcomePage = () => {
             <div className="absolute bottom-3 right-3 w-2 h-2 bg-lime-400/60 rounded-full animate-pulse"></div>
           </div>
           
-          {/* Middle Box - Platform Introduction */}
+          {/* Middle Box - New Features */}
           <div className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">LUNGO_AI_PLATFORM</span>
-              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">UNIFIED_EXPERIENCE</span>
+              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">PLATFORM_UPDATE</span>
+              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">NEW</span>
             </div>
             
-            <div className="mb-6">
-              <h2 className="text-2xl font-normal text-white mb-1">Multi-Model <span className="text-lime-400 font-light tracking-wide">Studio</span></h2>
+            <div>
+              <h2 className="text-2xl font-normal text-white mb-1">Fresh <span className="text-lime-400 font-light tracking-wide">Features</span></h2>
               <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
               <p className="text-sm text-neutral-400">
-                Test multiple AI models with one prompt, choose the best result.
+                Batch uploads & faster processing.
               </p>
-            </div>
-            
-            <div className="flex items-center justify-between text-xs font-light tracking-wide">
-              <span className="text-neutral-500 uppercase tracking-wider">ONE_PROMPT → MULTIPLE_RESULTS</span>
             </div>
           </div>
           

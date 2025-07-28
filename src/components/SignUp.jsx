@@ -30,7 +30,7 @@ function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+    <div className="h-screen bg-neutral-950 flex font-sans relative overflow-hidden">
       {/* Dot Grid Background */}
       <div className="absolute inset-0 h-full w-full bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
       
@@ -49,25 +49,25 @@ function SignUp() {
       <div className="diagonal-line line-1"></div>
       <div className="diagonal-line line-2"></div>
       
-      <div className="max-w-sm w-full relative z-10">
-        {/* Logo and Header Section */}
-        <div className="text-center mb-10">
-          <img src="/logonaked.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
-          <h1 className="text-3xl font-normal tracking-wide text-white mb-2">lungo ai</h1>
-          <p className="text-base text-gray-400">Join Lungo AI and bring your ideas to life.</p>
-        </div>
+      {/* Left side - SignUp Content */}
+      <div className="w-1/2 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8">
+        <div className="max-w-sm w-full relative z-10">
+          {/* Logo and Header Section */}
+          <div className="text-center mb-10">
+            <img src="/logonaked.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
+            <h1 className="text-3xl font-normal tracking-wide text-white mb-2">lungo ai</h1>
+            <p className="text-base text-gray-400">Join Lungo AI and bring your ideas to life.</p>
+          </div>
 
-        {/* Main Content - No Card Border */}
-        <div className="space-y-5 p-8 rounded-lg">
-          {/* Buttons Container */}
-          <div className="space-y-4">
+          {/* Main Content - Clean Style */}
+          <div className="space-y-6">
             {/* Google Button */}
             <button
               onClick={handleGoogleSignUp}
-              className="group w-full flex items-center justify-center px-5 py-3
-                        border border-gray-600 rounded-md
-                        bg-neutral-900 hover:bg-neutral-800 hover:border-gray-500
-                        transition-all duration-200 ease-in-out"
+              className="group w-full flex items-center justify-center px-6 py-4
+                        bg-neutral-950/40 backdrop-blur-xl 
+                        border border-neutral-700/50 hover:border-neutral-600/70
+                        rounded-3xl transition-all duration-300 hover:scale-105 hover:bg-neutral-950/60"
             >
               <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -75,34 +75,22 @@ function SignUp() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              <span className="text-sm font-normal text-white">Continue with Google</span>
+              <span className="text-sm font-normal text-white tracking-wide">Continue with Google</span>
             </button>
 
-            {/* Twitter Button - REMOVED */}
-
-            {/* Apple Button - REMOVED */}
-            {/*
-            <button
-              onClick={handleAppleSignUp}
-              className="group w-full flex items-center justify-center px-5 py-3
-                        border border-gray-100 rounded-md
-                        bg-white hover:border-gray-200
-                        transition-all duration-200 ease-in-out"
-            >
-              <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17.569 12.6254C17.597 15.4237 20.1579 16.3088 20.1869 16.3216C20.1649 16.3943 19.8501 17.4169 19.1395 18.4798C18.5346 19.3839 17.9128 20.2809 16.9128 20.3093C15.9344 20.3368 15.6169 19.7008 14.4837 19.7008C13.3504 19.7008 13.0058 20.2809 12.0564 20.3368C11.0858 20.3927 10.3777 19.3978 9.76762 18.5021C8.52547 16.6682 7.55047 13.3132 8.82129 11.0197C9.44961 9.88094 10.5858 9.16181 11.8213 9.13431C12.7712 9.10681 13.6663 9.80094 14.2456 9.80094C14.8249 9.80094 15.9009 8.9777 17.022 9.12681C17.5976 9.15431 18.6949 9.38956 19.3777 10.3389C19.3081 10.3839 17.5465 11.3783 17.569 12.6254ZM15.5702 7.46506C16.0606 6.87094 16.3949 6.04431 16.295 5.22681C15.5864 5.25431 14.7336 5.71506 14.2262 6.29831C13.7747 6.80919 13.37 7.65944 13.4847 8.45331C14.2696 8.51506 15.0798 8.05944 15.5702 7.46506Z" fill="black" />
-              </svg>
-              <span className="text-sm font-normal">Continue with Apple</span>
-            </button>
-            */}
+            {/* Privacy Note */}
+            <p className="mt-6 text-xs text-center text-neutral-400">
+              By continuing, you agree to our <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-lime-400 hover:text-lime-300 transition-colors">Terms</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-lime-400 hover:text-lime-300 transition-colors">Privacy Policy</a>.
+            </p>
           </div>
-
-          {/* Privacy Note - UPDATED */}
-          <p className="mt-6 text-xs text-center text-gray-400">
-            By clicking "Continue with Google", you acknowledge that you have read and 
-            understood, and agree to Lungo AI's <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Terms & Conditions</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Privacy Policy</a>.
-          </p>
         </div>
+      </div>
+      
+      {/* Right side - Video */}
+      <div className="w-1/2 p-5 relative z-10 h-full">
+        <video autoPlay loop muted className="w-full h-full object-cover rounded-2xl">
+          <source src="/vid2.mp4" type="video/mp4" />
+        </video>
       </div>
 
       {/* CSS for the animated background */}

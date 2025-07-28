@@ -11,6 +11,8 @@ import {
 } from '@phosphor-icons/react';
 import { auth, db } from '../firebase.js';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
@@ -24,8 +26,24 @@ const GenerationPage = () => {
 	const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
 	const fileInputRef = useRef(null);
 	const dropAreaRef = useRef(null);
+	const navigate = useNavigate();
 	
-	const user = auth.currentUser;
+	const [user, setUser] = useState(null);
+	const [authChecked, setAuthChecked] = useState(false);
+	
+	// Check authentication
+	useEffect(() => {
+		const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+			setUser(currentUser);
+			setAuthChecked(true);
+			
+			if (!currentUser) {
+				navigate('/signup');
+			}
+		});
+		
+		return () => unsubscribe();
+	}, [navigate]);
 	
 	// Fetch previous generations from Firestore
 	useEffect(() => {
@@ -293,15 +311,99 @@ const GenerationPage = () => {
 	};
 
 	// Handle generate
-	const handleGenerate = () => {
-		console.log('Generating with:', {
-			type: activeType,
-			model: selectedModel,
-			prompt,
-			settings,
-			uploadedImages: uploadedImages,
-			creditsNeeded: calculateCredits()
-		});
+	const handleGenerate = async () => {
+		if (!user) {
+			navigate('/signup');
+			return;
+		}
+
+		if (!prompt.trim()) {
+			alert('Please enter a prompt');
+			return;
+		}
+
+		try {
+			// Prepare data for Firebase function
+			const generationData = {
+				model: selectedModel,
+				prompt: prompt.trim(),
+				...settings
+			};
+
+			// Handle uploaded images
+			if (uploadedImages.length > 0) {
+				// Convert uploaded images to base64 for sending to Firebase
+				const imagePromises = uploadedImages.map(async (uploadedImage) => {
+					// If it's already a URL (from history), use it directly
+					if (uploadedImage.isFromHistory) {
+						return uploadedImage.url;
+					}
+					
+					// Convert file to base64
+					return new Promise((resolve) => {
+						const reader = new FileReader();
+						reader.onload = (e) => resolve(e.target.result);
+						reader.readAsDataURL(uploadedImage.file);
+					});
+				});
+
+				const imageData = await Promise.all(imagePromises);
+				
+				// Set the appropriate image parameter based on model config
+				const modelConfig = getModelById(selectedModel);
+				if (modelConfig?.params) {
+					// Find the image parameter name for this model
+					const imageParam = Object.keys(modelConfig.params).find(key => 
+						key.includes('image') || key === 'start_image' || key === 'first_frame_image'
+					);
+					
+					if (imageParam) {
+						generationData[imageParam] = imageData[0]; // Use first image for single image models
+					}
+				}
+			}
+
+			console.log('Sending generation request:', generationData);
+
+			// Call appropriate Firebase function based on type
+			let result;
+			if (activeType === 'image') {
+				const { httpsCallable } = await import('firebase/functions');
+				const { functions } = await import('../firebase.js');
+				const generateImage = httpsCallable(functions, 'generateImage');
+				result = await generateImage(generationData);
+			} else if (activeType === 'video') {
+				const { httpsCallable } = await import('firebase/functions');
+				const { functions } = await import('../firebase.js');
+				const generateVideo = httpsCallable(functions, 'generateVideo');
+				result = await generateVideo(generationData);
+			}
+
+			console.log('Generation result:', result.data);
+			
+			if (result.data.success) {
+				if (result.data.isAsync && result.data.predictionId) {
+					alert(`Generation started! Prediction ID: ${result.data.predictionId}. Check back in a few minutes.`);
+					// TODO: Add polling logic here
+				} else if (result.data.imageUrl) {
+					alert(`Image generated successfully! URL: ${result.data.imageUrl}`);
+					// Refresh the history to show new generation
+					window.location.reload();
+				} else if (result.data.videoUrl) {
+					alert(`Video generated successfully! URL: ${result.data.videoUrl}`);
+					// Refresh the history to show new generation
+					window.location.reload();
+				} else {
+					alert('Generation completed successfully!');
+				}
+			} else {
+				alert('Generation failed');
+			}
+
+		} catch (error) {
+			console.error('Generation error:', error);
+			alert(`Generation failed: ${error.message}`);
+		}
 	};
 
 	// Get all parameters that have options (dropdowns)
@@ -326,6 +428,20 @@ const GenerationPage = () => {
 			!modelConfig.options?.[key] // No predefined options
 		);
 	};
+
+	// Show loading while checking auth
+	if (!authChecked) {
+		return (
+			<div className="h-screen bg-neutral-950 flex items-center justify-center">
+				<div className="text-white">Loading...</div>
+			</div>
+		);
+	}
+
+	// Don't render if not authenticated
+	if (!user) {
+		return null;
+	}
 
 	return (
 		<div className="h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden flex">

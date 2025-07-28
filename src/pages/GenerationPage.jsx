@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { models, getModelById, getModelsByCategory } from '../config/models.js';
 import { 
 	Upload,
@@ -6,8 +6,11 @@ import {
 	Video as VideoIcon,
 	CaretDown,
 	X,
-	Plus
+	Plus,
+	CaretUp
 } from '@phosphor-icons/react';
+import { auth, db } from '../firebase.js';
+import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
@@ -16,8 +19,57 @@ const GenerationPage = () => {
 	const [settings, setSettings] = useState({});
 	const [uploadedImages, setUploadedImages] = useState([]);
 	const [isDragOver, setIsDragOver] = useState(false);
+	const [historyScrollIndex, setHistoryScrollIndex] = useState(0);
+	const [previousGenerations, setPreviousGenerations] = useState([]);
+	const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
 	const fileInputRef = useRef(null);
 	const dropAreaRef = useRef(null);
+	
+	const user = auth.currentUser;
+	
+	// Fetch previous generations from Firestore
+	useEffect(() => {
+		const fetchGenerations = async () => {
+			if (!user) {
+				setIsLoadingGenerations(false);
+				return;
+			}
+
+			try {
+				setIsLoadingGenerations(true);
+				const generationsColRef = collection(db, 'users', user.uid, 'generations');
+				
+				// Only fetch image type generations, limit to recent 20
+				const imageQuery = query(
+					generationsColRef, 
+					where('type', '==', 'image'), 
+					orderBy('timestamp', 'desc'), 
+					limit(20)
+				);
+				
+				const imageSnapshot = await getDocs(imageQuery);
+				const processedGenerations = imageSnapshot.docs.map(docSnapshot => {
+					const data = docSnapshot.data();
+					const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
+					return { 
+						id: docSnapshot.id, 
+						...data, 
+						timestamp,
+						url: data.imageUrl || data.url, // Handle different URL field names
+						prompt: data.prompt || 'Generated image'
+					};
+				}).filter(gen => gen.url); // Only include generations with valid image URLs
+
+				setPreviousGenerations(processedGenerations);
+			} catch (error) {
+				console.error("Error fetching generations:", error);
+			} finally {
+				setIsLoadingGenerations(false);
+			}
+		};
+
+		fetchGenerations();
+	}, [user]);
 	
 	// Get current model config
 	const modelConfig = getModelById(selectedModel);
@@ -152,12 +204,92 @@ const GenerationPage = () => {
 	const handleDrop = (e) => {
 		e.preventDefault();
 		setIsDragOver(false);
+		
+		// Check if it's a history image being dropped
+		const historyData = e.dataTransfer.getData('application/json');
+		if (historyData) {
+			try {
+				const generation = JSON.parse(historyData);
+				addHistoryImageToUploaded(generation);
+				return;
+			} catch (error) {
+				console.error('Error parsing dropped history data:', error);
+			}
+		}
+		
+		// Handle regular file drops
 		const files = e.dataTransfer.files;
-		handleFileUpload(files);
+		if (files.length > 0) {
+			handleFileUpload(files);
+		}
 	};
 
 	const handleClickUpload = () => {
 		fileInputRef.current?.click();
+	};
+
+	// History scroll functions
+	const scrollHistoryUp = () => {
+		setHistoryScrollIndex(prev => Math.max(0, prev - 1));
+	};
+
+	const scrollHistoryDown = () => {
+		const maxIndex = Math.max(0, previousGenerations.length - 6);
+		setHistoryScrollIndex(prev => Math.min(maxIndex, prev + 1));
+	};
+
+	const getVisibleHistory = () => {
+		return previousGenerations.slice(historyScrollIndex, historyScrollIndex + 6);
+	};
+
+	// Convert URL to File object for history images
+	const urlToFile = async (url, filename, mimeType) => {
+		try {
+			const response = await fetch(url);
+			const blob = await response.blob();
+			return new File([blob], filename, { type: mimeType });
+		} catch (error) {
+			console.error('Error converting URL to file:', error);
+			return null;
+		}
+	};
+
+	// Add history image to uploadedImages
+	const addHistoryImageToUploaded = async (generation) => {
+		if (uploadedImages.length >= 5) {
+			return; // Max limit reached
+		}
+
+		// Check if image is already added
+		const isAlreadyAdded = uploadedImages.some(img => img.url === generation.url);
+		if (isAlreadyAdded) {
+			return;
+		}
+
+		try {
+			const filename = `generation-${generation.id}.jpg`;
+			const file = await urlToFile(generation.url, filename, 'image/jpeg');
+			
+			if (file) {
+				// Create image element to get dimensions
+				const img = new window.Image();
+				img.onload = () => {
+					const aspectRatio = img.width / img.height;
+					const newImage = {
+						id: Date.now() + Math.random(),
+						file: file,
+						url: generation.url,
+						name: filename,
+						aspectRatio: aspectRatio,
+						isFromHistory: true
+					};
+					setUploadedImages(prev => [...prev, newImage]);
+				};
+				img.src = generation.url;
+			}
+		} catch (error) {
+			console.error('Error adding history image:', error);
+		}
 	};
 
 	// Handle generate
@@ -429,7 +561,12 @@ const GenerationPage = () => {
 					</div>
 				) : (
 					/* Grid layout for all images */
-					<div className="relative bg-transparent p-4 w-full h-full transition-all duration-300 flex items-center justify-center">
+					<div 
+						className="relative bg-transparent p-4 w-full h-full transition-all duration-300 flex items-center justify-center"
+						onDragOver={handleDragOver}
+						onDragLeave={handleDragLeave}
+						onDrop={handleDrop}
+					>
 						
 						{/* Grid container */}
 						<div className={` overflow-visible bg-neutral-900/0 p-4 ${
@@ -492,17 +629,74 @@ const GenerationPage = () => {
 					onChange={(e) => handleFileUpload(e.target.files)}
 				/>
 				
-				{/* Add more button - Outside the main area */}
-				{uploadedImages.length > 0 && uploadedImages.length < 5 && (
-					<div className="fixed top-1/2 right-4 transform -translate-y-1/2 z-50">
+				{/* Right sidebar with + button and history */}
+				<div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-center space-y-4">
+					{/* Add more button - always show when < 5 images */}
+					{uploadedImages.length < 5 && (
 						<button
 							onClick={handleClickUpload}
 							className="w-12 h-12 border-2 border-dashed border-neutral-700 hover:border-lime-400 rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm"
 						>
 							<Plus size={20} className="text-neutral-600 group-hover:text-lime-400" />
 						</button>
-					</div>
-				)}
+					)}
+					
+					{/* History section */}
+					
+					{!isLoadingGenerations && previousGenerations.length > 0 && (
+						<div className="flex flex-col items-center space-y-2">
+							{/* Scroll up button */}
+							{historyScrollIndex > 0 && (
+								<button
+									onClick={scrollHistoryUp}
+									className="w-12 h-4 bg-neutral-900/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-neutral-800/80 transition-colors group"
+								>
+									<CaretUp size={16} className="text-neutral-600 group-hover:text-lime-400" />
+								</button>
+							)}
+							
+							{/* History images */}
+							<div className="flex flex-col space-y-2">
+								{getVisibleHistory().map((generation) => (
+									<div
+										key={generation.id}
+										className="w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden hover:ring-2 hover:ring-lime-400/50 transition-all duration-300 cursor-pointer group relative"
+										title={`Click to add: ${generation.prompt}`}
+										draggable={true}
+										onClick={() => addHistoryImageToUploaded(generation)}
+										onDragStart={(e) => {
+											e.dataTransfer.setData('application/json', JSON.stringify(generation));
+											e.dataTransfer.effectAllowed = 'copy';
+										}}
+									>
+										<img
+											src={generation.url}
+											alt={generation.prompt}
+											className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
+											onError={(e) => {
+												e.target.style.display = 'none';
+											}}
+										/>
+										{/* Hover overlay */}
+										<div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+											<Plus size={16} className="text-white opacity-80" />
+										</div>
+									</div>
+								))}
+							</div>
+							
+							{/* Scroll down button */}
+							{historyScrollIndex < previousGenerations.length - 6 && (
+								<button
+									onClick={scrollHistoryDown}
+									className="w-12 h-4 bg-neutral-900/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-neutral-800/80 transition-colors group"
+								>
+									<CaretDown size={16} className="text-neutral-600 group-hover:text-lime-400" />
+								</button>
+							)}
+						</div>
+					)}
+				</div>
 			</div>
 			
 			{/* Bottom menu */}

@@ -12,7 +12,7 @@ import CampaignCreator from './pages/CampaignCreator';
 import CanvasWorkspace from './pages/CanvasWorkspace';
 import CreativeStudio from './pages/CreativeStudio';
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, requireAuth = true }) {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -21,6 +21,10 @@ function ProtectedRoute({ children }) {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     );
+  }
+  
+  if (!requireAuth) {
+    return children;
   }
   
   return user ? children : <Navigate to="/auth" />;
@@ -44,17 +48,33 @@ function App() {
           />
           <Routes>
             <Route path="/auth" element={<Layout />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
+            <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />
-              <Route path="generation" element={<Generation />} />
-              <Route path="gen" element={<GenerationPage />} />
-              <Route path="campaigns" element={<CampaignCreator />} />
-              <Route path="studio" element={<CanvasWorkspace />} />
-              <Route path="creative" element={<CreativeStudio />} />
+              <Route path="generation" element={
+                <ProtectedRoute>
+                  <Generation />
+                </ProtectedRoute>
+              } />
+              <Route path="gen" element={
+                <ProtectedRoute>
+                  <GenerationPage />
+                </ProtectedRoute>
+              } />
+              <Route path="campaigns" element={
+                <ProtectedRoute>
+                  <CampaignCreator />
+                </ProtectedRoute>
+              } />
+              <Route path="studio" element={
+                <ProtectedRoute>
+                  <CanvasWorkspace />
+                </ProtectedRoute>
+              } />
+              <Route path="creative" element={
+                <ProtectedRoute>
+                  <CreativeStudio />
+                </ProtectedRoute>
+              } />
             </Route>
           </Routes>
         </div>

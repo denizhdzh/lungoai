@@ -1,23 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import app from '../firebase'; // Assuming firebase.js is in src folder
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import { motion } from 'framer-motion'; // NEW: Import motion
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
 function SignUp() {
   const navigate = useNavigate(); // Initialize useNavigate
-  const [isLoading, setIsLoading] = useState(true); // Add loading state
-
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500); // Simulate 1.5 seconds load time
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleGoogleSignUp = async () => {
     try {
@@ -39,36 +29,8 @@ function SignUp() {
     }
   };
 
-  // --- Full Page Loader ---
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-900 text-white">
-        {/* Animated Logo Loader using Framer Motion */}
-        <motion.div
-          style={{
-            width: 80, // Represents 4 units
-            boxSizing: 'border-box',
-            boxShadow: 'inset 0 0 0 10px currentColor', // Thicker inside border (was 3px)
-            marginBottom: 20, // Optional space below
-            borderRadius: '16px', // Added corner radius
-          }}
-          animate={{
-            height: [80, 40, 80], // 4x4 -> 4x2 -> 4x4
-          }}
-          transition={{
-            duration: 1.5,
-            repeat: Infinity,
-            repeatType: "loop", // Changed from "reverse" to ensure it goes 80-40-80 then restarts 80-40-80
-            ease: "easeInOut",
-          }}
-        />
-      </div>
-    );
-  }
-  // --- End Full Page Loader ---
-
   return (
-    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative overflow-hidden">
       {/* Dot Grid Background */}
       <div className="absolute inset-0 h-full w-full bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
       
@@ -104,7 +66,7 @@ function SignUp() {
               onClick={handleGoogleSignUp}
               className="group w-full flex items-center justify-center px-5 py-3
                         border border-gray-600 rounded-md
-                        bg-neutral-800 hover:bg-neutral-700 hover:border-gray-500
+                        bg-neutral-900 hover:bg-neutral-800 hover:border-gray-500
                         transition-all duration-200 ease-in-out"
             >
               <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

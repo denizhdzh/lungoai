@@ -19,6 +19,9 @@ import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 import GenerationPage from './pages/GenerationPage.jsx';
 import WelcomePage from './pages/WelcomePage.jsx';
+import ModelsPage from './pages/ModelsPage.jsx';
+import TermsPage from './pages/TermsPage.jsx';
+import PrivacyPage from './pages/PrivacyPage.jsx';
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -234,12 +237,18 @@ console.log("[main.jsx] Dark mode forced.");
 // --- END ENHANCED NAVIGATION PROTECTION ---
 
 // Protected Route Component (Updated to use userData)
-function ProtectedRoute({ user, userData, userDataFetched, children }) {
+function ProtectedRoute({ user, userData, userDataFetched, children, requireAuth = true }) {
 
   // Wait until auth is checked and user data is fetched
   if (!userDataFetched) {
     return null; // Or a loading indicator
   }
+  
+  // If requireAuth is false, just render children
+  if (!requireAuth) {
+    return children;
+  }
+  
   if (!user) {
     return <Navigate to="/signup" replace />;
   }
@@ -377,24 +386,43 @@ function AppRouter() {
         }
       />
 
-      {/* Protected Routes using Layout (Pass userData now) */}
+      {/* Main Layout Routes - No auth required for layout */}
       <Route 
         path="/" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched} requireAuth={false}>
             <Layout /> 
           </ProtectedRoute>
         }
       >
-        {/* Default child route (Dashboard) */}
+        {/* Default child route (Dashboard) - No auth required */}
         <Route index element={<WelcomePage />} /> 
-        {/* Other child routes */}
-        <Route path="dashboard" element={<WelcomePage />} />
-        <Route path="settings" element={<Settings />} />
+        {/* Other child routes - Auth required */}
+        <Route path="dashboard" element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <WelcomePage />
+          </ProtectedRoute>
+        } />
+        <Route path="settings" element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <Settings />
+          </ProtectedRoute>
+        } />
         <Route path="pricing" element={<PricingSection id="pricing" />} />
         <Route path="aiguide" element={<CommandInfo />} />
-        <Route path="admin" element={<Admin />} />
-        <Route path="studio" element={<GenerationPage/>} />
+        <Route path="admin" element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <Admin />
+          </ProtectedRoute>
+        } />
+        <Route path="studio" element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <GenerationPage/>
+          </ProtectedRoute>
+        } />
+        <Route path="models" element={<ModelsPage />} />
+        <Route path="terms" element={<TermsPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
       </Route>
 
 

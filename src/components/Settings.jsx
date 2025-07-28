@@ -6,7 +6,7 @@ import { doc, collection, addDoc, getDocs, updateDoc, deleteDoc, setDoc, query, 
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from '@firebase/storage';
 // Import Firebase Functions
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
-import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash } from '@phosphor-icons/react';
+import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash, Gavel } from '@phosphor-icons/react';
 import PricingSection from './PricingSection'; // Import the PricingSection component
 
 // Helper to format bytes
@@ -239,12 +239,9 @@ function Settings() {
   // Tab configuration - Added Plan & Billing, updated icons
   const tabs = [
     { id: 'user', label: 'User Profile', icon: <User size={18} /> },
-    { id: 'plan', label: 'Plan & Billing', icon: <CreditCard size={18} /> }, // New Plan tab
-    { id: 'products', label: 'Products', icon: <Package size={18} /> },
-    { id: 'tiktok', label: 'TikTok Accounts', icon: <TiktokLogo size={18} /> },
-    { id: 'creators', label: 'UGC Creators', icon: <Camera size={18} /> },
-    { id: 'backgrounds', label: 'Background Images', icon: <ImagesSquare size={18} /> },
-    { id: 'featureRequests', label: 'Feature Requests', icon: <Sparkle size={18} /> }, // Changed icon
+    { id: 'billing', label: 'Manage Billing', icon: <CreditCard size={18} /> },
+    { id: 'featureRequests', label: 'Feature Requests', icon: <Sparkle size={18} /> },
+    { id: 'legal', label: 'Legal & Privacy', icon: <Gavel size={18} /> },
   ];
 
   // --- NEW: useEffect to set activeTab from URL hash and update hash on tab click ---
@@ -1156,16 +1153,10 @@ function Settings() {
     switch(activeTab) {
       case 'user':
         return renderUserTab();
-      case 'plan': // Add case for 'plan'
-        return renderPlanTab();
-      case 'products':
-        return renderProductsTab();
-      case 'tiktok':
-        return renderTikTokTab();
-      case 'creators':
-        return renderCreatorsTab();
-      case 'backgrounds':
-        return renderBackgroundsTab();
+      case 'billing':
+        return renderBillingTab();
+      case 'legal':
+        return renderLegalTab();
       case 'featureRequests':
         return renderFeatureRequestsTab();
       default:
@@ -1179,11 +1170,11 @@ function Settings() {
       <div className="px-6 lg:px-0"> 
         <div className="text-left">
           <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+            <span className="text-sm font-medium text-white uppercase tracking-wider">
               User Profile
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-            <span className="text-sm text-stone-500 dark:text-stone-400">
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+            <span className="text-sm text-neutral-400">
               Manage your personal information
             </span>
           </div>
@@ -1280,11 +1271,11 @@ function Settings() {
           <div className="space-y-6">
             <div>
               <div className="flex items-center mb-4">
-                <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+                <span className="text-sm font-medium text-white uppercase tracking-wider">
                   Account Actions
                 </span>
-                <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-                <span className="text-sm text-stone-500 dark:text-stone-400">
+                <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+                <span className="text-sm text-neutral-400">
                   Manage your account
                 </span>
               </div>
@@ -1328,103 +1319,286 @@ function Settings() {
   );
 
   // --- NEW: Plan & Billing Tab ---
-  const renderPlanTab = () => {
-     // --- NEW: Handle Manage Billing Button Click ---
-      const handleManageBilling = async () => {
-         if (!userSubscription?.stripeCustomerId) {
-             setPortalError("No active billing account found. Subscribe to a plan first.");
-             return;
-         }
-         setIsPortalLoading(true);
-         setPortalError(null);
-         try {
-             console.log("Calling createStripePortalSession...");
-             const result = await createStripePortalSessionCallable();
-             const portalUrl = result?.data?.url;
-            // Add a stricter check to ensure portalUrl is a valid-looking string
-            if (typeof portalUrl === 'string' && portalUrl.startsWith('http')) {
-                 console.log("Redirecting to Stripe Portal:", portalUrl);
-                 window.location.href = portalUrl;
-             } else {
-                console.error("Invalid or missing portal URL received from backend:", portalUrl);
-                throw new Error("Could not retrieve a valid billing portal URL.");
-             }
-         } catch (error) {
-             console.error("Error creating Stripe Portal session:", error);
-             // Display specific error from Firebase function if available
-             const message = error.message || "An unexpected error occurred.";
-             setPortalError(`Failed to open billing portal: ${message}`);
-         } finally {
-             setIsPortalLoading(false);
-         }
-      };
-     // --- End Handle Manage Billing --- 
+  const renderBillingTab = () => {
+    const handleManageBilling = async () => {
+      if (!userSubscription?.stripeCustomerId) {
+        setPortalError("No active billing account found. Subscribe to a plan first.");
+        return;
+      }
+      setIsPortalLoading(true);
+      setPortalError(null);
+      try {
+        console.log("Calling createStripePortalSession...");
+        const result = await createStripePortalSessionCallable();
+        const portalUrl = result?.data?.url;
+        if (typeof portalUrl === 'string' && portalUrl.startsWith('http')) {
+          console.log("Redirecting to Stripe Portal:", portalUrl);
+          window.location.href = portalUrl;
+        } else {
+          console.error("Invalid or missing portal URL received from backend:", portalUrl);
+          throw new Error("Could not retrieve a valid billing portal URL.");
+        }
+      } catch (error) {
+        console.error("Error creating Stripe Portal session:", error);
+        const message = error.message || "An unexpected error occurred.";
+        setPortalError(`Failed to open billing portal: ${message}`);
+      } finally {
+        setIsPortalLoading(false);
+      }
+    };
 
     return (
-      <div className="w-full"> {/* Add container */}
-        <div className="px-6 lg:px-0"> {/* Add padding */}
-          {/* Add header consistent with User tab */}
-          <div className="text-left mb-8"> 
+      <div className="w-full">
+        <div className="px-6 lg:px-0">
+          <div className="text-left mb-8">
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
-                Plan & Billing
+              <span className="text-sm font-medium text-white uppercase tracking-wider">
+                Manage Billing
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
-                Manage your subscription and billing details
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
+                Subscription and payment management
               </span>
             </div>
-            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl">
-           View your current plan, upgrade options, or manage your payment methods and billing history.
-          </p>
+            <p className="text-base text-neutral-400 max-w-2xl">
+              View your current subscription, manage payment methods, and access billing history.
+            </p>
           </div>
-          {/* Render the PricingSection - Pass subscription data */}
-          {isFetchingSubscription ? (
-             <div className="flex justify-center items-center py-20">
-                <CircleNotch size={28} weight="regular" className="animate-spin text-stone-400 dark:text-stone-500 mr-3" />
-                <span className="text-base text-stone-500 dark:text-stone-400">Loading plan details...</span>
-             </div>
-          ) : (
-             <PricingSection id="settings-pricing" subscriptionData={userSubscription} user={user} /> 
-          )}
 
-          {/* Manage Billing Button Area - Added below PricingSection */} 
-          {!isFetchingSubscription && userSubscription?.stripeCustomerId && (userSubscription?.subscriptionStatus === 'active' || userSubscription?.subscriptionStatus === 'trialing') && (
-             <div className="mt-12 pt-8 border-t border-stone-100 dark:border-stone-800 flex flex-col items-start">
-                <h3 className="text-base font-medium text-stone-800 dark:text-stone-200 mb-3">Manage Your Subscription</h3>
-                <p className="text-sm text-stone-600 dark:text-stone-400 mb-4 max-w-xl">
-                   Need to update your payment method, view invoices, or cancel your plan? Access the secure customer portal.
-                </p>
-                <button 
-                   onClick={handleManageBilling}
-                   disabled={isPortalLoading || !userSubscription?.stripeCustomerId} // Disable if loading or no customer ID
-                   className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow ${
-                      isPortalLoading 
-                         ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait' 
-                         : !userSubscription?.stripeCustomerId
-                            ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-not-allowed' // Disabled style if no customer ID
-                            : 'bg-neutral-100 dark:bg-neutral-900 text-black dark:text-stone-100 ring-1 ring-inset ring-stone-200 dark:ring-stone-700 hover:bg-neutral-50 dark:hover:bg-neutral-800'
-                   }`}
-                >
-                   {isPortalLoading ? (
-                      <CircleNotch size={16} className="animate-spin" />
-                   ) : (
-                      <ArrowSquareOut size={16} />
-                   )}
-                   {isPortalLoading ? 'Opening Portal...' : 'Manage Billing'}
-                </button>
+          {isFetchingSubscription ? (
+            <div className="flex justify-center items-center py-20">
+              <CircleNotch size={28} weight="regular" className="animate-spin text-neutral-400 mr-3" />
+              <span className="text-base text-neutral-400">Loading subscription details...</span>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              
+              {/* Current Subscription */}
+              <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-white font-semibold text-xl mb-2">Current Subscription</h3>
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider">ACTIVE PLAN</span>
+                  </div>
+                  <div className="text-right">
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${
+                      userSubscription?.subscriptionStatus === 'active' 
+                        ? 'bg-lime-400/20 text-lime-400 border border-lime-400/30'
+                        : userSubscription?.subscriptionStatus === 'trialing'
+                        ? 'bg-blue-400/20 text-blue-400 border border-blue-400/30'
+                        : 'bg-neutral-700/60 text-neutral-400 border border-neutral-600/50'
+                    }`}>
+                      {userSubscription?.subscriptionStatus || 'No Subscription'}
+                    </div>
+                  </div>
+                </div>
+
+                {userSubscription?.subscriptionStatus ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="text-white font-medium mb-2">Plan Details</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-neutral-400">Plan Name:</span>
+                            <span className="text-white font-medium">{userSubscription?.planName || 'Pro Plan'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-400">Billing Cycle:</span>
+                            <span className="text-white font-medium">{userSubscription?.billingInterval || 'Monthly'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-400">Amount:</span>
+                            <span className="text-white font-medium">${(userSubscription?.amount / 100).toFixed(2) || '29.99'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-white font-medium mb-2">Billing Information</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-neutral-400">Next Billing:</span>
+                            <span className="text-white font-medium">
+                              {userSubscription?.currentPeriodEnd 
+                                ? new Date(userSubscription.currentPeriodEnd * 1000).toLocaleDateString()
+                                : 'N/A'
+                              }
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-400">Customer ID:</span>
+                            <span className="text-white font-medium text-xs">
+                              {userSubscription?.stripeCustomerId?.substring(0, 12)}...
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-neutral-400 mb-4">No active subscription found</p>
+                    <p className="text-sm text-neutral-500">Subscribe to a plan to access premium features</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Portal Access */}
+              <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-white font-semibold text-xl mb-2">Billing Portal</h3>
+                    <p className="text-neutral-400 text-sm max-w-lg">
+                      Access the secure customer portal to update payment methods, view invoices, 
+                      download receipts, and manage your subscription settings.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={handleManageBilling}
+                      disabled={isPortalLoading || !userSubscription?.stripeCustomerId}
+                      className="bg-lime-400/20 hover:bg-lime-400/30 disabled:bg-neutral-700/60 text-lime-400 disabled:text-neutral-500 px-6 py-3 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 disabled:border-neutral-600/50 flex items-center gap-2 disabled:cursor-not-allowed"
+                    >
+                      {isPortalLoading ? (
+                        <CircleNotch size={16} className="animate-spin" />
+                      ) : (
+                        <ArrowSquareOut size={16} />
+                      )}
+                      {isPortalLoading ? 'Opening...' : 'Open Portal'}
+                    </button>
+                    
+                    {!userSubscription?.stripeCustomerId && (
+                      <p className="text-xs text-neutral-500 text-center max-w-32">
+                        Subscribe first to access portal
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
                 {portalError && (
-                    <p className="mt-3 text-xs text-red-600 dark:text-red-400">{portalError}</p>
+                  <div className="mt-4 p-4 bg-red-900/20 border border-red-700/50 rounded-2xl">
+                    <p className="text-red-400 text-sm">{portalError}</p>
+                  </div>
                 )}
-                {!userSubscription?.stripeCustomerId && !isFetchingSubscription && (
-                     <p className="mt-3 text-xs text-stone-500 dark:text-stone-500">Subscribe to a plan to manage billing.</p>
-                )}
-             </div>
+              </div>
+
+              {/* Usage Overview */}
+              <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
+                <h3 className="text-white font-semibold text-xl mb-6">Usage Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-lime-400 mb-2">
+                      {layoutFirestoreUserData?.general_credits?.toLocaleString() || '0'}
+                    </div>
+                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Credits Remaining</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-400 mb-2">
+                      {layoutFirestoreUserData?.daily_credits_used?.toLocaleString() || '0'}
+                    </div>
+                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Used Today</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-400 mb-2">
+                      {layoutFirestoreUserData?.monthly_credits_used?.toLocaleString() || '0'}
+                    </div>
+                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Used This Month</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           )}
         </div>
       </div>
     );
   };
+
+  // Legal & Privacy Tab
+  const renderLegalTab = () => (
+    <div className="w-full">
+      <div className="px-6 lg:px-0">
+        <div className="text-left mb-8">
+          <div className="flex items-center mb-4">
+            <span className="text-sm font-medium text-white uppercase tracking-wider">
+              Legal & Privacy
+            </span>
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+            <span className="text-sm text-neutral-400">
+              Terms, privacy policy, and legal information
+            </span>
+          </div>
+          <p className="text-base text-neutral-400 max-w-2xl">
+            Review our terms of service, privacy policy, and other legal documentation.
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          {/* Terms of Service */}
+          <div className="bg-neutral-800/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold text-lg mb-2">Terms of Service</h3>
+                <p className="text-neutral-400 text-sm">
+                  Our terms and conditions for using Lungo AI services
+                </p>
+              </div>
+              <a 
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-4 py-2 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center gap-2"
+              >
+                <ArrowSquareOut size={16} />
+                View Terms
+              </a>
+            </div>
+          </div>
+
+          {/* Privacy Policy */}
+          <div className="bg-neutral-800/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold text-lg mb-2">Privacy Policy</h3>
+                <p className="text-neutral-400 text-sm">
+                  How we collect, use, and protect your personal information
+                </p>
+              </div>
+              <a 
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-4 py-2 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center gap-2"
+              >
+                <ArrowSquareOut size={16} />
+                View Policy
+              </a>
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div className="bg-neutral-800/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">
+            <h3 className="text-white font-semibold text-lg mb-4">Legal Contact</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Legal inquiries:</span>
+                <span className="text-white">deniz@lungoai.com</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Privacy concerns:</span>
+                <span className="text-white">deniz@lungoai.com</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-400">GDPR requests:</span>
+                <span className="text-white">deniz@lungoai.com</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   // Modified Products Tab
   const renderProductsTab = () => (
@@ -1433,11 +1607,11 @@ function Settings() {
         {/* Header consistent with User tab */}
         <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+              <span className="text-sm font-medium text-white uppercase tracking-wider">
                 Products
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
                 Manage your product information
               </span>
             </div>
@@ -1679,11 +1853,11 @@ function Settings() {
         {/* NEW HEADER SECTION */}
         <div className="text-left mb-8">
           <div className="flex items-center mb-4">
-            <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+            <span className="text-sm font-medium text-white uppercase tracking-wider">
               TikTok Accounts
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-            <span className="text-sm text-stone-500 dark:text-stone-400">
+            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+            <span className="text-sm text-neutral-400">
               Manage your TikTok account integrations
             </span>
           </div>
@@ -1865,11 +2039,11 @@ function Settings() {
        {/* Header consistent with User tab */}
          <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+              <span className="text-sm font-medium text-white uppercase tracking-wider">
                 UGC Creators
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
                 Manage your UGC creator assets
               </span>
             </div>
@@ -2013,11 +2187,11 @@ function Settings() {
         {/* Header consistent with User tab */}
         <div className="text-left"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+              <span className="text-sm font-medium text-white uppercase tracking-wider">
                 Background Images
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
                 Manage backgrounds for video generation
               </span>
             </div>
@@ -2247,17 +2421,17 @@ function Settings() {
   const renderFeatureRequestsTab = () => (
      <div className="w-full"> 
       <div className="px-6 lg:px-0 space-y-6"> 
-        <div className="text-left border-b border-stone-100 dark:border-stone-800 pb-8 mb-8"> 
+        <div className="text-left border-b border-neutral-700/50 pb-8 mb-8"> 
             <div className="flex items-center mb-4">
-              <span className="text-sm font-medium text-stone-800 dark:text-stone-200">
+              <span className="text-sm font-medium text-white uppercase tracking-wider">
                 Feature Requests
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-400 dark:bg-neutral-500"></span>
-              <span className="text-sm text-stone-500 dark:text-stone-400">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
                 Vote on upcoming features or submit your own
               </span>
             </div>
-            <p className="text-base text-stone-600 dark:text-stone-400 max-w-2xl">
+            <p className="text-base text-neutral-400 max-w-2xl">
               Help us prioritize what to build next by upvoting the features you want most, or let us know what you'd like to see!
             </p>
         </div>
@@ -2714,30 +2888,40 @@ function Settings() {
 
   // Main component return - Notion-style with sidebar
   return (
-    <div className="flex justify-center pt-4">
-      {/* Main content container with Notion-style sidebar layout */}
-      <div className="flex max-w-6xl w-full mx-auto">
-        {/* Sidebar - clean borderless design */}
-        <aside className="w-56 min-h-screen sticky top-0 pt-4">
-          <div className="pr-4">            
-            <nav className="space-y-1">
+    <div className="min-h-screen bg-neutral-950 p-6">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto mb-12">
+        <div className="text-center mb-8">
+          <h1 className="text-5xl font-bold text-white mb-4">SETTINGS</h1>
+          <p className="text-xl text-neutral-400">
+            Manage your account, preferences, and integrations
+          </p>
+        </div>
+      </div>
+
+      {/* Main content container with sidebar layout */}
+      <div className="flex max-w-7xl mx-auto gap-8">
+        {/* Sidebar */}
+        <aside className="w-80 sticky top-0">
+          <div className="bg-neutral-900/50 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">            
+            <nav className="space-y-2">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => handleTabClick(tab.id)} // Use new handler
+                  onClick={() => handleTabClick(tab.id)}
                   className={`
-                    w-full text-left px-3 py-2 rounded-md flex items-center gap-2.5 transition-colors duration-150 ease-in-out
+                    w-full text-left px-4 py-3 rounded-2xl flex items-center gap-3 transition-all duration-200
                     ${activeTab === tab.id
-                      ? 'bg-neutral-100 dark:bg-neutral-800 text-black dark:text-stone-100 font-medium' 
-                      : 'text-stone-600 dark:text-stone-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 hover:text-black dark:hover:text-stone-100'}
+                      ? 'bg-neutral-800/60 text-white font-medium border border-neutral-700/50' 
+                      : 'text-neutral-400 hover:bg-neutral-800/30 hover:text-white'}
                   `}
                   aria-current={activeTab === tab.id ? 'page' : undefined}
                 >
-                  {React.cloneElement(tab.icon, { weight: activeTab === tab.id ? 'fill' : 'regular' })} 
-                  <span className="text-sm">{tab.label}</span>
+                  {React.cloneElement(tab.icon, { weight: activeTab === tab.id ? 'fill' : 'regular', size: 20 })} 
+                  <span className="text-sm font-medium tracking-wide">{tab.label}</span>
                   
                   {activeTab === tab.id && (
-                    <span className="ml-auto h-5 w-1 bg-black dark:bg-neutral-100 rounded-full"></span> 
+                    <span className="ml-auto h-2 w-2 bg-lime-400 rounded-full"></span> 
                   )}
                 </button>
               ))}
@@ -2745,8 +2929,9 @@ function Settings() {
           </div>
         </aside>
 
-        <main className="flex-1 py-4 px-8 border-l border-stone-100 dark:border-stone-800/60 min-h-screen relative"> {/* Added relative for toast positioning */}
-          <div>
+        {/* Main Content */}
+        <main className="flex-1">
+          <div className="bg-neutral-900/50 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
             {renderTabContent()}
           </div>
 

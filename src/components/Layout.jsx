@@ -1173,12 +1173,14 @@ function Layout() {
     backgrounds,
     products,
     user,
+    firestoreUserData, // <-- ADDED for user data
     refreshLayoutData,
     refreshDashboardGenerations,
     notifyGenerationComplete, // <-- ADDED
     slideshowTypeOptions, // Pass down slideshow options
     languageOptions, // Pass down language options
     setCanvasStatus, // <-- ADDED for canvas status
+    setIsPricingModalOpen, // <-- ADDED for pricing modal
   }), [
     dashboardRefreshKey,
     generatingItem, // If generatingItem is an object, its reference changing will still trigger this
@@ -1190,6 +1192,7 @@ function Layout() {
     backgrounds, // Array reference
     products, // Array reference
     user, // User object reference
+    firestoreUserData, // <-- ADDED for user data
     // refreshLayoutData, // Assuming this is stable (useCallback)
     // refreshDashboardGenerations // Stable (useCallback)
     // For functions like navigate, refreshLayoutData, refreshDashboardGenerations,
@@ -1272,8 +1275,8 @@ function Layout() {
       <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
         
         {/* --- Top Navigation Bar --- */}
-        <header className="fixed top-3 left-3 right-3 z-40 bg-neutral-900/40 backdrop-blur-xl transition-colors duration-200 rounded-lg h-12">
-          <div className="flex items-center justify-between h-full px-4">
+        <header className="fixed top-3 left-3 right-3 z-40 bg-neutral-900/40 backdrop-blur-xl transition-colors duration-200 rounded-2xl h-12">
+          <div className="flex items-center justify-between h-full px-2">
             {/* Left: Logo */}
             <button 
               onClick={() => navigate('/')}
@@ -1286,35 +1289,47 @@ function Layout() {
               />
             </button>
             
-            {/* Right: Credits and Settings */}
+            {/* Right: Credits/Settings for authenticated users, Sign Up for guests */}
             <div className="flex items-center gap-3">
-              {/* Credit Display */}
-              {user && firestoreUserData && (
-                <div 
+              {user ? (
+                <>
+                  {/* Credit Display */}
+                  {firestoreUserData && (
+                    <div 
+                      onClick={() => setIsPricingModalOpen(true)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
+                    >
+                      <img 
+                        src="/logonaked.png"
+                        alt="Lungo AI Logo"
+                        className="h-2.5 w-auto"
+                      />
+                      <span className="text-sm font-medium text-white">
+                        {firestoreUserData.general_credits?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Settings */}
+                  <button
+                    onClick={() => navigate('/settings')}
+                    className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
+                    aria-label="Settings"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </>
+              ) : (
+                /* Sign Up button for non-authenticated users */
+                <button
                   onClick={() => setIsPricingModalOpen(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
+                  className="px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
                 >
-                  <img 
-                    src="/logonaked.png"
-                    alt="Lungo AI Logo"
-                    className="h-2.5 w-auto"
-                  />
-                  <span className="text-sm font-medium text-white">
-                    {firestoreUserData.general_credits?.toLocaleString() || '0'}
-                  </span>
-                </div>
+                  Sign Up
+                </button>
               )}
-              
-              {/* Settings */}
-              <button
-                onClick={() => navigate('/settings')}
-                className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
-                aria-label="Settings"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                </svg>
-              </button>
             </div>
           </div>
         </header>

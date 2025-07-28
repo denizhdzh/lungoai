@@ -2,9 +2,11 @@ import React, { useState, useRef } from 'react';
 import { models, getModelById, getModelsByCategory } from '../config/models.js';
 import { 
 	Upload,
-	Image,
-	Video,
-	CaretDown
+	Image as ImageIcon,
+	Video as VideoIcon,
+	CaretDown,
+	X,
+	Plus
 } from '@phosphor-icons/react';
 
 const GenerationPage = () => {
@@ -12,7 +14,10 @@ const GenerationPage = () => {
 	const [selectedModel, setSelectedModel] = useState('black-forest-labs/flux-1.1-pro');
 	const [prompt, setPrompt] = useState('');
 	const [settings, setSettings] = useState({});
+	const [uploadedImages, setUploadedImages] = useState([]);
+	const [isDragOver, setIsDragOver] = useState(false);
 	const fileInputRef = useRef(null);
+	const dropAreaRef = useRef(null);
 	
 	// Get current model config
 	const modelConfig = getModelById(selectedModel);
@@ -100,6 +105,61 @@ const GenerationPage = () => {
 		return 0;
 	};
 
+	// Handle file operations
+	const handleFileUpload = (files) => {
+		const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+		
+		// OpenAI supports multiple images, but let's limit to 5 for UI purposes
+		const remainingSlots = Math.max(0, 5 - uploadedImages.length);
+		const filesToAdd = imageFiles.slice(0, remainingSlots);
+		
+		filesToAdd.forEach(file => {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				// Create image element to get dimensions
+				const img = new window.Image();
+				img.onload = () => {
+					const aspectRatio = img.width / img.height;
+					const newImage = {
+						id: Date.now() + Math.random(),
+						file: file,
+						url: e.target.result,
+						name: file.name,
+						aspectRatio: aspectRatio
+					};
+					setUploadedImages(prev => [...prev, newImage]);
+				};
+				img.src = e.target.result;
+			};
+			reader.readAsDataURL(file);
+		});
+	};
+
+	const removeImage = (imageId) => {
+		setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+	};
+
+	const handleDragOver = (e) => {
+		e.preventDefault();
+		setIsDragOver(true);
+	};
+
+	const handleDragLeave = (e) => {
+		e.preventDefault();
+		setIsDragOver(false);
+	};
+
+	const handleDrop = (e) => {
+		e.preventDefault();
+		setIsDragOver(false);
+		const files = e.dataTransfer.files;
+		handleFileUpload(files);
+	};
+
+	const handleClickUpload = () => {
+		fileInputRef.current?.click();
+	};
+
 	// Handle generate
 	const handleGenerate = () => {
 		console.log('Generating with:', {
@@ -107,6 +167,7 @@ const GenerationPage = () => {
 			model: selectedModel,
 			prompt,
 			settings,
+			uploadedImages: uploadedImages,
 			creditsNeeded: calculateCredits()
 		});
 	};
@@ -139,6 +200,41 @@ const GenerationPage = () => {
 			{/* Left Sidebar - Minimal Design */}
 			<div className="fixed left-2 top-15 z-10 w-80">
 				<div className="bg-transparent space-y-1 shadow-2xl max-h-[80vh]">
+					
+					{/* Type Selection */}
+					<div className="bg-neutral-900 rounded-[10px] p-3 mb-1">
+						<div className="text-xs text-neutral-400 mb-2">Type</div>
+						<div className="flex gap-2">
+							<button
+								onClick={() => {
+									setActiveType('image');
+									setSelectedModel('black-forest-labs/flux-1.1-pro');
+								}}
+								className={`flex-1 px-3 py-2 rounded-xl text-xs font-light tracking-wide transition-all flex items-center justify-center gap-2 ${
+									activeType === 'image' 
+										? 'bg-white text-black font-medium' 
+										: 'bg-neutral-800/40 text-neutral-400 hover:text-white hover:bg-neutral-700/40'
+								}`}
+							>
+								<ImageIcon size={14} />
+								Image
+							</button>
+							<button
+								onClick={() => {
+									setActiveType('video');
+									setSelectedModel('google/veo-3-fast');
+								}}
+								className={`flex-1 px-3 py-2 rounded-xl text-xs font-light tracking-wide transition-all flex items-center justify-center gap-2 ${
+									activeType === 'video' 
+										? 'bg-white text-black font-medium' 
+										: 'bg-neutral-800/40 text-neutral-400 hover:text-white hover:bg-neutral-700/40'
+								}`}
+							>
+								<VideoIcon size={14} />
+								Video
+							</button>
+						</div>
+					</div>
 					
 					{/* Model Selection */}
 					<div className="bg-neutral-900 rounded-[10px] p-3">
@@ -305,80 +401,157 @@ const GenerationPage = () => {
 
 			{/* Main content area */}
 			<div className="flex items-center justify-center p-4 h-full w-full">
-				<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
-					{/* L-shape corners */}
-					<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
-						<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
-					</div>
-					<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
-						<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
-					</div>
-					
-					{/* Inner frame */}
-					<div className="bg-neutral-900 w-full h-full rounded-[60px] flex items-center justify-center">
-						<div className="text-neutral-400 text-center">
-							<div className="text-lg font-medium mb-2">
-								Describe a scene and click generate...
+				{uploadedImages.length === 0 ? (
+					/* Empty state - Use getAspectRatioClass */
+					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
+						{/* L-shape corners */}
+						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
+						</div>
+						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
+						</div>
+						
+						{/* Inner frame - Drop Area */}
+						<div 
+							ref={dropAreaRef}
+							onDragOver={handleDragOver}
+							onDragLeave={handleDragLeave}
+							onDrop={handleDrop}
+							onClick={handleClickUpload}
+							className={`w-full h-full rounded-[60px] flex items-center justify-center transition-all duration-300 cursor-pointer relative overflow-hidden bg-neutral-900 hover:bg-neutral-800 ${isDragOver ? 'bg-neutral-800 border-2 border-dashed border-lime-400' : 'border-2 border-dashed border-neutral-700'}`}
+						>
+							<div className="text-center">
+								<div className={`mb-4 transition-colors ${isDragOver ? 'text-lime-400' : 'text-neutral-400'}`}>
+									<Upload size={48} className="mx-auto mb-2" />
+									<div className="text-lg font-medium mb-2">
+										{isDragOver ? 'Drop images here' : 'Drop images or click to upload'}
+									</div>
+									<div className="text-sm text-neutral-500">
+										Support multiple images (max 5) • PNG, JPG, WEBP
+									</div>
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
+				) : uploadedImages.length === 1 ? (
+					/* Single image - Use image's aspect ratio for outer container */
+					<div 
+						className="relative bg-transparent p-4 w-full transition-all duration-300 max-w-full max-h-full"
+						style={{
+							aspectRatio: uploadedImages[0].aspectRatio,
+							width: 'auto',
+							height: 'auto',
+							maxWidth: '100%',
+							maxHeight: '100%'
+						}}
+					>
+						{/* L-shape corners */}
+						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
+						</div>
+						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
+						</div>
+						
+						{/* Image fills the entire outer container */}
+						<div className="w-full h-full rounded-[60px] overflow-hidden relative group">
+							<img 
+								src={uploadedImages[0].url} 
+								alt={uploadedImages[0].name}
+								className="w-full h-full object-cover"
+							/>
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									removeImage(uploadedImages[0].id);
+								}}
+								className="absolute top-6 right-6 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+							>
+								<X size={16} className="text-white" />
+							</button>
+						</div>
+					</div>
+				) : (
+					/* Multiple images - Use getAspectRatioClass for grid */
+					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
+						{/* L-shape corners */}
+						<div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-t-2 border-l-2 rounded-tl-[70px] border-neutral-500"></div>
+						</div>
+						<div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
+							<div className="w-full h-full border-b-2 border-r-2 rounded-br-[70px] border-neutral-500"></div>
+						</div>
+						
+						{/* Multiple images grid */}
+						<div className="w-full h-full rounded-[60px] overflow-hidden p-4">
+							<div className="grid gap-3 h-full w-full" style={{
+								gridTemplateColumns: uploadedImages.length === 2 ? 'repeat(2, 1fr)' :
+													   uploadedImages.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+								gridTemplateRows: uploadedImages.length <= 2 ? '1fr' : 
+													uploadedImages.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)'
+							}}>
+								{uploadedImages.map((image) => (
+									<div 
+										key={image.id} 
+										className="relative group bg-neutral-800 rounded-2xl overflow-hidden"
+										style={{
+											aspectRatio: image.aspectRatio
+										}}
+									>
+										<img 
+											src={image.url} 
+											alt={image.name}
+											className="w-full h-full object-cover"
+										/>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												removeImage(image.id);
+											}}
+											className="absolute top-2 right-2 w-6 h-6 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+										>
+											<X size={14} className="text-white" />
+										</button>
+										<div className="absolute bottom-2 left-2 right-2">
+											<div className="text-xs text-white bg-black/70 rounded px-2 py-1 truncate">
+												{image.name}
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				)}
+				
+				{/* Hidden file input */}
+				<input
+					ref={fileInputRef}
+					type="file"
+					accept="image/*"
+					multiple
+					className="hidden"
+					onChange={(e) => handleFileUpload(e.target.files)}
+				/>
+				
+				{/* Add more button - Outside the main area */}
+				{uploadedImages.length > 0 && uploadedImages.length < 5 && (
+					<div className="absolute top-4 right-4 z-50">
+						<button
+							onClick={handleClickUpload}
+							className="w-12 h-12 border-2 border-dashed border-neutral-700 hover:border-lime-400 rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm"
+						>
+							<Plus size={20} className="text-neutral-600 group-hover:text-lime-400" />
+						</button>
+					</div>
+				)}
 			</div>
 			
 			{/* Bottom menu */}
-			<div className="fixed bottom-5 left-1/2 transform -translate-x-1/2 rounded-[20px] p-4 bg-neutral-900 border-t border-neutral-800 p-1 w-full max-w-3xl">
-				<div className="relative">
-					{/* Type toggle */}
-					<div className="absolute left-0 top-0 bottom-0 bg-neutral-900 rounded-[10px] p-2 flex flex-col justify-stretch gap-2 min-w-[80px]">
-						<button
-							onClick={() => {
-								setActiveType('image');
-								setSelectedModel('black-forest-labs/flux-1.1-pro');
-							}}
-							className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
-								activeType === 'image' 
-									? 'bg-lime-400 text-black' 
-									: 'bg-neutral-900 text-neutral-400 hover:text-white'
-							}`}
-						>
-							<Image size={16} />
-							Image
-						</button>
-						<button
-							onClick={() => {
-								setActiveType('video');
-								setSelectedModel('google/veo-3-fast');
-							}}
-							className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
-								activeType === 'video' 
-									? 'bg-lime-400 text-black' 
-									: 'bg-neutral-900 text-neutral-400 hover:text-white'
-							}`}
-						>
-							<Video size={16} />
-							Video
-						</button>
-					</div>
-				
-					<div className="pl-24">
-						<div className="flex items-stretch gap-3 mb-3 h-16">
-							{/* Upload button */}
-							<button
-								onClick={() => fileInputRef.current?.click()}
-								className="flex-shrink-0 w-16 h-16 bg-neutral-900 rounded-[10px] flex flex-col items-center justify-center hover:bg-neutral-700 transition-colors"
-							>
-								<Upload size={18} className="text-neutral-400 mb-1" />
-								<span className="text-xs text-neutral-400">Upload</span>
-							</button>
-							<input
-								ref={fileInputRef}
-								type="file"
-								accept="image/*"
-								className="hidden"
-								onChange={(e) => {
-									console.log('File uploaded:', e.target.files[0]);
-								}}
-							/>
+			<div className="fixed bottom-5 left-1/2 transform -translate-x-1/2 rounded-3xl p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-full max-w-3xl">
+				<div>
+						<div className="flex items-stretch gap-3 h-16">
 							
 							{/* Prompt input */}
 							<div className="flex-1 relative h-full">
@@ -386,23 +559,10 @@ const GenerationPage = () => {
 									value={prompt}
 									onChange={(e) => setPrompt(e.target.value)}
 									placeholder="Describe a scene and click generate"
-									className="w-full h-full bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-3 pb-8 text-white placeholder-neutral-500 resize-none focus:border-lime-400 focus:outline-none text-sm"
+									className="w-full h-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-2 pb-8 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide"
 								/>
 								
-								{/* Model selection */}
-								<div className="absolute bottom-2 right-2">
-									<select
-										value={selectedModel}
-										onChange={(e) => setSelectedModel(e.target.value)}
-										className="bg-neutral-700 border border-neutral-600 rounded-lg px-2 py-1 text-xs text-white focus:border-lime-400 focus:outline-none"
-									>
-										{Object.entries(availableModels).map(([id, model]) => (
-											<option key={id} value={id}>
-												{model.name}
-											</option>
-										))}
-									</select>
-								</div>
+							
 							</div>
 							
 							{/* Generate Section */}
@@ -410,11 +570,11 @@ const GenerationPage = () => {
 								<button
 									onClick={handleGenerate}
 									disabled={!prompt.trim()}
-									className="px-6 py-3 bg-gradient-to-r from-green-400 to-lime-400 text-black font-bold rounded-xl hover:from-green-300 hover:to-lime-300 disabled:bg-neutral-700 disabled:text-neutral-500 transition-colors text-sm"
+									className="px-8 py-3 bg-white/90 hover:bg-white text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm"
 								>
 									GENERATE
 								</button>
-								<div className="text-xs text-neutral-400 text-center">
+								<div className="text-xs text-neutral-500 text-center font-light tracking-wider uppercase">
 									Credits: {calculateCredits()}
 								</div>
 							</div>
@@ -422,7 +582,6 @@ const GenerationPage = () => {
 					</div>
 				</div>
 			</div>
-		</div>
 	);
 };
 

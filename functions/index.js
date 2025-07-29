@@ -26,6 +26,59 @@ const planCreditAllocations = {
 };
 
 
+// Helper function to save files to Firebase Storage
+async function saveToFirebaseStorage(fileUrl, userId, model, type) {
+    try {
+        logger.info(`Saving ${type} to Firebase Storage from: ${fileUrl}`);
+        
+        // Download the file from the URL
+        const response = await axios.get(fileUrl, { responseType: 'stream' });
+        
+        // Generate a unique filename
+        const timestamp = Date.now();
+        const sanitizedModel = model.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const fileName = `${timestamp}_${sanitizedModel}.${type === 'video' ? 'mp4' : 'jpg'}`;
+        const filePath = `generations/${userId}/${fileName}`;
+        
+        // Create a file reference in Firebase Storage
+        const file = bucket.file(filePath);
+        const stream = file.createWriteStream({
+            metadata: {
+                contentType: type === 'video' ? 'video/mp4' : 'image/jpeg',
+                metadata: {
+                    userId: userId,
+                    model: model,
+                    generatedAt: new Date().toISOString()
+                }
+            }
+        });
+        
+        // Pipe the downloaded file to Firebase Storage
+        const uploadPromise = new Promise((resolve, reject) => {
+            stream.on('error', reject);
+            stream.on('finish', async () => {
+                try {
+                    // Make the file publicly accessible
+                    await file.makePublic();
+                    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+                    logger.info(`Successfully saved ${type} to Firebase Storage: ${publicUrl}`);
+                    resolve(publicUrl);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        });
+        
+        response.data.pipe(stream);
+        return await uploadPromise;
+        
+    } catch (error) {
+        logger.error(`Error saving ${type} to Firebase Storage:`, error);
+        // Fallback to original URL if Firebase Storage fails
+        return fileUrl;
+    }
+}
+
 // --- generateImage Function (Updated for Replicate API) ---
 exports.generateImage = onCall(async (request) => {
     const userId = request.auth?.uid;
@@ -86,6 +139,32 @@ exports.generateImage = onCall(async (request) => {
         logger.info(`Model: ${model}`);
         logger.info(`Full input object:`, JSON.stringify(input, null, 2));
         logger.info(`Full parameters received:`, JSON.stringify(parameters, null, 2));
+        
+        // Special processing for image parameters - convert base64 to proper format for Replicate
+        const imageParams = ['image', 'input_image', 'start_image', 'first_frame_image', 'subject_reference'];
+        for (const param of imageParams) {
+            if (input[param]) {
+                logger.info(`🖼️ FOUND IMAGE PARAM: ${param}`);
+                logger.info(`🖼️ Image data type: ${typeof input[param]}`);
+                
+                if (typeof input[param] === 'string') {
+                    if (input[param].startsWith('data:image/')) {
+                        logger.info(`✅ Base64 data URI detected - sending directly to Replicate`);
+                        // Replicate accepts data URIs directly, no need to convert to Buffer
+                        logger.info(`✅ Data URI length: ${input[param].length}`);
+                    } else if (input[param].startsWith('http')) {
+                        logger.info(`✅ URL format detected - sending directly to Replicate`);
+                        // URLs can be sent directly to Replicate
+                    } else {
+                        logger.warn(`❌ UNKNOWN image format - not data URL or HTTP URL`);
+                        logger.info(`🖼️ Image data preview: ${input[param]?.substring ? input[param].substring(0, 100) : 'N/A'}...`);
+                    }
+                } else {
+                    logger.info(`🖼️ Image parameter is not a string: ${typeof input[param]}`);
+                }
+            }
+        }
+        
         logger.info(`========================`);
 
         // Try both sync (run) and async (predictions.create) approaches
@@ -99,6 +178,7 @@ exports.generateImage = onCall(async (request) => {
             output = await replicate.run(model, { input: input });
         } catch (syncError) {
             logger.warn(`Synchronous run failed: ${syncError.message}`);
+            logger.warn(`Sync error details:`, syncError);
             try {
                 // Second try: async predictions - better for slow models
                 logger.info(`Trying async predictions.create approach...`);
@@ -175,25 +255,28 @@ exports.generateImage = onCall(async (request) => {
                 imageUrl = output;
             }
 
+            // Save to Firebase Storage for permanent storage
+            const savedImageUrl = await saveToFirebaseStorage(imageUrl, userId, model, 'image');
+            
             // Store generation result in user's generations subcollection
             const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
                 type: 'image',
                 model: model,
                 prompt: input.prompt,
-                imageUrl: imageUrl,
+                imageUrl: savedImageUrl, // Use Firebase Storage URL
                 settings: input,
                 creditsUsed: creditsNeeded,
                 timestamp: admin.firestore.FieldValue.serverTimestamp()
             });
 
             logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
-            logger.info(`Final image URL: ${imageUrl}`);
+            logger.info(`Final image URL: ${savedImageUrl}`);
 
-            // Return success with image URL
+            // Return success with Firebase Storage URL
             return {
                 success: true,
-                imageUrl: imageUrl,
+                imageUrl: savedImageUrl,
                 creditsUsed: creditsNeeded,
                 remainingCredits: currentCredits - creditsNeeded
             };
@@ -780,13 +863,16 @@ exports.generateVideo = onCall(async (request) => {
                 videoUrl = output;
             }
 
+            // Save to Firebase Storage for permanent storage
+            const savedVideoUrl = await saveToFirebaseStorage(videoUrl, userId, model, 'video');
+            
             // Store generation result in user's generations subcollection
             const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
                 type: 'video',
                 model: model,
                 prompt: input.prompt,
-                videoUrl: videoUrl,
+                videoUrl: savedVideoUrl, // Use Firebase Storage URL
                 settings: input,
                 duration: duration,
                 creditsUsed: creditsNeeded,
@@ -794,12 +880,12 @@ exports.generateVideo = onCall(async (request) => {
             });
 
             logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
-            logger.info(`Final video URL: ${videoUrl}`);
+            logger.info(`Final video URL: ${savedVideoUrl}`);
 
-            // Return success with video URL
+            // Return success with Firebase Storage URL
             return {
                 success: true,
-                videoUrl: videoUrl,
+                videoUrl: savedVideoUrl,
                 creditsUsed: creditsNeeded,
                 remainingCredits: currentCredits - creditsNeeded,
                 duration: duration

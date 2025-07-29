@@ -48,19 +48,6 @@ export const models = {
     output_format: ["jpg", "png"]
   }
 },
-    "black-forest-labs/flux-1.1-pro": {
-      name: "Flux 1.1 Pro",
-      type: "image", 
-      credits: 1,
-      params: {
-        prompt: { required: true, type: "string" },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        image: { required: false, type: "string", description: "Input image for img2img" }
-      },
-      options: {
-        aspect_ratio: ["1:1", "3:4", "4:3", "9:16", "16:9"]
-      }
-    },
     
     "ideogram-ai/ideogram-v3-balanced": {
       name: "Ideogram V3 Balanced",

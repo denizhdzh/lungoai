@@ -16,14 +16,17 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
-	const [selectedModel, setSelectedModel] = useState('black-forest-labs/flux-1.1-pro');
+	const [selectedModel, setSelectedModel] = useState('google/imagen-4');
 	const [prompt, setPrompt] = useState('');
 	const [settings, setSettings] = useState({});
-	const [uploadedImages, setUploadedImages] = useState([]);
+	const [uploadedImage, setUploadedImage] = useState(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [historyScrollIndex, setHistoryScrollIndex] = useState(0);
 	const [previousGenerations, setPreviousGenerations] = useState([]);
 	const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
+	const [generatedImage, setGeneratedImage] = useState(null);
+	const [isGenerating, setIsGenerating] = useState(false);
+	const [openDropdowns, setOpenDropdowns] = useState({});
 	const fileInputRef = useRef(null);
 	const dropAreaRef = useRef(null);
 	const navigate = useNavigate();
@@ -93,6 +96,57 @@ const GenerationPage = () => {
 	const modelConfig = getModelById(selectedModel);
 	const availableModels = getModelsByCategory(activeType);
 	
+	// Load default settings when model changes
+	useEffect(() => {
+		const currentModelConfig = getModelById(selectedModel);
+		if (currentModelConfig?.params) {
+			const defaultSettings = {};
+			
+			// Set default values for all parameters
+			Object.keys(currentModelConfig.params).forEach(key => {
+				const param = currentModelConfig.params[key];
+				if (param.default !== undefined) {
+					defaultSettings[key] = param.default;
+				}
+			});
+			
+			setSettings(defaultSettings);
+		}
+	}, [selectedModel]); // Only depend on selectedModel
+	
+	// Check if model supports image input and clear uploaded images if not
+	useEffect(() => {
+		const currentModelConfig = getModelById(selectedModel);
+		const supportsImages = Object.keys(currentModelConfig?.params || {})
+			.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
+		
+		// Only clear image if model doesn't support images and there's an image uploaded
+		if (!supportsImages) {
+			setUploadedImage(prev => {
+				if (prev) {
+					console.log(`🚫 Model ${selectedModel} doesn't support image input, cleared uploaded image`);
+					return null;
+				}
+				return prev;
+			});
+		}
+	}, [selectedModel]);
+	
+	// Close dropdowns when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			// Check if click is outside any dropdown
+			if (!event.target.closest('.dropdown-container')) {
+				closeAllDropdowns();
+			}
+		};
+		
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, []);
+	
 	// Handle settings change
 	const handleSettingChange = (key, value) => {
 		setSettings(prev => ({
@@ -101,12 +155,58 @@ const GenerationPage = () => {
 		}));
 	};
 	
+	// Toggle dropdown open/close
+	const toggleDropdown = (key) => {
+		setOpenDropdowns(prev => ({
+			...prev,
+			[key]: !prev[key]
+		}));
+	};
+	
+	// Close all dropdowns
+	const closeAllDropdowns = () => {
+		setOpenDropdowns({});
+	};
+	
+	// Get logo for model
+	const getModelLogo = (modelId) => {
+		if (modelId.includes('google')) return '/logos/google_logo.png';
+		if (modelId.includes('flux')) return '/logos/flux_logo.png';
+		if (modelId.includes('ideogram')) return '/logos/ideogram_logo.png';
+		if (modelId.includes('minimax')) return '/logos/minimax_logo.png';
+		if (modelId.includes('bytedance')) return '/logos/bytedance_logo.png';
+		if (modelId.includes('kling')) return '/logos/kling_logo.png';
+		if (modelId.includes('runway')) return '/logos/runway_logo.png';
+		if (modelId.includes('leonardo')) return '/logos/leonardo_logo.png';
+		return '/logos/google_logo.png'; // default
+	};
+	
+	// Get support info for model
+	const getModelSupport = (modelId) => {
+		const modelConfig = getModelById(modelId);
+		const supportsImages = Object.keys(modelConfig?.params || {})
+			.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
+		
+		const modelType = modelConfig?.type;
+		
+		if (modelType === 'image') {
+			return supportsImages ? 'TXT+IMG→IMG' : 'TXT→IMG';
+		} else if (modelType === 'text_to_video') {
+			return 'TXT→VID';
+		} else if (modelType === 'image_to_video') {
+			return 'IMG→VID';
+		} else if (modelType === 'both') {
+			return 'TXT+IMG→VID';
+		}
+		return 'TXT→IMG';
+	};
+	
 	// Get setting value with fallback to model default
 	const getSettingValue = (key) => {
-		if (settings[key] !== undefined) {
-			return settings[key];
-		}
-		return modelConfig?.params?.[key]?.default;
+		const settingValue = settings[key];
+		const defaultValue = modelConfig?.params?.[key]?.default;
+		const result = settingValue !== undefined ? settingValue : defaultValue;
+		return result;
 	};
 	
 	// Get dynamic aspect ratio class based on selected ratio or model type
@@ -179,34 +279,32 @@ const GenerationPage = () => {
 	const handleFileUpload = (files) => {
 		const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
 		
-		// OpenAI supports multiple images, but let's limit to 5 for UI purposes
-		const remainingSlots = Math.max(0, 5 - uploadedImages.length);
-		const filesToAdd = imageFiles.slice(0, remainingSlots);
+		if (imageFiles.length === 0) return;
 		
-		filesToAdd.forEach(file => {
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				// Create image element to get dimensions
-				const img = new window.Image();
-				img.onload = () => {
-					const aspectRatio = img.width / img.height;
-					const newImage = {
-						id: Date.now() + Math.random(),
-						file: file,
-						url: e.target.result,
-						name: file.name,
-						aspectRatio: aspectRatio
-					};
-					setUploadedImages(prev => [...prev, newImage]);
+		// Take only the first image file
+		const file = imageFiles[0];
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			// Create image element to get dimensions
+			const img = new window.Image();
+			img.onload = () => {
+				const aspectRatio = img.width / img.height;
+				const newImage = {
+					id: Date.now() + Math.random(),
+					file: file,
+					url: e.target.result,
+					name: file.name,
+					aspectRatio: aspectRatio
 				};
-				img.src = e.target.result;
+				setUploadedImage(newImage);
 			};
-			reader.readAsDataURL(file);
-		});
+			img.src = e.target.result;
+		};
+		reader.readAsDataURL(file);
 	};
 
-	const removeImage = (imageId) => {
-		setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+	const removeImage = () => {
+		setUploadedImage(null);
 	};
 
 	const handleDragOver = (e) => {
@@ -272,39 +370,25 @@ const GenerationPage = () => {
 		}
 	};
 
-	// Add history image to uploadedImages
+	// Add history image to uploadedImage (replace current)
 	const addHistoryImageToUploaded = async (generation) => {
-		if (uploadedImages.length >= 5) {
-			return; // Max limit reached
-		}
-
-		// Check if image is already added
-		const isAlreadyAdded = uploadedImages.some(img => img.url === generation.url);
-		if (isAlreadyAdded) {
-			return;
-		}
-
 		try {
 			const filename = `generation-${generation.id}.jpg`;
-			const file = await urlToFile(generation.url, filename, 'image/jpeg');
 			
-			if (file) {
-				// Create image element to get dimensions
-				const img = new window.Image();
-				img.onload = () => {
-					const aspectRatio = img.width / img.height;
-					const newImage = {
-						id: Date.now() + Math.random(),
-						file: file,
-						url: generation.url,
-						name: filename,
-						aspectRatio: aspectRatio,
-						isFromHistory: true
-					};
-					setUploadedImages(prev => [...prev, newImage]);
-				};
-				img.src = generation.url;
-			}
+			// For history images, we'll use a default aspect ratio and set directly
+			// Since they're from Firebase Storage, we know they exist
+			const newImage = {
+				id: Date.now() + Math.random(),
+				file: null, // Don't need file for history images
+				url: generation.url,
+				name: filename,
+				aspectRatio: 1, // Default to square, will be updated when image loads in preview
+				isFromHistory: true
+			};
+			
+			setUploadedImage(newImage);
+			console.log('✅ Set history image as uploaded image:', filename);
+			
 		} catch (error) {
 			console.error('Error adding history image:', error);
 		}
@@ -323,6 +407,9 @@ const GenerationPage = () => {
 		}
 
 		try {
+			setIsGenerating(true);
+			setGeneratedImage(null); // Clear previous generated image
+			
 			// Prepare data for Firebase function
 			const generationData = {
 				model: selectedModel,
@@ -331,39 +418,56 @@ const GenerationPage = () => {
 			};
 
 			// Handle uploaded images
-			if (uploadedImages.length > 0) {
-				// Convert uploaded images to base64 for sending to Firebase
-				const imagePromises = uploadedImages.map(async (uploadedImage) => {
-					// If it's already a URL (from history), use it directly
-					if (uploadedImage.isFromHistory) {
-						return uploadedImage.url;
-					}
-					
-					// Convert file to base64
-					return new Promise((resolve) => {
-						const reader = new FileReader();
-						reader.onload = (e) => resolve(e.target.result);
-						reader.readAsDataURL(uploadedImage.file);
-					});
-				});
-
-				const imageData = await Promise.all(imagePromises);
-				
-				// Set the appropriate image parameter based on model config
+			if (uploadedImage) {
 				const modelConfig = getModelById(selectedModel);
+				
 				if (modelConfig?.params) {
-					// Find the image parameter name for this model
-					const imageParam = Object.keys(modelConfig.params).find(key => 
-						key.includes('image') || key === 'start_image' || key === 'first_frame_image'
+					// Find the first image parameter for this model
+					const imageParams = Object.keys(modelConfig.params).filter(key => 
+						key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference'
 					);
 					
-					if (imageParam) {
-						generationData[imageParam] = imageData[0]; // Use first image for single image models
+					if (imageParams.length > 0) {
+						const imageParam = imageParams[0]; // Use first image parameter
+						
+						if (uploadedImage.isFromHistory) {
+							// Use URL directly for history images
+							generationData[imageParam] = uploadedImage.url;
+							console.log(`🖼️ FRONTEND: Added image parameter '${imageParam}' with URL: ${uploadedImage.url}`);
+						} else {
+							// Convert local files to base64 data URI for Firebase function
+							const base64DataUri = await new Promise((resolve) => {
+								const reader = new FileReader();
+								reader.onload = (e) => resolve(e.target.result);
+								reader.readAsDataURL(uploadedImage.file);
+							});
+							
+							generationData[imageParam] = base64DataUri;
+							console.log(`🖼️ FRONTEND: Added image parameter '${imageParam}' with base64 data URI`);
+							console.log(`🖼️ FRONTEND: File name: ${uploadedImage.file.name}`);
+							console.log(`🖼️ FRONTEND: File type: ${uploadedImage.file.type}`);
+							console.log(`🖼️ FRONTEND: File size: ${uploadedImage.file.size} bytes`);
+							console.log(`🖼️ FRONTEND: Data URI length: ${base64DataUri.length}`);
+							console.log(`🖼️ FRONTEND: Data URI preview: ${base64DataUri.substring(0, 100)}...`);
+						}
+					} else {
+						console.warn(`❌ FRONTEND: No image parameters found for model ${selectedModel}`);
 					}
 				}
 			}
 
-			console.log('Sending generation request:', generationData);
+			console.log('🔥 FRONTEND DEBUG - Sending generation request:');
+		console.log('📋 Generation Data:', generationData);
+		console.log('🖼️ Uploaded Image:', uploadedImage);
+		console.log('🤖 Selected Model:', selectedModel);
+		console.log('📊 Model Config:', modelConfig);
+		
+		// Show exact parameter names that will be sent
+		Object.keys(generationData).forEach(key => {
+			if (key !== 'prompt' && key !== 'model') {
+				console.log(`🔧 Parameter: ${key} = ${typeof generationData[key] === 'string' ? generationData[key].substring(0, 50) + '...' : generationData[key]}`);
+			}
+		});
 
 			// Call appropriate Firebase function based on type
 			let result;
@@ -383,26 +487,43 @@ const GenerationPage = () => {
 			
 			if (result.data.success) {
 				if (result.data.isAsync && result.data.predictionId) {
-					alert(`Generation started! Prediction ID: ${result.data.predictionId}. Check back in a few minutes.`);
+					console.log(`Generation started! Prediction ID: ${result.data.predictionId}`);
 					// TODO: Add polling logic here
 				} else if (result.data.imageUrl) {
-					alert(`Image generated successfully! URL: ${result.data.imageUrl}`);
-					// Refresh the history to show new generation
-					window.location.reload();
+					console.log(`Image generated successfully! URL: ${result.data.imageUrl}`);
+					// Set the generated image to display in the center
+					const newGeneratedImage = {
+						url: result.data.imageUrl,
+						prompt: prompt.trim(),
+						model: selectedModel,
+						timestamp: new Date()
+					};
+					console.log('🖼️ Setting generated image:', newGeneratedImage);
+					setGeneratedImage(newGeneratedImage);
+					// Clear uploaded images and show the result
+					setUploadedImages([]);
+					console.log('🖼️ Cleared uploaded images, should show generated image now');
 				} else if (result.data.videoUrl) {
-					alert(`Video generated successfully! URL: ${result.data.videoUrl}`);
-					// Refresh the history to show new generation
-					window.location.reload();
-				} else {
-					alert('Generation completed successfully!');
+					console.log(`Video generated successfully! URL: ${result.data.videoUrl}`);
+					// For videos, you might want to handle differently
+					setGeneratedImage({
+						url: result.data.videoUrl,
+						prompt: prompt.trim(),
+						model: selectedModel,
+						timestamp: new Date(),
+						isVideo: true
+					});
+					setUploadedImages([]);
 				}
 			} else {
-				alert('Generation failed');
+				console.error('Generation failed:', result.data);
 			}
 
 		} catch (error) {
 			console.error('Generation error:', error);
 			alert(`Generation failed: ${error.message}`);
+		} finally {
+			setIsGenerating(false);
 		}
 	};
 
@@ -456,7 +577,7 @@ const GenerationPage = () => {
 							<button
 								onClick={() => {
 									setActiveType('image');
-									setSelectedModel('black-forest-labs/flux-1.1-pro');
+									setSelectedModel('google/imagen-4');
 								}}
 								className={`flex-1 px-3 py-2 rounded-xl text-xs font-light tracking-wide transition-all flex items-center justify-center gap-2 ${
 									activeType === 'image' 
@@ -485,25 +606,71 @@ const GenerationPage = () => {
 					</div>
 					
 					{/* Model Selection */}
-					<div className="bg-neutral-900 rounded-[10px] p-3">
+					<div className="bg-neutral-900 rounded-[10px] p-3 relative dropdown-container">
 						<div className="text-xs text-neutral-400 mb-2">Model</div>
-						<select 
-							value={selectedModel}
-							onChange={(e) => setSelectedModel(e.target.value)}
-							className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none"
-						>
-							{Object.entries(availableModels).map(([id, model]) => (
-								<option key={id} value={id} className="bg-neutral-900">
-									{model.name}
-								</option>
-							))}
-						</select>
+						<div className="relative">
+							<button
+								onClick={() => toggleDropdown('model')}
+								className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none text-left flex items-center justify-between"
+							>
+								<div className="flex items-center gap-2">
+									<div className="w-5 h-5 bg-white/10 rounded-md flex items-center justify-center p-0.5">
+										<img 
+											src={getModelLogo(selectedModel)}
+											alt={availableModels[selectedModel]?.name}
+											className="w-full h-full object-contain"
+											onError={(e) => {
+												e.target.style.display = 'none';
+											}}
+										/>
+									</div>
+									<div>
+										<div className="text-white text-sm">{availableModels[selectedModel]?.name || selectedModel}</div>
+										<div className="text-xs text-neutral-500">{getModelSupport(selectedModel)}</div>
+									</div>
+								</div>
+								<CaretDown size={14} className={`text-neutral-400 transition-transform ${openDropdowns.model ? 'rotate-180' : ''}`} />
+							</button>
+							
+							{openDropdowns.model && (
+								<div className="absolute top-full left-0 right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+									{Object.entries(availableModels).map(([id, model]) => (
+										<button
+											key={id}
+											onClick={() => {
+												setSelectedModel(id);
+												closeAllDropdowns();
+											}}
+											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+											}`}
+										>
+											<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+												<img 
+													src={getModelLogo(id)}
+													alt={model.name}
+													className="w-full h-full object-contain"
+													onError={(e) => {
+														e.target.style.display = 'none';
+													}}
+												/>
+											</div>
+											<div className="flex-1">
+												<div className="text-sm">{model.name}</div>
+												<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
+											</div>
+										</button>
+									))}
+								</div>
+							)}
+						</div>
 					</div>
 
 					{/* All Dropdown Parameters */}
 					{getDropdownParameters().map(([key, param]) => {
 						const options = modelConfig?.options?.[key];
 						const value = getSettingValue(key);
+						
 						
 						// Handle boolean with 2 options as buttons
 						if (param.type === 'boolean') {
@@ -564,26 +731,40 @@ const GenerationPage = () => {
 							);
 						}
 						
-						// Handle all other options as dropdown
+						// Handle all other options as custom dropdown
 						if (options && options.length > 2) {
 							return (
-								<div key={key} className="bg-neutral-900 rounded-[10px] p-3">
+								<div key={key} className="bg-neutral-900 rounded-[10px] p-3 relative dropdown-container">
 									<div className="text-xs text-neutral-400 mb-2 capitalize">
 										{key.replace(/_/g, ' ')}
 									</div>
 									<div className="relative">
-										<select
-											value={value || ''}
-											onChange={(e) => handleSettingChange(key, e.target.value)}
-											className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none pr-6"
+										<button
+											onClick={() => toggleDropdown(key)}
+											className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none text-left flex items-center justify-between pr-2"
 										>
-											{options.map(option => (
-												<option key={option} value={option} className="bg-neutral-900">
-													{option}
-												</option>
-											))}
-										</select>
-										<CaretDown size={14} className="absolute right-0 top-1/2 transform -translate-y-1/2 text-neutral-400 pointer-events-none" />
+											<span>{value || options[0] || 'Select...'}</span>
+											<CaretDown size={14} className={`text-neutral-400 transition-transform ${openDropdowns[key] ? 'rotate-180' : ''}`} />
+										</button>
+										
+										{openDropdowns[key] && (
+											<div className="absolute top-full left-0 right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+												{options.map(option => (
+													<button
+														key={option}
+														onClick={() => {
+															handleSettingChange(key, option);
+															closeAllDropdowns();
+														}}
+														className={`w-full text-left px-3 py-2 text-sm hover:bg-neutral-700 transition-colors ${
+															value === option ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+														}`}
+													>
+														{option}
+													</button>
+												))}
+											</div>
+										)}
 									</div>
 								</div>
 							);
@@ -649,88 +830,135 @@ const GenerationPage = () => {
 
 			{/* Main content area */}
 			<div className="flex items-center justify-center p-4 h-full w-full ml-64 mr-20">
-				{uploadedImages.length === 0 ? (
+				{generatedImage ? (
+					/* Generated Image Display */
+					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
+						<div className="w-full h-full rounded-[60px] overflow-hidden bg-neutral-900 shadow-2xl relative group">
+							{generatedImage.isVideo ? (
+								<video 
+									src={generatedImage.url} 
+									className="w-full h-full object-cover"
+									controls
+									autoPlay
+									muted
+									loop
+								/>
+							) : (
+								<img 
+									src={generatedImage.url} 
+									alt={generatedImage.prompt}
+									className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+								/>
+							)}
+							
+							{/* Generated image overlay */}
+							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+								<div className="text-white text-sm font-medium mb-1">{generatedImage.model}</div>
+								<div className="text-white/80 text-xs truncate">{generatedImage.prompt}</div>
+							</div>
+							
+							{/* Clear/New Generation Button */}
+							<button
+								onClick={() => {
+									setGeneratedImage(null);
+									setPrompt('');
+								}}
+								className="absolute top-4 right-4 w-10 h-10 bg-neutral-800/80 hover:bg-neutral-700 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
+							>
+								<X size={20} className="text-white" />
+							</button>
+						</div>
+					</div>
+				) : !uploadedImage ? (
 					/* Empty state - Use getAspectRatioClass */
 					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
 					
-						{/* Inner frame - Drop Area */}
+						{/* Inner frame - Drop Area or Info */}
 						<div 
 							ref={dropAreaRef}
-							onDragOver={handleDragOver}
-							onDragLeave={handleDragLeave}
-							onDrop={handleDrop}
-							onClick={handleClickUpload}
-							className={`w-full h-full rounded-[60px] flex items-center justify-center transition-all duration-300 cursor-pointer relative overflow-hidden bg-neutral-900 hover:bg-neutral-800 ${isDragOver ? 'bg-neutral-800 border-2 border-dashed border-lime-400' : 'border-2 border-dashed border-neutral-700'}`}
+							onDragOver={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDragOver : undefined}
+							onDragLeave={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDragLeave : undefined}
+							onDrop={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDrop : undefined}
+							onClick={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleClickUpload : undefined}
+							className={`w-full h-full rounded-[60px] flex items-center justify-center transition-all duration-300 relative overflow-hidden bg-neutral-900 ${
+								modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') 
+									? `cursor-pointer hover:bg-neutral-800 ${isDragOver ? 'bg-neutral-800 border-2 border-dashed border-lime-400' : 'border-2 border-dashed border-neutral-700'}`
+									: 'border-2 border-dashed border-neutral-700/50'
+							}`}
 						>
-							<div className="text-center">
-								<div className={`mb-4 transition-colors ${isDragOver ? 'text-lime-400' : 'text-neutral-400'}`}>
-									<Upload size={48} className="mx-auto mb-2" />
-									<div className="text-lg font-medium mb-2">
-										{isDragOver ? 'Drop images here' : 'Drop images or click to upload'}
-									</div>
-									<div className="text-sm text-neutral-500">
-										Support multiple images (max 5) • PNG, JPG, WEBP
+							{isGenerating ? (
+								<div className="text-center">
+									<div className="text-lime-400 mb-4">
+										<div className="w-12 h-12 border-4 border-lime-400/20 border-t-lime-400 rounded-full animate-spin mx-auto mb-4"></div>
+										<div className="text-lg font-medium mb-2">Generating...</div>
+										<div className="text-sm text-neutral-400">Please wait while AI creates your content</div>
 									</div>
 								</div>
-							</div>
+							) : modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? (
+								<div className="text-center">
+									<div className={`mb-4 transition-colors ${isDragOver ? 'text-lime-400' : 'text-neutral-400'}`}>
+										<Upload size={48} className="mx-auto mb-2" />
+										<div className="text-lg font-medium mb-2">
+											{isDragOver ? 'Drop image here' : 'Drop image or click to upload'}
+										</div>
+										<div className="text-sm text-neutral-500">
+											Single image input • PNG, JPG, WEBP
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="text-center">
+									<div className="mb-4 text-neutral-500">
+										<ImageIcon size={48} className="mx-auto mb-2" />
+										<div className="text-lg font-medium mb-2">
+											Ready to Generate
+										</div>
+										<div className="text-sm text-neutral-600">
+											{availableModels[selectedModel]?.name} • Text-to-Image
+										</div>
+									</div>
+								</div>
+							)}
 						</div>
 					</div>
 				) : (
-					/* Grid layout for all images */
+					/* Single image display */
 					<div 
 						className="relative bg-transparent p-4 w-full h-full transition-all duration-300 flex items-center justify-center"
 						onDragOver={handleDragOver}
 						onDragLeave={handleDragLeave}
 						onDrop={handleDrop}
 					>
-						
-						{/* Grid container */}
-						<div className={` overflow-visible bg-neutral-900/0 p-4 ${
-							uploadedImages.length === 1 ? 'flex items-center justify-center' :
-							uploadedImages.length === 2 ? 'grid grid-cols-2 gap-3 items-center justify-center' :
-							uploadedImages.length === 3 ? 'grid grid-cols-3 gap-3 items-center justify-center' :
-							uploadedImages.length === 4 ? 'grid grid-cols-2 grid-rows-2 gap-3 place-items-center' :
-							'grid grid-cols-3 grid-rows-2 gap-3 place-items-center'
-						}`} style={{
-							width: 'fit-content',
-							maxWidth: '90%'
-						}}>
-							{uploadedImages.map((image) => {
-								const containerSize = uploadedImages.length === 1 ? 500 : 
-													uploadedImages.length <= 3 ? 300 : 250;
-								
-								return (
-								<div 
-									key={image.id}
-									className="relative group bg-neutral-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
-									style={{
-										aspectRatio: '3/4',
-										width: `${containerSize}px`,
-										height: `${containerSize * 4/3}px`
-									}}
-								>
-										<img 
-											src={image.url} 
-											alt={image.name}
-											className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-										/>
-										{/* Image info overlay */}
-										<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-											<div className="text-white text-sm font-medium truncate">{image.name}</div>
-										</div>
-										<button
-											onClick={(e) => {
-												e.stopPropagation();
-												removeImage(image.id);
-											}}
-											className="absolute top-3 right-3 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
-										>
-											<X size={16} className="text-white" />
-										</button>
-									
-								</div>
-								);
-							})}
+						<div 
+							className="relative group bg-neutral-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+							style={{
+								aspectRatio: uploadedImage.aspectRatio || '3/4',
+								width: '500px',
+								maxWidth: '90%',
+								maxHeight: '90%'
+							}}
+							onClick={handleClickUpload}
+						>
+							<img 
+								src={uploadedImage.url} 
+								alt={uploadedImage.name}
+								className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+							/>
+							{/* Image info overlay */}
+							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+								<div className="text-white text-sm font-medium truncate">{uploadedImage.name}</div>
+								<div className="text-white/70 text-xs">Click to replace</div>
+							</div>
+							{/* Remove button */}
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									removeImage();
+								}}
+								className="absolute top-3 right-3 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
+							>
+								<X size={16} className="text-white" />
+							</button>
 						</div>
 					</div>
 				)}
@@ -740,25 +968,35 @@ const GenerationPage = () => {
 					ref={fileInputRef}
 					type="file"
 					accept="image/*"
-					multiple
 					className="hidden"
 					onChange={(e) => handleFileUpload(e.target.files)}
 				/>
 				
 				{/* Right sidebar with + button and history */}
 				<div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-center space-y-4">
-					{/* Add more button - always show when < 5 images */}
-					{uploadedImages.length < 5 && (
-						<button
-							onClick={handleClickUpload}
-							className="w-12 h-12 border-2 border-dashed border-neutral-700 hover:border-lime-400 rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm"
-						>
-							<Plus size={20} className="text-neutral-600 group-hover:text-lime-400" />
-						</button>
-					)}
+					{/* Add image button - show only when no image */}
+					{!uploadedImage && (() => {
+						const currentModelConfig = getModelById(selectedModel);
+						const supportsImages = Object.keys(currentModelConfig?.params || {})
+							.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
+						
+						return (
+							<button
+								onClick={supportsImages ? handleClickUpload : undefined}
+								disabled={!supportsImages}
+								className={`w-12 h-12 border-2 border-dashed rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm ${
+									supportsImages 
+										? 'border-neutral-700 hover:border-lime-400 cursor-pointer' 
+										: 'border-neutral-800 cursor-not-allowed opacity-50'
+								}`}
+								title={supportsImages ? "Add image" : "This model doesn't support image input"}
+							>
+								<Plus size={20} className={supportsImages ? "text-neutral-600 group-hover:text-lime-400" : "text-neutral-700"} />
+							</button>
+						);
+					})()}
 					
 					{/* History section */}
-					
 					{!isLoadingGenerations && previousGenerations.length > 0 && (
 						<div className="flex flex-col items-center space-y-2">
 							{/* Scroll up button */}
@@ -773,18 +1011,27 @@ const GenerationPage = () => {
 							
 							{/* History images */}
 							<div className="flex flex-col space-y-2">
-								{getVisibleHistory().map((generation) => (
-									<div
-										key={generation.id}
-										className="w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden hover:ring-2 hover:ring-lime-400/50 transition-all duration-300 cursor-pointer group relative"
-										title={`Click to add: ${generation.prompt}`}
-										draggable={true}
-										onClick={() => addHistoryImageToUploaded(generation)}
-										onDragStart={(e) => {
-											e.dataTransfer.setData('application/json', JSON.stringify(generation));
-											e.dataTransfer.effectAllowed = 'copy';
-										}}
-									>
+								{getVisibleHistory().map((generation) => {
+									const currentModelConfig = getModelById(selectedModel);
+									const supportsImages = Object.keys(currentModelConfig?.params || {})
+										.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
+									
+									return (
+										<div
+											key={generation.id}
+											className={`w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden transition-all duration-300 group relative ${
+												supportsImages 
+													? 'hover:ring-2 hover:ring-lime-400/50 cursor-pointer' 
+													: 'opacity-50 cursor-not-allowed'
+											}`}
+											title={supportsImages ? `Click to add: ${generation.prompt}` : "This model doesn't support image input"}
+											draggable={supportsImages}
+											onClick={supportsImages ? () => addHistoryImageToUploaded(generation) : undefined}
+											onDragStart={supportsImages ? (e) => {
+												e.dataTransfer.setData('application/json', JSON.stringify(generation));
+												e.dataTransfer.effectAllowed = 'copy';
+											} : undefined}
+										>
 										<img
 											src={generation.url}
 											alt={generation.prompt}
@@ -798,7 +1045,8 @@ const GenerationPage = () => {
 											<Plus size={16} className="text-white opacity-80" />
 										</div>
 									</div>
-								))}
+									);
+								})}
 							</div>
 							
 							{/* Scroll down button */}
@@ -836,10 +1084,10 @@ const GenerationPage = () => {
 							<div className="flex flex-col gap-2 h-full justify-center">
 								<button
 									onClick={handleGenerate}
-									disabled={!prompt.trim()}
+									disabled={!prompt.trim() || isGenerating}
 									className="px-8 py-3 bg-white/90 hover:bg-white text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm"
 								>
-									GENERATE
+									{isGenerating ? 'GENERATING...' : 'GENERATE'}
 								</button>
 								<div className="text-xs text-neutral-500 text-center font-light tracking-wider uppercase">
 									Credits: {calculateCredits()}

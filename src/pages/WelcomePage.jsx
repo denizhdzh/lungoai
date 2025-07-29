@@ -24,7 +24,7 @@ const WelcomePage = () => {
         const q = query(
           generationsRef,
           orderBy('timestamp', 'desc'),
-          limit(4)
+          limit(7)
         );
         
         const querySnapshot = await getDocs(q);
@@ -109,13 +109,13 @@ const WelcomePage = () => {
               </div>
               
               {isLoadingGenerations ? (
-                <div className="flex gap-2">
-                  {[...Array(4)].map((_, i) => (
+                <div className="flex gap-1">
+                  {[...Array(7)].map((_, i) => (
                     <div key={i} className="w-12 h-12 bg-neutral-800 rounded-lg animate-pulse"></div>
                   ))}
                 </div>
               ) : recentGenerations.length > 0 ? (
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   {recentGenerations.map((generation) => (
                     <div key={generation.id} className="w-12 h-12 rounded-lg overflow-hidden bg-neutral-800">
                       {generation.type === 'video' ? (

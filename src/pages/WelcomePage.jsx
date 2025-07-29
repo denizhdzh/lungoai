@@ -51,7 +51,7 @@ const WelcomePage = () => {
     <div className="min-h-32 relative overflow-hidden">
       
       {/* Right Side - Control Panel (3 Box Bento) */}
-      <div className="fixed top-16 right-3 w-[420px] space-y-2 z-40">
+      <div className="fixed top-16 right-3 w-[420px] space-y-1 z-40">
           {/* Top Box - AI Platform Info */}
           <div 
             onClick={() => navigate('/models')}

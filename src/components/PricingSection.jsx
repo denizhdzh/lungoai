@@ -78,6 +78,8 @@ const plans = [
     yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6", // Update with new Stripe price ID
     credits: 200,
     unitPrice: 0.07,
+    imageCount: Math.floor(200 / 0.25), // 800 images with cheapest model
+    videoCount: Math.floor(200 / 5), // 40 videos with cheapest model
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)', 
@@ -98,6 +100,8 @@ const plans = [
     yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq", // Update with new Stripe price ID
     credits: 500,
     unitPrice: 0.06,
+    imageCount: Math.floor(500 / 0.25), // 2000 images with cheapest model
+    videoCount: Math.floor(500 / 5), // 100 videos with cheapest model
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)',
@@ -119,6 +123,8 @@ const plans = [
     yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho", // Update with new Stripe price ID
     credits: 3000,
     unitPrice: 0.05,
+    imageCount: Math.floor(3000 / 0.25), // 12000 images with cheapest model
+    videoCount: Math.floor(3000 / 5), // 600 videos with cheapest model
     features: [
       'AI UGC Video Generation',
       'AI Image Generation (High Quality)',
@@ -189,12 +195,27 @@ function AnimatedPrice({ price, duration = 800 }) {
 }
 
 // --- NEW: Animated Credits Component ---
-function AnimatedCredits({ credits, duration = 800 }) {
+function AnimatedCredits({ credits, imageCount, videoCount, duration = 800 }) {
   const animatedCredits = useCounterAnimation(credits, duration);
+  const animatedImages = useCounterAnimation(imageCount || 0, duration);
+  const animatedVideos = useCounterAnimation(videoCount || 0, duration);
+  
   return (
-    <span className="text-2xl font-semibold text-stone-700 dark:text-stone-200">
-      {Math.round(animatedCredits).toLocaleString()} Credits
-    </span>
+    <div>
+      <span className="text-2xl font-semibold text-stone-700 dark:text-stone-200">
+        {Math.round(animatedCredits).toLocaleString()} Credits
+      </span>
+      {(imageCount || videoCount) && (
+        <div className="text-xs text-stone-500 dark:text-stone-400 mt-1 space-y-0.5">
+          {imageCount && (
+            <div>Up to {Math.round(animatedImages).toLocaleString()} images</div>
+          )}
+          {videoCount && (
+            <div>Up to {Math.round(animatedVideos).toLocaleString()} videos</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 // --- End Animated Credits Component ---
@@ -486,9 +507,11 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                       <div className="text-xs text-stone-500 dark:text-stone-400">
                         ${(pkg.unitPrice * 100).toFixed(1)}¢ per credit
                       </div>
-                      <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
-                        Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
-                      </div>
+                      {pkg.id === 2000 && ( // Only show discount for Ultimate package
+                        <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
+                          Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -638,7 +661,13 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                         <span className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-2">
                           {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
                         </span>
-                        <AnimatedCredits credits={plan.credits} duration={800 + index * 100} key={billingCycle + '-credits'} />
+                        <AnimatedCredits 
+                          credits={plan.credits} 
+                          imageCount={plan.imageCount}
+                          videoCount={plan.videoCount}
+                          duration={800 + index * 100} 
+                          key={billingCycle + '-credits'} 
+                        />
                       </div>
                     </div>
                     

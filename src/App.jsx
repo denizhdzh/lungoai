@@ -50,6 +50,11 @@ function App() {
             <Route path="/auth" element={<Layout />} />
             <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
               <Route path="generation" element={
                 <ProtectedRoute>
                   <Generation />

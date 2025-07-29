@@ -1,10 +1,51 @@
 
 import { useOutletContext } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { db } from '../firebase.js';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 
 const WelcomePage = () => {
   const { user, setIsPricingModalOpen, firestoreUserData } = useOutletContext() || {};
   const navigate = useNavigate();
+  const [recentGenerations, setRecentGenerations] = useState([]);
+  const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
+  
+  // Fetch recent generations for logged in users
+  useEffect(() => {
+    const fetchRecentGenerations = async () => {
+      if (!user) {
+        setIsLoadingGenerations(false);
+        return;
+      }
+      
+      try {
+        const generationsRef = collection(db, 'users', user.uid, 'generations');
+        const q = query(
+          generationsRef,
+          orderBy('timestamp', 'desc'),
+          limit(4)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        const generations = [];
+        querySnapshot.forEach((doc) => {
+          generations.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        setRecentGenerations(generations);
+      } catch (error) {
+        console.error('Error fetching recent generations:', error);
+      } finally {
+        setIsLoadingGenerations(false);
+      }
+    };
+    
+    fetchRecentGenerations();
+  }, [user]);
 
   return (
     <div className="min-h-32 relative overflow-hidden">
@@ -51,21 +92,72 @@ const WelcomePage = () => {
             <div className="absolute bottom-3 right-3 w-2 h-2 bg-lime-400/60 rounded-full animate-pulse"></div>
           </div>
           
-          {/* Middle Box - New Features */}
-          <div className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">PLATFORM_UPDATE</span>
-              <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">NEW</span>
+          {/* Middle Box - Recent Generations */}
+          {user ? (
+            <div 
+              onClick={() => navigate('/dashboard')}
+              className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1 hover:bg-neutral-950/60 hover:border-neutral-600/70 transition-all duration-300 cursor-pointer relative"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">RECENT_GENERATIONS</span>
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">{recentGenerations.length}</span>
+              </div>
+              
+              <div className="mb-4">
+                <h2 className="text-2xl font-normal text-white mb-1">Latest <span className="text-lime-400 font-light tracking-wide">Creations</span></h2>
+                <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
+              </div>
+              
+              {isLoadingGenerations ? (
+                <div className="flex gap-2">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="w-12 h-12 bg-neutral-800 rounded-lg animate-pulse"></div>
+                  ))}
+                </div>
+              ) : recentGenerations.length > 0 ? (
+                <div className="flex gap-2">
+                  {recentGenerations.map((generation) => (
+                    <div key={generation.id} className="w-12 h-12 rounded-lg overflow-hidden bg-neutral-800">
+                      {generation.type === 'video' ? (
+                        <video 
+                          src={generation.videoUrl} 
+                          className="w-full h-full object-cover"
+                          muted
+                        />
+                      ) : (
+                        <img 
+                          src={generation.imageUrl} 
+                          alt={generation.prompt}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-400">No generations yet. Start creating!</p>
+              )}
+              
+              {/* Click indicator */}
+              <div className="absolute bottom-3 right-3 w-2 h-2 bg-lime-400/60 rounded-full animate-pulse"></div>
             </div>
-            
-            <div>
-              <h2 className="text-2xl font-normal text-white mb-1">Fresh <span className="text-lime-400 font-light tracking-wide">Features</span></h2>
-              <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
-              <p className="text-sm text-neutral-400">
-                Batch uploads & faster processing.
-              </p>
+          ) : (
+            // Show platform update for non-logged users
+            <div className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">PLATFORM_UPDATE</span>
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">NEW</span>
+              </div>
+              
+              <div>
+                <h2 className="text-2xl font-normal text-white mb-1">Fresh <span className="text-lime-400 font-light tracking-wide">Features</span></h2>
+                <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
+                <p className="text-sm text-neutral-400">
+                  Batch uploads & faster processing.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
           
           {/* Bottom Box - Credits or Pricing */}
           {user ? (
@@ -192,35 +284,29 @@ const WelcomePage = () => {
         {user ? (
           <div className="mx-3 mb-3 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 rounded-3xl">
           <div className="flex items-center justify-between px-8 py-6">
-            {/* Left Side - Quick Actions */}
+            {/* Left Side - AI Generation Info */}
             <div className="flex items-center gap-6">
-              <span className="text-xs text-neutral-500 uppercase tracking-wider font-light">QUICK_ACTIONS</span>
+              <span className="text-xs text-neutral-500 uppercase tracking-wider font-light">AI_GENERATION</span>
               <div className="w-8 h-px bg-gradient-to-r from-lime-400 to-transparent"></div>
-              <div className="flex gap-3">
-                <button className="bg-neutral-800/60 hover:bg-neutral-700/60 px-4 py-2 rounded-xl text-white text-sm font-light tracking-wide transition-all hover:scale-105">
-                  text → img
-                </button>
-                <button className="bg-neutral-800/60 hover:bg-neutral-700/60 px-4 py-2 rounded-xl text-white text-sm font-light tracking-wide transition-all hover:scale-105">
-                  img → vid
-                </button>
-                <button className="bg-neutral-800/60 hover:bg-neutral-700/60 px-4 py-2 rounded-xl text-white text-sm font-light tracking-wide transition-all hover:scale-105">
-                  text → vid
-                </button>
-                <button className="bg-lime-500/80 hover:bg-lime-400/80 px-4 py-2 rounded-xl text-black text-sm font-medium tracking-wide transition-all hover:scale-105">
-                  upscale
-                </button>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-neutral-300">Create with</span>
+                <span className="text-lime-400 font-medium">15+ AI models</span>
+                <span className="text-neutral-300">•</span>
+                <span className="text-neutral-300">Images & Videos</span>
+                <span className="text-neutral-300">•</span>
+                <span className="text-neutral-300">Single platform</span>
               </div>
             </div>
             
             {/* Right Side - Start Button */}
             <div className="flex items-center gap-6">
-              <span className="text-xs text-neutral-500 uppercase tracking-wider font-light">GENERATION_FLOW</span>
+              <span className="text-xs text-neutral-500 uppercase tracking-wider font-light">START_CREATING</span>
               <div className="w-8 h-px bg-gradient-to-r from-lime-400 to-transparent"></div>
               <button 
-                onClick={() => navigate('/studio')}
+                onClick={() => navigate('/generation')}
                 className="bg-white/90 hover:bg-white text-black px-8 py-3 rounded-2xl font-normal tracking-wide transition-all hover:scale-105 shadow-lg"
               >
-                START
+                GENERATE
               </button>
             </div>
           </div>

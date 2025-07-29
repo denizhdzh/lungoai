@@ -13,6 +13,7 @@ import { auth, db } from '../firebase.js';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
+import DynamicIsland from '../components/DynamicIsland.jsx';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
@@ -27,9 +28,23 @@ const GenerationPage = () => {
 	const [generatedImage, setGeneratedImage] = useState(null);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [openDropdowns, setOpenDropdowns] = useState({});
+	const [generatingItem, setGeneratingItem] = useState(null);
+	const [notifications, setNotifications] = useState([]);
 	const fileInputRef = useRef(null);
 	const dropAreaRef = useRef(null);
 	const navigate = useNavigate();
+	
+	// Add notification
+	const addNotification = (message, type = 'info') => {
+		const id = Date.now() + Math.random();
+		const notification = { id, message, type, timestamp: new Date() };
+		setNotifications(prev => [...prev, notification]);
+		
+		// Auto remove after 5 seconds
+		setTimeout(() => {
+			setNotifications(prev => prev.filter(n => n.id !== id));
+		}, 5000);
+	};
 	
 	const [user, setUser] = useState(null);
 	const [authChecked, setAuthChecked] = useState(false);
@@ -410,6 +425,14 @@ const GenerationPage = () => {
 			setIsGenerating(true);
 			setGeneratedImage(null); // Clear previous generated image
 			
+			// Set generating item for DynamicIsland
+			setGeneratingItem({
+				type: activeType,
+				name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+				status: 'generating',
+				model: selectedModel
+			});
+			
 			// Prepare data for Firebase function
 			const generationData = {
 				model: selectedModel,
@@ -488,6 +511,14 @@ const GenerationPage = () => {
 			if (result.data.success) {
 				if (result.data.isAsync && result.data.predictionId) {
 					console.log(`Generation started! Prediction ID: ${result.data.predictionId}`);
+					setGeneratingItem({
+						type: activeType,
+						name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+						status: 'processing',
+						model: selectedModel,
+						predictionId: result.data.predictionId
+					});
+					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generation started. Prediction ID: ${result.data.predictionId}`, 'info');
 					// TODO: Add polling logic here
 				} else if (result.data.imageUrl) {
 					console.log(`Image generated successfully! URL: ${result.data.imageUrl}`);
@@ -500,9 +531,21 @@ const GenerationPage = () => {
 					};
 					console.log('🖼️ Setting generated image:', newGeneratedImage);
 					setGeneratedImage(newGeneratedImage);
-					// Clear uploaded images and show the result
-					setUploadedImages([]);
-					console.log('🖼️ Cleared uploaded images, should show generated image now');
+					// Clear uploaded image and show the result
+					setUploadedImage(null);
+					console.log('🖼️ Cleared uploaded image, should show generated image now');
+					
+					// Update DynamicIsland to completed
+					setGeneratingItem({
+						type: activeType,
+						name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+						status: 'completed',
+						model: selectedModel
+					});
+					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+					
+					// Clear generating item after 3 seconds
+					setTimeout(() => setGeneratingItem(null), 3000);
 				} else if (result.data.videoUrl) {
 					console.log(`Video generated successfully! URL: ${result.data.videoUrl}`);
 					// For videos, you might want to handle differently
@@ -513,15 +556,46 @@ const GenerationPage = () => {
 						timestamp: new Date(),
 						isVideo: true
 					});
-					setUploadedImages([]);
+					setUploadedImage(null);
+					
+					// Update DynamicIsland to completed
+					setGeneratingItem({
+						type: activeType,
+						name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+						status: 'completed',
+						model: selectedModel
+					});
+					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+					
+					// Clear generating item after 3 seconds
+					setTimeout(() => setGeneratingItem(null), 3000);
 				}
 			} else {
 				console.error('Generation failed:', result.data);
+				setGeneratingItem({
+					type: activeType,
+					name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+					status: 'failed',
+					model: selectedModel
+				});
+				addNotification(`Generation failed: ${result.data.error || 'Unknown error'}`, 'error');
+				
+				// Clear generating item after 5 seconds
+				setTimeout(() => setGeneratingItem(null), 5000);
 			}
 
 		} catch (error) {
 			console.error('Generation error:', error);
-			alert(`Generation failed: ${error.message}`);
+			setGeneratingItem({
+				type: activeType,
+				name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+				status: 'failed',
+				model: selectedModel
+			});
+			addNotification(`Generation failed: ${error.message}`, 'error');
+			
+			// Clear generating item after 5 seconds
+			setTimeout(() => setGeneratingItem(null), 5000);
 		} finally {
 			setIsGenerating(false);
 		}
@@ -566,6 +640,74 @@ const GenerationPage = () => {
 
 	return (
 		<div className="h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden flex">
+			{/* CSS for notification animation */}
+			<style>
+				{`
+					@keyframes slide-in-right {
+						from {
+							transform: translateX(100%);
+							opacity: 0;
+						}
+						to {
+							transform: translateX(0);
+							opacity: 1;
+						}
+					}
+					.animate-slide-in-right {
+						animation: slide-in-right 0.3s ease-out;
+					}
+				`}
+			</style>
+			{/* DynamicIsland */}
+			<div className="fixed bottom-20 right-6 z-50">
+				<DynamicIsland 
+					generatingItem={generatingItem}
+					isDarkMode={true}
+				/>
+			</div>
+			
+			{/* Custom Notifications */}
+			<div className="fixed top-4 right-4 z-50 space-y-2">
+				{notifications.map((notification) => (
+					<div
+						key={notification.id}
+						className={`px-4 py-3 rounded-lg shadow-lg backdrop-blur-xl border transition-all duration-300 transform translate-x-0 opacity-100 animate-slide-in-right ${
+							notification.type === 'error' 
+								? 'bg-red-900/80 border-red-700/50 text-red-100' 
+								: notification.type === 'success'
+								? 'bg-green-900/80 border-green-700/50 text-green-100'
+								: 'bg-neutral-900/80 border-neutral-700/50 text-neutral-100'
+						}`}
+						style={{ minWidth: '300px', maxWidth: '400px' }}
+					>
+						<div className="flex items-start gap-3">
+							{notification.type === 'error' ? (
+								<X size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+							) : notification.type === 'success' ? (
+								<div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+									<div className="w-2 h-2 bg-white rounded-full"></div>
+								</div>
+							) : (
+								<div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+									<div className="w-2 h-2 bg-white rounded-full"></div>
+								</div>
+							)}
+							<div className="flex-1">
+								<div className="text-sm font-medium">{notification.message}</div>
+								<div className="text-xs opacity-70 mt-1">
+									{notification.timestamp.toLocaleTimeString()}
+								</div>
+							</div>
+							<button
+								onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
+								className="text-neutral-400 hover:text-white transition-colors flex-shrink-0"
+							>
+								<X size={16} />
+							</button>
+						</div>
+					</div>
+				))}
+			</div>
 			{/* Left Sidebar - Minimal Design */}
 			<div className="fixed left-2 top-15 z-10 w-64">
 				<div className="bg-transparent space-y-1 shadow-2xl max-h-[80vh]">

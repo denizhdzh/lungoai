@@ -29,6 +29,8 @@ const creditPackages = [
     originalPrice: 20.00,
     unitPrice: 0.10,
     subscriberUnitPrice: 0.08,
+    imageCount: Math.floor(200 / 0.25), // 800 images
+    videoCount: Math.floor(200 / 5), // 40 videos
     popular: false
   },
   {
@@ -40,6 +42,8 @@ const creditPackages = [
     originalPrice: 45.00,
     unitPrice: 0.09,
     subscriberUnitPrice: 0.07,
+    imageCount: Math.floor(500 / 0.25), // 2000 images
+    videoCount: Math.floor(500 / 5), // 100 videos
     popular: true
   },
   {
@@ -51,6 +55,8 @@ const creditPackages = [
     originalPrice: 80.00,
     unitPrice: 0.08,
     subscriberUnitPrice: 0.06,
+    imageCount: Math.floor(1000 / 0.25), // 4000 images
+    videoCount: Math.floor(1000 / 5), // 200 videos
     popular: false
   },
   {
@@ -62,6 +68,8 @@ const creditPackages = [
     originalPrice: 140.00,
     unitPrice: 0.07,
     subscriberUnitPrice: 0.05,
+    imageCount: Math.floor(2000 / 0.25), // 8000 images
+    videoCount: Math.floor(2000 / 5), // 400 videos
     popular: false
   }
 ];
@@ -81,12 +89,12 @@ const plans = [
     imageCount: Math.floor(200 / 0.25), // 800 images with cheapest model
     videoCount: Math.floor(200 / 5), // 40 videos with cheapest model
     features: [
-      'AI UGC Video Generation',
-      'AI Image Generation (High Quality)', 
-      'Slideshow Content Generation',
-      'AI-Powered Scripts + Visuals',
-      'Watermark-Free Downloads',
-      'E-mail Support',
+      'Access to 15+ AI Models',
+      'Image Generation (Google Imagen, Flux, Ideogram)',
+      'Video Generation (Veo, Kling, Hailuo)',
+      'Text-to-Image & Image-to-Video',
+      'High Quality Output (4K Images, 1080p Videos)',
+      'Email Support',
     ],
     buttonText: 'Get Started',
     mostPopular: false,
@@ -103,13 +111,13 @@ const plans = [
     imageCount: Math.floor(500 / 0.25), // 2000 images with cheapest model
     videoCount: Math.floor(500 / 5), // 100 videos with cheapest model
     features: [
-      'AI UGC Video Generation',
-      'AI Image Generation (High Quality)',
-      'Slideshow Content Generation',
-      'AI-Powered Scripts + Visuals',
-      'Watermark-Free Downloads',
+      'Access to 15+ AI Models',
+      'Image Generation (Google Imagen, Flux, Ideogram)',
+      'Video Generation (Veo, Kling, Hailuo)',
+      'Text-to-Image & Image-to-Video',
+      'High Quality Output (4K Images, 1080p Videos)',
       'Priority Support',
-      'Advanced Templates',
+      'Batch Processing',
     ],
     buttonText: 'Get Started',
     mostPopular: true,
@@ -126,15 +134,15 @@ const plans = [
     imageCount: Math.floor(3000 / 0.25), // 12000 images with cheapest model
     videoCount: Math.floor(3000 / 5), // 600 videos with cheapest model
     features: [
-      'AI UGC Video Generation',
-      'AI Image Generation (High Quality)',
-      'Slideshow Content Generation', 
-      'AI-Powered Scripts + Visuals',
-      'Watermark-Free Downloads',
+      'Access to 15+ AI Models',
+      'Image Generation (Google Imagen, Flux, Ideogram)',
+      'Video Generation (Veo, Kling, Hailuo)',
+      'Text-to-Image & Image-to-Video',
+      'High Quality Output (4K Images, 1080p Videos)',
       'Priority Support',
-      'Advanced Templates',
-      'API Access',
-      'White-label Options',
+      'Batch Processing',
+      'API Access (Coming Soon)',
+      'Custom Model Integration',
     ],
     buttonText: 'Get Started',
     mostPopular: false,
@@ -188,7 +196,7 @@ function AnimatedPrice({ price, duration = 800 }) {
   const animatedPrice = useCounterAnimation(price, duration);
   
   return (
-    <span className="text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+    <span className="text-3xl font-normal text-white">
       ${animatedPrice.toFixed(2)}
     </span>
   );
@@ -202,16 +210,16 @@ function AnimatedCredits({ credits, imageCount, videoCount, duration = 800 }) {
   
   return (
     <div>
-      <span className="text-2xl font-semibold text-stone-700 dark:text-stone-200">
-        {Math.round(animatedCredits).toLocaleString()} Credits
+      <span className="text-xl font-normal text-white">
+        {Math.round(animatedCredits).toLocaleString()} <span className="text-lime-400 font-light">Credits</span>
       </span>
       {(imageCount || videoCount) && (
-        <div className="text-xs text-stone-500 dark:text-stone-400 mt-1 space-y-0.5">
+        <div className="text-sm text-neutral-200 mt-2 space-y-1 font-normal tracking-wide">
           {imageCount && (
-            <div>Up to {Math.round(animatedImages).toLocaleString()} images</div>
+            <div>Up to <span className="text-white font-semibold">{Math.round(animatedImages).toLocaleString()}</span> images</div>
           )}
           {videoCount && (
-            <div>Up to {Math.round(animatedVideos).toLocaleString()} videos</div>
+            <div>Up to <span className="text-white font-semibold">{Math.round(animatedVideos).toLocaleString()}</span> videos</div>
           )}
         </div>
       )}
@@ -463,84 +471,91 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
         return (
           <div
             key={pkg.id}
-            className={`relative rounded-xl p-6 border ${
-              pkg.popular 
-                ? 'border-lime-300 dark:border-lime-600 bg-lime-50/50 dark:bg-lime-900/10' 
-                : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-neutral-900'
-            } hover:border-stone-300 dark:hover:border-stone-700 transition-colors shadow-sm hover:shadow`}
+            className={`relative bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
+              pkg.popular ? 'ring-1 ring-lime-400/50' : ''
+            }`}
           >
-            {pkg.popular && (
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <span className="bg-lime-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
-                  Most Popular
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
+                {pkg.name.toUpperCase()}_PACK
+              </span>
+              {pkg.popular && (
+                <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
+                  MOST_POPULAR
                 </span>
-              </div>
-            )}
-            
-            <div className="text-center">
-              <div className="mb-4">
-                <div className="text-3xl font-bold text-stone-900 dark:text-white mb-1">
-                  {pkg.credits.toLocaleString()}
-                </div>
-                <div className="text-sm text-stone-500 dark:text-stone-400 mb-3">
-                  Credits
-                </div>
-                
-                <div className="space-y-1">
-                  {hasActiveOverallSubscription ? (
-                    <>
-                      <div className="text-2xl font-bold text-stone-900 dark:text-white">
-                        ${pkg.subscriberPrice.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400">
-                        ${(pkg.subscriberUnitPrice * 100).toFixed(1)}¢ per credit
-                      </div>
-                      <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
-                        Subscriber pricing active
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-stone-900 dark:text-white">
-                        ${pkg.price.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400">
-                        ${(pkg.unitPrice * 100).toFixed(1)}¢ per credit
-                      </div>
-                      {pkg.id === 2000 && ( // Only show discount for Ultimate package
-                        <div className="text-xs text-lime-600 dark:text-lime-400 mt-1">
-                          Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+              )}
+            </div>
+
+            {/* Title and Credits */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-normal text-white mb-1">
+                {pkg.name} <span className="text-lime-400 font-light tracking-wide">Pack</span>
+              </h2>
+              <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
               
-              <button
-                onClick={() => handleCreditPurchase(pkg.id)}
-                disabled={isLoadingThisPackage || isLoadingCheckout}
-                className={`w-full flex items-center justify-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                  isLoadingThisPackage
-                    ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
-                    : pkg.popular 
-                      ? 'bg-lime-500 hover:bg-lime-600 text-white shadow-lg hover:shadow-xl' 
-                      : 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 hover:bg-stone-800 dark:hover:bg-stone-200'
-                } ${
-                  isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
-                }`}
-              >
-                {isLoadingThisPackage ? (
+              <AnimatedCredits 
+                credits={pkg.credits} 
+                imageCount={pkg.imageCount}
+                videoCount={pkg.videoCount}
+                duration={800 + index * 100} 
+                key={`credit-${pkg.id}`}
+              />
+            </div>
+
+            {/* Pricing */}
+            <div className="mb-6">
+              <div className="space-y-1">
+                {hasActiveOverallSubscription ? (
                   <>
-                    <CircleNotch size={16} className="animate-spin mr-2" /> 
-                    Processing...
+                    <div className="text-3xl font-normal text-white">
+                      ${pkg.subscriberPrice.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-neutral-400">
+                      ${(pkg.subscriberUnitPrice * 100).toFixed(1)}¢ per credit
+                    </div>
+                    <div className="text-xs text-lime-400 mt-1">
+                      Subscriber pricing active
+                    </div>
                   </>
                 ) : (
-                  'Purchase Credits'
+                  <>
+                    <div className="text-3xl font-normal text-white">
+                      ${pkg.price.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-neutral-400">
+                      ${(pkg.unitPrice * 100).toFixed(1)}¢ per credit
+                    </div>
+                    <div className="text-xs text-lime-400 mt-1">
+                      Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
+                    </div>
+                  </>
                 )}
-              </button>
+              </div>
             </div>
-          </div>
+              
+            <button
+              onClick={() => handleCreditPurchase(pkg.id)}
+              disabled={isLoadingThisPackage || isLoadingCheckout}
+              className={`w-full flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
+                isLoadingThisPackage
+                  ? 'bg-neutral-800 text-neutral-500 cursor-wait'
+                  : pkg.popular 
+                    ? 'bg-white text-black hover:bg-neutral-100' 
+                    : 'bg-neutral-800/60 text-white hover:bg-neutral-700/60'
+              } ${
+                isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
+            >
+              {isLoadingThisPackage ? (
+                <>
+                  <CircleNotch size={16} className="animate-spin mr-2" /> PROCESSING...
+                </>
+              ) : (
+                'PURCHASE CREDITS'
+              )}
+            </button>
+            </div>
         );
       })}
     </div>
@@ -637,89 +652,97 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 return (
                   <div
                     key={`${plan.id}-${billingCycle}`}
-                    className={`relative rounded-xl p-6 border ${
-                      plan.mostPopular 
-                        ? 'border-stone-800 dark:border-white' 
-                        : 'border-stone-200 dark:border-stone-800'
-                    } hover:border-stone-300 dark:hover:border-stone-700 transition-colors bg-white dark:bg-neutral-900 shadow-sm hover:shadow`}
+                    className={`relative bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
+                      plan.mostPopular ? 'ring-1 ring-lime-400/50' : ''
+                    }`}
                   >
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-stone-900 dark:text-white">{plan.name}</h3>
-                        {plan.mostPopular && (
-                          <span className="relative overflow-hidden inline-flex items-center rounded-full bg-neutral-800/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-semibold leading-5 text-stone-800 dark:text-white
-                                         before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/40 dark:before:via-white/20 before:to-transparent">
-                            Popular
-                          </span>
-                        )}
-                      </div>
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
+                        {plan.name.toUpperCase()}_PLAN
+                      </span>
+                      {plan.mostPopular && (
+                        <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
+                          MOST_POPULAR
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Title and Price */}
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-normal text-white mb-1">
+                        {plan.name} <span className="text-lime-400 font-light tracking-wide">Plan</span>
+                      </h2>
+                      <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
                       
-                      <div className="flex flex-col">
-                        <div className="flex items-baseline gap-2">
-                          <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
-                        </div>
-                        <span className="text-xs text-stone-500 dark:text-stone-400 mt-1 mb-2">
+                      <div className="flex items-baseline gap-2 mb-2">
+                        <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
+                        <span className="text-sm text-neutral-400">
                           {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
                         </span>
-                        <AnimatedCredits 
-                          credits={plan.credits} 
-                          imageCount={plan.imageCount}
-                          videoCount={plan.videoCount}
-                          duration={800 + index * 100} 
-                          key={billingCycle + '-credits'} 
-                        />
                       </div>
+                      
+                      <AnimatedCredits 
+                        credits={plan.credits} 
+                        imageCount={plan.imageCount}
+                        videoCount={plan.videoCount}
+                        duration={800 + index * 100} 
+                        key={billingCycle + '-credits'} 
+                      />
                     </div>
                     
+                    {/* Features */}
+                    <div className="mb-6">
+                      <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-3">FEATURES_INCLUDED</p>
+                      <ul role="list" className="space-y-2 text-sm text-neutral-300 font-light tracking-wide">
+                        {plan.features.map((feature, idx) => {
+                          let baseFeature = feature;
+                          let suffix = null;
+                          const soonMatch = feature.match(/\((very soon|soon|coming soon)\)$/i);
+                          
+                          if (soonMatch) {
+                              suffix = soonMatch[0];
+                              baseFeature = feature.replace(suffix, '').trim();
+                          }
+                          
+                          return (
+                            <li key={idx} className="flex gap-x-3 items-start">
+                              <div className="w-1.5 h-1.5 bg-lime-400 rounded-full mt-2 flex-shrink-0"></div>
+                              <span className="text-neutral-200">
+                                  {baseFeature}
+                                  {suffix && <span className="ml-1 text-xs text-neutral-500">{suffix}</span>}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+
                     <button
                       onClick={() => handleCheckout(plan.id, billingCycle)}
                       disabled={isCurrentPlan || isLoadingThisButton || isLoadingCheckout}
-                      className={`w-full flex items-center justify-center px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow ${
+                      className={`w-full flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
                         isCurrentPlan
-                          ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-500 dark:text-stone-400 cursor-default'
+                          ? 'bg-neutral-800 text-neutral-400 cursor-default'
                           : isLoadingThisButton
-                            ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-wait'
+                            ? 'bg-neutral-800 text-neutral-500 cursor-wait'
                             : plan.mostPopular 
-                              ? 'bg-neutral-800 dark:bg-white text-white dark:text-stone-800 hover:bg-neutral-800 dark:hover:bg-neutral-200' 
-                              : 'bg-white dark:bg-neutral-900 text-stone-800 dark:text-white ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                              ? 'bg-white text-black hover:bg-neutral-100' 
+                              : 'bg-neutral-800/60 text-white hover:bg-neutral-700/60'
                       } ${
                         isLoadingCheckout && !isLoadingThisButton && !isCurrentPlan ? 'opacity-60 cursor-not-allowed' : ''
                       }`}
                     >
                       {isCurrentPlan ? (
-                         <>Current Plan</>
+                         <>CURRENT PLAN</>
                       ) : isLoadingThisButton ? (
                         <>
-                          <CircleNotch size={16} className="animate-spin mr-2" /> Processing...
+                          <CircleNotch size={16} className="animate-spin mr-2" /> PROCESSING...
                         </>
                       ) : (
-                        <>{plan.buttonText}</>
+                        <>{plan.buttonText.toUpperCase()}</>
                       )}
                     </button>
-                    
-                    <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-8 mb-3">Features</p>
-                    <ul role="list" className="space-y-2.5 text-xs leading-6 text-stone-600 dark:text-stone-300">
-                      {plan.features.map((feature, idx) => {
-                        let baseFeature = feature;
-                        let suffix = null;
-                        const soonMatch = feature.match(/\((very soon|soon)\)$/i);
-                        
-                        if (soonMatch) {
-                            suffix = soonMatch[0];
-                            baseFeature = feature.replace(suffix, '').trim();
-                        }
-                        
-                        return (
-                          <li key={idx} className="flex gap-x-2.5 items-start">
-                            <CheckCircle className="h-4 w-4 flex-none text-stone-400 dark:text-stone-500 mt-0.5" weight="fill" aria-hidden="true" />
-                            <span className="text-stone-600 dark:text-stone-300">
-                                {baseFeature}
-                                {suffix && <span className="ml-1 text-xs text-stone-400 dark:text-stone-500">{suffix}</span>}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
                   </div>
                 );
               })}

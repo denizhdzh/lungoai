@@ -7,6 +7,7 @@ import { ArrowRight, Sparkle, FileText, Lightning, Question, ChartLine, Bookmark
 // Keep only necessary Firestore functions
 import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc } from "@firebase/firestore"; // Added doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc
 import { motion, AnimatePresence } from 'framer-motion';
+import SimpleImageModal from './SimpleImageModal';
 
 // --- NEW: Plan Credit Limits ---
 const planCreditLimits = {
@@ -645,78 +646,44 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-50" onClick={onClose}>
+        {/* Main Image/Video Display */}
         <motion.div 
-          initial={{ scale: 0.95, opacity: 0 }}
+          initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="bg-neutral-100 dark:bg-neutral-800 rounded-lg shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[85vh] w-full max-w-4xl" 
-          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+          exit={{ scale: 0.9, opacity: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="relative max-w-2xl max-h-[70vh] bg-black rounded-2xl overflow-hidden shadow-2xl mb-6" 
+          onClick={(e) => e.stopPropagation()}
         >
-          {/* Left side - Preview - Aspect ratio 9:16 and smaller size */}
-          <div className="relative w-full md:w-80 aspect-[9/16] bg-black overflow-hidden flex-shrink-0">
+          <div className="relative w-full h-full">
             {generation.type === 'image' && generation.imageUrl && (
-              <motion.img 
-                initial={{ scale: 0.98, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1 }}
+              <img 
                 src={generation.imageUrl} 
                 alt={generation.prompt || 'Generated image'} 
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             )}
             
             {generation.type === 'video' && generation.videoUrl && (
-              <motion.div 
-                initial={{ scale: 0.98, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="relative w-full h-full"
-              >
-                {/* Show video with thumbnail and play button */}
-                    <video 
-                      ref={videoRef}
-                  src={`${generation.finalVideoUrl || generation.runwayVideoUrl || generation.videoUrl}#t=0.1`} 
-                      className="w-full h-full object-cover" 
-                      preload="metadata"
-                      playsInline
-                  muted
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onEnded={() => setIsPlaying(false)}
-                    />
+              <div className="relative w-full h-full">
+                <video 
+                  ref={videoRef}
+                  src={`${generation.finalVideoUrl || generation.runwayVideoUrl || generation.videoUrl}`} 
+                  className="w-full h-full object-contain" 
+                  controls
+                  preload="metadata"
+                  playsInline
+                  poster={generation.thumbnailUrl || undefined}
+                  onLoadedMetadata={() => {
+                    if (videoRef.current && !generation.thumbnailUrl) {
+                      videoRef.current.currentTime = 0.1;
+                    }
+                  }}
+                />
                 
-                {/* Hook text overlay - only show if not using finalVideoUrl (which already has text) */}
-                {generation.hookText && !generation.finalVideoUrl && (
-                  <div className="absolute inset-0 flex items-center justify-start p-6 z-10">
-                    <p
-                      className="text-white text-left font-normal text-lg max-w-[85%] leading-relaxed"
-                      style={{ 
-                        textShadow: '0 1px 3px rgba(0,0,0,0.8)' 
-                      }}
-                    >
-                      {generation.hookText}
-                    </p>
-                  </div>
-                )}
                 
-                {/* Play button overlay */}
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleVideoToggle}
-                  className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors group z-20"
-                    >
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      {isPlaying ? (
-                        <Pause size={32} className="text-white/80" weight="fill" />
-                      ) : (
-                        <Play size={32} className="text-white/80" weight="fill" />
-                      )}
-                  </div>
-                    </motion.button>
-              </motion.div>
+              </div>
             )}
             
             {generation.type === 'slideshow' && (
@@ -837,12 +804,12 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
             )}
           </div>
           
-          {/* Right side - Controls and info - Much more compact */}
+          {/* Right side - Controls and info - Larger panel */}
           <motion.div 
             initial={{ x: 16, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.1, duration: 0.25 }}
-            className="flex-1 flex flex-col bg-white dark:bg-neutral-900 min-w-0"
+            className="w-full lg:w-96 flex flex-col bg-neutral-800 min-w-0"
           >
             {/* Header - Very compact */}
             <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between flex-shrink-0">
@@ -1493,63 +1460,66 @@ function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit
                     </motion.button>
                   )}
                   
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {/* Show download button for rendered videos and slideshows */}
-                    {((generation.type === 'video' && generation.finalVideoUrl) || 
-                      (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0 && generation.processedImageUrls[0])) && (
-                      <motion.button
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        onClick={() => handleGenerationDownload(generation)}
-                        disabled={isDownloading}
-                        className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
-                      >
-                        <>
-                          <DownloadSimple size={10} />
-                          Download
-                        </>
-                      </motion.button>
-                    )}
+                  {/* Action Buttons Section */}
+                  <div className="space-y-3 pt-4 border-t border-neutral-700">
+                    <h4 className="text-sm font-medium text-white">Actions</h4>
                     
-                    {/* For images, always show download */}
-                    {generation.type === 'image' && (
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={handleDownload}
-                    disabled={isDownloading}
-                    className="py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1"
-                  >
-                    {isDownloading ? (
-                      <CircleNotch size={10} className="animate-spin" />
-                    ) : (
-                      <>
-                        <DownloadSimple size={10} />
-                        Download
-                      </>
-                    )}
-                  </motion.button>
-                    )}
-                  
-                  <motion.button 
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                      className={`py-2 px-3 bg-red-600 hover:bg-red-500 disabled:bg-neutral-400 text-white text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-                        ((generation.type === 'video' && !generation.finalVideoUrl) || 
-                         (generation.type === 'slideshow' && (!generation.processedImageUrls || generation.processedImageUrls.length === 0))) ? 'col-span-2' : ''
-                      }`}
-                  >
-                    {isDeleting ? (
-                      <CircleNotch size={10} className="animate-spin" />
-                    ) : (
-                      <>
-                        <Trash size={10} />
-                        Delete
-                      </>
-                    )}
-                  </motion.button>
+                    <div className="grid grid-cols-1 gap-3">
+                      {/* Download Button */}
+                      {(generation.type === 'image' || 
+                        (generation.type === 'video' && generation.finalVideoUrl) || 
+                        (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0)) && (
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={generation.type === 'image' ? handleDownload : () => handleGenerationDownload(generation)}
+                          disabled={isDownloading}
+                          className="py-3 px-4 bg-lime-500 hover:bg-lime-400 disabled:bg-neutral-600 text-black disabled:text-neutral-400 text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2"
+                        >
+                          {isDownloading ? (
+                            <CircleNotch size={16} className="animate-spin" />
+                          ) : (
+                            <>
+                              <DownloadSimple size={16} />
+                              Download
+                            </>
+                          )}
+                        </motion.button>
+                      )}
+                      
+                      {/* Favorite Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onToggleFavorite(generation.id)}
+                        className={`py-3 px-4 ${
+                          generation.isFavorite 
+                            ? 'bg-red-500 hover:bg-red-400 text-white' 
+                            : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                        } text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2`}
+                      >
+                        <Heart size={16} weight={generation.isFavorite ? 'fill' : 'regular'} />
+                        {generation.isFavorite ? 'Unfavorite' : 'Favorite'}
+                      </motion.button>
+                      
+                      {/* Delete Button */}
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        className="py-3 px-4 bg-red-600 hover:bg-red-500 disabled:bg-neutral-600 text-white disabled:text-neutral-400 text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                        {isDeleting ? (
+                          <CircleNotch size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            <Trash size={16} />
+                            Delete
+                          </>
+                        )}
+                      </motion.button>
+                    </div>
                   </div>
                   
                   {/* Note about editing limitations after rendering */}
@@ -1904,9 +1874,45 @@ function GenerationCard({ generation, onClick, creators, backgrounds, onToggleFa
               </div>
             </div>
           </div>
+        ) : generation.type === 'video' && (generation.videoUrl || generation.runwayVideoUrl || generation.finalVideoUrl) ? (
+          <div className="relative w-full aspect-square bg-black overflow-hidden">
+            <video 
+              src={`${generation.finalVideoUrl || generation.runwayVideoUrl || generation.videoUrl}#t=0.1`}
+              className="w-full h-full object-cover"
+              preload="metadata"
+              muted
+              poster={generation.thumbnailUrl}
+            />
+            {/* Video play button overlay */}
+            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
+                <Play size={20} className="text-black ml-0.5" weight="fill" />
+              </div>
+            </div>
+            {/* Hook text overlay */}
+            {generation.hookText && (
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                <p className="text-white text-sm font-medium line-clamp-2">
+                  {generation.hookText}
+                </p>
+              </div>
+            )}
+          </div>
         ) : (
-          <div className="w-full aspect-square bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
-            <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
+          <div className="relative w-full aspect-square bg-neutral-800 flex items-center justify-center">
+            {generation.type === 'video' ? (
+              <div className="text-center">
+                <FilmSlate size={32} className="text-white/60 mx-auto mb-2" />
+                <p className="text-white/80 text-xs">Video</p>
+                {generation.hookText && (
+                  <p className="text-white/60 text-xs mt-1 px-2 line-clamp-2">
+                    {generation.hookText}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
+            )}
           </div>
         )}
         
@@ -2381,26 +2387,13 @@ function Dashboard() {
       )}
 
 
-      {/* Edit Popup */}
+      {/* Simple Image/Video Modal */}
       {selectedGeneration && (
-        <GenerationEditPopup
+        <SimpleImageModal
           generation={selectedGeneration}
           onClose={() => setSelectedGeneration(null)}
-          isDarkMode={isDarkMode}
-          onScheduleSubmit={handleScheduleGenerationSubmit}
+          onToggleFavorite={handleToggleFavorite}
           onShowSuccessNotification={showSuccessNotification}
-          creators={creators}
-          backgrounds={backgrounds}
-          onAssetSaved={refreshLayoutData}
-          onGenerationUpdated={(updatedGeneration) => {
-            setGenerations(prevGenerations =>
-              prevGenerations.map(gen =>
-                gen.id === updatedGeneration.id ? updatedGeneration : gen
-              )
-            );
-            // Don't close popup after saving - keep it open for further editing
-            // setSelectedGeneration(null);
-          }}
           onGenerationDeleted={(deletedId) => {
             setGenerations(prevGenerations =>
               prevGenerations.filter(gen => gen.id !== deletedId)

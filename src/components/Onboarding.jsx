@@ -4,7 +4,7 @@ import { doc, setDoc, collection, writeBatch, serverTimestamp, updateDoc, getDoc
 import { updateProfile } from "firebase/auth"; // <-- ADD THIS IMPORT
 import { auth, db, storage } from '../firebase'; // Import auth, db, and storage
 import { getFunctions, httpsCallable } from 'firebase/functions'; // NEW: Import Firebase Functions
-import PricingSection from './PricingSection'; // Import PricingSection
+// import PricingSection from './PricingSection'; // Removed - no longer needed
 import { Plus, X, Package, Image as ImageIcon, CheckCircle, CircleNotch, FilmSlate } from '@phosphor-icons/react'; // Added icons
 import { ref, uploadBytes, getDownloadURL, listAll } from "firebase/storage"; // Added Firebase storage functions
 import { motion } from 'framer-motion'; // NEW: Import motion
@@ -17,7 +17,6 @@ function Onboarding({ setOnboardingComplete }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [showOffer, setShowOffer] = useState(false);
-  const [isSkipping, setIsSkipping] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // General loading state for async operations
 
   const [formData, setFormData] = useState({
@@ -25,7 +24,7 @@ function Onboarding({ setOnboardingComplete }) {
     lastName: '',
     jobTitle: '',
     company: '',
-    contentType: '', // Content type selection
+    contentType: [], // Content type selection - now array for multi-select
     referralSource: '', // How they heard about us
     notifications: false,
     dataCollection: false
@@ -58,7 +57,7 @@ function Onboarding({ setOnboardingComplete }) {
       if (!formData.company.trim()) newErrors.company = 'Company is required';
     }
     else if (step === 3) {
-      if (!formData.contentType) newErrors.contentType = 'Please select a content type';
+      if (!formData.contentType || formData.contentType.length === 0) newErrors.contentType = 'Please select at least one content type';
     }
     else if (step === 4) {
       if (!formData.referralSource) newErrors.referralSource = 'Please select how you heard about us';
@@ -99,7 +98,7 @@ function Onboarding({ setOnboardingComplete }) {
         lastName: formData.lastName,
         jobTitle: formData.jobTitle,
         company: formData.company,
-        contentType: formData.contentType, // Save content type
+        contentType: formData.contentType, // Save content types array
         referralSource: formData.referralSource, // Save referral source
         notifications: formData.notifications,
         dataCollection: formData.dataCollection,
@@ -162,7 +161,7 @@ function Onboarding({ setOnboardingComplete }) {
       
       await updateDoc(userDocRef, {
         onboardingCompleted: true,
-        general_credits: currentCredits + 200, // Add 200 credits for completing onboarding
+        general_credits: currentCredits + 10, // Add 200 credits for completing onboarding
       });
       console.log('User onboarding status marked as completed. Added 200 credits.');
       
@@ -175,12 +174,6 @@ function Onboarding({ setOnboardingComplete }) {
     }
   };
   
-  const skipOffer = async () => {
-    setIsSkipping(true);
-    console.log("User is skipping the offer. Proceeding to finalize onboarding.");
-    await finalizeOnboarding();
-    setIsSkipping(false);
-  };
 
   // Render different form based on current step
   const renderStep = () => {
@@ -261,39 +254,54 @@ function Onboarding({ setOnboardingComplete }) {
         return (
           <>
             <h2 className="text-lg font-medium text-center mb-6 text-white">What type of content do you want to create?</h2>
+            <p className="text-sm text-neutral-400 text-center mb-6">Select all that apply</p>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {[
-                  {value: "marketing_ads", label: "Marketing & Ads"},
-                  {value: "social_content", label: "Social Content"},
-                  {value: "product_demos", label: "Product Demos"},
-                  {value: "educational", label: "Educational"},
-                  {value: "entertainment", label: "Entertainment"},
-                  {value: "other", label: "Other"}
-                ].map((contentType) => (
-                  <button
-                    key={contentType.value}
-                    type="button"
-                    onClick={() => {
-                      setFormData({...formData, contentType: contentType.value});
-                      if (errors.contentType) setErrors(prev => ({...prev, contentType: ''}));
-                    }}
-                    className={`p-4 text-sm text-left rounded-xl transition-all duration-200 ${
-                      formData.contentType === contentType.value 
-                        ? 'bg-neutral-700 ring-2 ring-lime-400/50 text-lime-300' 
-                        : 'bg-neutral-800 border border-neutral-600 text-neutral-300 hover:border-neutral-500'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{contentType.label}</span>
-                      {formData.contentType === contentType.value && (
-                        <div className="w-5 h-5 bg-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
-                          <div className="w-2 h-2 bg-black rounded-full"></div>
+                  {value: "ai_images", label: "AI Images", icon: "🎨", description: "High-quality images from text prompts"},
+                  {value: "ai_videos", label: "AI Videos", icon: "🎬", description: "Text-to-video and image-to-video generation"},
+                  {value: "marketing_content", label: "Marketing Content", icon: "📈", description: "Ads, banners, and promotional materials"},
+                  {value: "social_media", label: "Social Media", icon: "📱", description: "Posts, stories, and social content"},
+                  {value: "creative_art", label: "Creative Art", icon: "🎭", description: "Artistic and experimental content"},
+                  {value: "business_presentations", label: "Business Presentations", icon: "💼", description: "Professional visuals and materials"}
+                ].map((contentType) => {
+                  const isSelected = formData.contentType.includes(contentType.value);
+                  
+                  return (
+                    <button
+                      key={contentType.value}
+                      type="button"
+                      onClick={() => {
+                        const newContentTypes = isSelected 
+                          ? formData.contentType.filter(type => type !== contentType.value)
+                          : [...formData.contentType, contentType.value];
+                        
+                        setFormData({...formData, contentType: newContentTypes});
+                        if (errors.contentType) setErrors(prev => ({...prev, contentType: ''}));
+                      }}
+                      className={`p-4 text-sm text-left rounded-xl transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-neutral-700 ring-2 ring-lime-400/50 text-lime-300' 
+                          : 'bg-neutral-800 border border-neutral-600 text-neutral-300 hover:border-neutral-500'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">{contentType.icon}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium">{contentType.label}</span>
+                            {isSelected && (
+                              <div className="w-5 h-5 bg-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
+                                <div className="w-2 h-2 bg-black rounded-full"></div>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-400">{contentType.description}</p>
                         </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               {errors.contentType && <p className="text-xs text-red-500 mt-1 text-center">{errors.contentType}</p>}
             </div>
@@ -385,29 +393,31 @@ function Onboarding({ setOnboardingComplete }) {
   };
 
   const renderOffer = () => (
-    <div className="w-full max-w-4xl bg-neutral-900 border border-neutral-700 rounded-lg mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="text-left mb-8 relative">
-        <button 
-          onClick={skipOffer}
-          disabled={isSkipping || isLoading}
-          className={`absolute top-0 right-0 text-sm transition-colors
-                      ${(isSkipping || isLoading) 
-                        ? 'text-neutral-500 cursor-not-allowed' 
-                        : 'text-white hover:text-neutral-300'
-                      }`}
-        >
-          {(isSkipping || isLoading) ? 'Processing...' : 'Skip for now'}
-        </button>
-        <h2 className="text-2xl font-medium text-white">You're all set! 🎉</h2>
-        <p className="mt-2 text-neutral-300">Unlock the full potential of LungoAI with a premium plan</p>
+    <div className="max-w-md w-full bg-neutral-900/60 border border-neutral-700 rounded-xl mx-auto px-6 py-8">
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-medium text-white mb-2">You're all set! 🎉</h2>
+        <p className="text-neutral-300">Welcome to Lungo AI! You've received 10 free credits to get started.</p>
       </div>
       
-      <PricingSection 
-        id="pricing" 
-        subscriptionData={null} 
-        user={auth.currentUser} 
-        onSubscriptionSuccess={finalizeOnboarding}
-      />
+      <div className="bg-neutral-800/50 rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-center mb-2">
+          <div className="text-3xl font-normal text-lime-400">10</div>
+          <div className="text-lg text-neutral-400 ml-2">Free Credits</div>
+        </div>
+        <p className="text-sm text-neutral-400 text-center">Start creating amazing content right away!</p>
+      </div>
+      
+      <button
+        onClick={finalizeOnboarding}
+        disabled={isLoading}
+        className="w-full px-6 py-3 bg-lime-500 text-black rounded-lg hover:bg-lime-400 font-medium transition-all disabled:opacity-50 flex items-center justify-center"
+      >
+        {isLoading ? (
+          <CircleNotch className="animate-spin h-4 w-4" />
+        ) : (
+          'Start Creating'
+        )}
+      </button>
     </div>
   );
 

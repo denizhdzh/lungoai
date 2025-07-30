@@ -398,9 +398,9 @@ function AppRouter() {
         {/* Default child route (Dashboard) - No auth required */}
         <Route index element={<WelcomePage />} /> 
         {/* Other child routes - Auth required */}
-        <Route path="dashboard" element={
+        <Route path="history" element={
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <WelcomePage />
+            <Dashboard />
           </ProtectedRoute>
         } />
         <Route path="settings" element={

@@ -95,7 +95,7 @@ const WelcomePage = () => {
           {/* Middle Box - Recent Generations */}
           {user ? (
             <div 
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/history')}
               className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1 hover:bg-neutral-950/60 hover:border-neutral-600/70 transition-all duration-300 cursor-pointer relative"
             >
               <div className="flex items-center justify-between mb-4">

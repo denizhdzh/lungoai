@@ -1251,8 +1251,8 @@ function Layout() {
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
       {/* Conditional Background */}
-      {location.pathname === '/' || location.pathname === '/dashboard' ? (
-        // Background image for index/dashboard pages
+      {location.pathname === '/' ? (
+        // Background image for index pages
         <div className="absolute inset-0 h-full w-full">
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -1263,6 +1263,9 @@ function Layout() {
           />
           <div className="absolute inset-0 bg-black/30" />
         </div>
+      ) : location.pathname === '/history' ? (
+        // Solid neutral-950 background for history page
+        <div className="absolute inset-0 h-full w-full bg-neutral-950" />
       ) : location.pathname === '/studio' ? (
         // White dot grid background for studio page
         <div className="absolute inset-0 h-full w-full bg-neutral-950 bg-[radial-gradient(#303030_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>

@@ -303,7 +303,7 @@ const WelcomePage = () => {
               <span className="text-xs text-neutral-500 uppercase tracking-wider font-light">START_CREATING</span>
               <div className="w-8 h-px bg-gradient-to-r from-lime-400 to-transparent"></div>
               <button 
-                onClick={() => navigate('/generation')}
+                onClick={() => navigate('/studio')}
                 className="bg-white/90 hover:bg-white text-black px-8 py-3 rounded-2xl font-normal tracking-wide transition-all hover:scale-105 shadow-lg"
               >
                 GENERATE

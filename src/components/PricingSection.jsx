@@ -89,11 +89,10 @@ const plans = [
     imageCount: Math.floor(200 / 0.25), // 800 images with cheapest model
     videoCount: Math.floor(200 / 5), // 40 videos with cheapest model
     features: [
-      'Access to 15+ AI Models',
-      'Image Generation (Google Imagen, Flux, Ideogram)',
-      'Video Generation (Veo, Kling, Hailuo)',
-      'Text-to-Image & Image-to-Video',
-      'High Quality Output (4K Images, 1080p Videos)',
+      'Access to Basic AI Models',
+      'Image Generation (Flux, Basic Models)',
+      'Text-to-Image Generation',
+      'Standard Quality Output',
       'Email Support',
     ],
     buttonText: 'Get Started',
@@ -111,13 +110,12 @@ const plans = [
     imageCount: Math.floor(500 / 0.25), // 2000 images with cheapest model
     videoCount: Math.floor(500 / 5), // 100 videos with cheapest model
     features: [
-      'Access to 15+ AI Models',
+      'Access to Premium AI Models',
       'Image Generation (Google Imagen, Flux, Ideogram)',
-      'Video Generation (Veo, Kling, Hailuo)',
+      'Video Generation (Kling, Hailuo)',
       'Text-to-Image & Image-to-Video',
       'High Quality Output (4K Images, 1080p Videos)',
       'Priority Support',
-      'Batch Processing',
     ],
     buttonText: 'Get Started',
     mostPopular: true,
@@ -134,15 +132,13 @@ const plans = [
     imageCount: Math.floor(3000 / 0.25), // 12000 images with cheapest model
     videoCount: Math.floor(3000 / 5), // 600 videos with cheapest model
     features: [
-      'Access to 15+ AI Models',
+      'Access to All AI Models',
       'Image Generation (Google Imagen, Flux, Ideogram)',
       'Video Generation (Veo, Kling, Hailuo)',
       'Text-to-Image & Image-to-Video',
       'High Quality Output (4K Images, 1080p Videos)',
       'Priority Support',
-      'Batch Processing',
-      'API Access (Coming Soon)',
-      'Custom Model Integration',
+      'Higher Credit Allowance',
     ],
     buttonText: 'Get Started',
     mostPopular: false,

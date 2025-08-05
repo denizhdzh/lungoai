@@ -29,7 +29,7 @@ const creditPackages = [
     originalPrice: 20.00,
     unitPrice: 0.10,
     subscriberUnitPrice: 0.08,
-    imageCount: Math.floor(200 / 0.25), // 800 images
+    imageCount: Math.floor(200 / 1), // 200 images
     videoCount: Math.floor(200 / 5), // 40 videos
     popular: false
   },
@@ -42,7 +42,7 @@ const creditPackages = [
     originalPrice: 45.00,
     unitPrice: 0.09,
     subscriberUnitPrice: 0.07,
-    imageCount: Math.floor(500 / 0.25), // 2000 images
+    imageCount: Math.floor(500 / 1), // 500 images
     videoCount: Math.floor(500 / 5), // 100 videos
     popular: true
   },
@@ -55,7 +55,7 @@ const creditPackages = [
     originalPrice: 80.00,
     unitPrice: 0.08,
     subscriberUnitPrice: 0.06,
-    imageCount: Math.floor(1000 / 0.25), // 4000 images
+    imageCount: Math.floor(1000 / 1), // 1000 images
     videoCount: Math.floor(1000 / 5), // 200 videos
     popular: false
   },
@@ -68,7 +68,7 @@ const creditPackages = [
     originalPrice: 140.00,
     unitPrice: 0.07,
     subscriberUnitPrice: 0.05,
-    imageCount: Math.floor(2000 / 0.25), // 8000 images
+    imageCount: Math.floor(2000 / 1), // 2000 images
     videoCount: Math.floor(2000 / 5), // 400 videos
     popular: false
   }
@@ -82,11 +82,11 @@ const plans = [
     name: 'Starter',
     monthlyPrice: 14.00,
     yearlyMonthlyPrice: Math.round(14.00 * 9 / 12),
-    monthlyPriceId: "price_1RMqEZDf8kAOBAT3ltD6n2lX", // Update with new Stripe price ID
-    yearlyPriceId: "price_1RMqGbDf8kAOBAT3vgwkWLr6", // Update with new Stripe price ID
+    monthlyPriceId: "price_1RqYZsBcrIf8H8FJgOq3dOFn", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RqYZsBcrIf8H8FJkaolnXfV", // Update with new Stripe price ID
     credits: 200,
     unitPrice: 0.07,
-    imageCount: Math.floor(200 / 0.25), // 800 images with cheapest model
+    imageCount: Math.floor(200 / 1), // 200 images with cheapest model
     videoCount: Math.floor(200 / 5), // 40 videos with cheapest model
     features: [
       'Access to Basic AI Models',
@@ -103,11 +103,11 @@ const plans = [
     name: 'Creator',
     monthlyPrice: 30.00,
     yearlyMonthlyPrice: Math.round(30.00 * 9 / 12),
-    monthlyPriceId: "price_1RRJ8tDf8kAOBAT3qBwC6qpM", // Update with new Stripe price ID
-    yearlyPriceId: "price_1RRJ9SDf8kAOBAT3bA8Xbriq", // Update with new Stripe price ID
+    monthlyPriceId: "price_1RqYbBBcrIf8H8FJcwx4ubhh", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RqYbBBcrIf8H8FJHwvT8NcQ", // Update with new Stripe price ID
     credits: 500,
     unitPrice: 0.06,
-    imageCount: Math.floor(500 / 0.25), // 2000 images with cheapest model
+    imageCount: Math.floor(500 / 1), // 500 images with cheapest model
     videoCount: Math.floor(500 / 5), // 100 videos with cheapest model
     features: [
       'Access to Premium AI Models',
@@ -125,11 +125,11 @@ const plans = [
     name: 'Pro',
     monthlyPrice: 150.00,
     yearlyMonthlyPrice: Math.round(150.00 * 9 / 12),
-    monthlyPriceId: "price_1RMqHgDf8kAOBAT3m6kthIND", // Update with new Stripe price ID
-    yearlyPriceId: "price_1RMqI1Df8kAOBAT3Xoy3M7Ho", // Update with new Stripe price ID
+    monthlyPriceId: "price_1RqYbrBcrIf8H8FJEyvN5vkw", // Update with new Stripe price ID
+    yearlyPriceId: "price_1RqYbrBcrIf8H8FJQLDrUWC5", // Update with new Stripe price ID
     credits: 3000,
     unitPrice: 0.05,
-    imageCount: Math.floor(3000 / 0.25), // 12000 images with cheapest model
+    imageCount: Math.floor(3000 / 1), // 3000 images with cheapest model
     videoCount: Math.floor(3000 / 5), // 600 videos with cheapest model
     features: [
       'Access to All AI Models',
@@ -507,11 +507,8 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                     <div className="text-3xl font-normal text-white">
                       ${pkg.subscriberPrice.toFixed(2)}
                     </div>
-                    <div className="text-xs text-neutral-400">
-                      ${(pkg.subscriberUnitPrice * 100).toFixed(1)}¢ per credit
-                    </div>
                     <div className="text-xs text-lime-400 mt-1">
-                      Subscriber pricing active
+                      20% subscriber discount applied
                     </div>
                   </>
                 ) : (
@@ -519,11 +516,8 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                     <div className="text-3xl font-normal text-white">
                       ${pkg.price.toFixed(2)}
                     </div>
-                    <div className="text-xs text-neutral-400">
-                      ${(pkg.unitPrice * 100).toFixed(1)}¢ per credit
-                    </div>
                     <div className="text-xs text-lime-400 mt-1">
-                      Subscribe and save ${(pkg.price - pkg.subscriberPrice).toFixed(2)}!
+                      Subscribe to get 20% off all credit purchases
                     </div>
                   </>
                 )}

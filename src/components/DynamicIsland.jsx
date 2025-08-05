@@ -1,52 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Spinner, Info, CheckCircle, XCircle, FilmSlate, ImageSquare, Slideshow as SlideshowIcon } from '@phosphor-icons/react';
+import { Spinner, Info, CheckCircle, XCircle, FilmSlate, ImageSquare, Slideshow as SlideshowIcon, Clock, Play } from '@phosphor-icons/react';
 
-// --- SVG'yi React komponenti olarak ekleyelim ---
-const LungoLogoIcon = ({ className }) => (
-  <svg 
-    className={className} 
-    viewBox="0 0 566 399" 
-    fill="none" 
-    xmlns="http://www.w3.org/2000/svg"
+const DotLoader = () => (
+  <motion.div 
+    className="flex space-x-1 ml-2"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
   >
-    <rect x="35" y="35" width="496" height="329" rx="93" stroke="currentColor" strokeWidth="70"/>
-  </svg>
+    {[0, 1, 2].map((i) => (
+      <motion.div
+        key={i}
+        className="w-1 h-1 bg-white rounded-full"
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.5, 1, 0.5]
+        }}
+        transition={{
+          duration: 1.2,
+          repeat: Infinity,
+          delay: i * 0.2
+        }}
+      />
+    ))}
+  </motion.div>
 );
 
-const DotLoader = ({ isDarkMode }) => (
-  <span className={`inline-flex ml-1 ${isDarkMode ? 'text-neutral-700' : 'text-neutral-200'}`}>
-    <style>
-      {`
-        @keyframes blink {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 1; }
-        }
-        .dot-loader span {
-          animation: blink 1.4s infinite both;
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .dot-loader span:nth-child(1) {
-          animation-delay: 0s;
-        }
-        .dot-loader span:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-        .dot-loader span:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-      `}
-    </style>
-    <span className="dot-loader">
-      <span>•</span>
-      <span>•</span>
-      <span>•</span>
-    </span>
-  </span>
-);
-
-const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
+const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode, position = 'top-center' }) => {
   const [currentDisplayItem, setCurrentDisplayItem] = useState(null);
 
   useEffect(() => {
@@ -64,15 +44,26 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
     }
   }, [generatingItem, commandQueue]);
 
-  const getIcon = (item) => {
-    const iconColor = isDarkMode ? "text-neutral-700" : "text-neutral-200";
-
-    if (!item) return <Info size={16} className={iconColor} />;
-    const iconProps = { size: 16, className: `flex-shrink-0 ${iconColor}` }; 
+  const getIcon = (item, status) => {
+    if (!item) return <Info size={14} className="text-white/60" />;
     
+    const iconProps = { size: 14, className: "flex-shrink-0 text-white" };
+    
+    // Status-based icons
+    if (status === 'completed' || status === 'succeeded') {
+      return <CheckCircle {...iconProps} className="flex-shrink-0 text-lime-400" />;
+    }
+    if (status === 'failed' || status === 'error') {
+      return <XCircle {...iconProps} className="flex-shrink-0 text-red-400" />;
+    }
+    if (status === 'starting' || status === 'processing') {
+      return <Spinner {...iconProps} className="flex-shrink-0 text-white animate-spin" />;
+    }
+    
+    // Type-based icons
     switch (item.type) {
       case 'video': return <FilmSlate {...iconProps} />;
-      case 'image': return null;
+      case 'image': return <ImageSquare {...iconProps} />;
       case 'slideshow': return <SlideshowIcon {...iconProps} />;
       default: return <Info {...iconProps} />;
     }
@@ -81,14 +72,19 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
   const getStatusText = (item) => {
     if (!item) return null;
 
-    const textColorClass = isDarkMode ? "text-neutral-800" : "text-neutral-100";
-
-    let typeText = '';
     let descriptiveText = '';
 
-    if (item.type === 'video') {
-      typeText = 'Video';
-      // Use Firestore status for more descriptive text
+    // Handle async prediction statuses first
+    if (item.status === 'starting') {
+      descriptiveText = 'Starting generation...';
+    } else if (item.status === 'processing') {
+      descriptiveText = 'AI is processing...';
+    } else if (item.status === 'succeeded' || item.status === 'completed') {
+      descriptiveText = item.type === 'video' ? 'Video ready!' : 'Image ready!';
+    } else if (item.status === 'failed' || item.status === 'error') {
+      descriptiveText = 'Generation failed';
+    } else if (item.type === 'video') {
+      // Legacy video statuses
       switch (item.status) {
         case 'image_generation_pending':
         case 'image_generating':
@@ -97,152 +93,111 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode }) => {
         case 'image_generated':
           descriptiveText = 'Rendering video';
           break;
-        case 'processing': // Runway processing
-          descriptiveText = 'Processing video';
-          break;
         case 'pending_concatenation':
         case 'processing_concatenation':
           descriptiveText = 'Finalizing video';
           break;
-        case 'completed':
-        case 'assets_ready_for_review': // Consider this as completed for island view
+        case 'assets_ready_for_review':
           descriptiveText = 'Video ready';
           break;
-        case 'failed':
-        case 'runway_failed':
-        case 'runway_timeout':
-        case 'runway_max_attempts':
-        case 'runway_success_no_video':
-        case 'polling_internal_error':
-        case 'polling_error_config':
-          descriptiveText = 'Video generation error';
-          break;
         default:
-          descriptiveText = 'Video content';
+          descriptiveText = 'Generating video';
       }
     } else if (item.type === 'image') {
-      typeText = 'Image';
-      // More detailed status for image generation
+      // Legacy image statuses
       switch (item.status) {
         case 'creating_prompt':
-          descriptiveText = 'Creating detailed prompt';
+          descriptiveText = 'Creating prompt';
           break;
         case 'generating_image':
-          descriptiveText = 'Generating with Flux AI';
+          descriptiveText = 'Generating image';
           break;
         case 'saving_image':
-          descriptiveText = 'Saving to cloud storage';
-          break;
-        case 'updating_credits':
-          descriptiveText = 'Updating credits';
-          break;
-        case 'completed':
-          descriptiveText = 'Image ready';
-          break;
-        case 'failed':
-        case 'error':
-          descriptiveText = 'Image generation error';
+          descriptiveText = 'Saving image';
           break;
         default:
-          descriptiveText = 'Generating AI image';
+          descriptiveText = 'Generating image';
       }
-    } else if (item.type === 'slideshow') {
-      typeText = 'Slideshow';
-      descriptiveText = 'Generating Tiktok slideshow';
-    } else if (item.type) {
-      typeText = item.type.charAt(0).toUpperCase() + item.type.slice(1);
-      descriptiveText = 'content';
+    } else {
+      descriptiveText = item.name || 'Processing...';
     }
 
-    const name = item.name || (item.isMain && typeText ? typeText : (item.isMain ? 'Task' : 'Queued task'));
-
-    // Centralized active states for loader
-    const activeStatusesForLoader = [
-      'initiating', 'generating', 'processing', 'uploading',
+    // Active states that should show loader
+    const activeStatuses = [
+      'starting', 'processing', 'initiating', 'generating', 'uploading',
       'image_generation_pending', 'image_generating', 'image_generated',
       'pending_concatenation', 'processing_concatenation',
-      // New image generation steps
       'creating_prompt', 'generating_image', 'saving_image', 'updating_credits'
     ];
 
-    if (item.isMain && activeStatusesForLoader.includes(item.status)) {
-      const stepText = item.step && item.totalSteps ? ` (${item.step}/${item.totalSteps})` : '';
-      return (
-        <span className={`${textColorClass} font-medium`}>
-          {item.message || descriptiveText || `Generating ${name.toLowerCase()}`}{stepText}
-          <DotLoader isDarkMode={isDarkMode} />
-        </span>
-      );
-    }
-    
-    if (item.isMain && (item.status === 'completed' || item.status === 'failed' || item.status === 'error' || item.status === 'assets_ready_for_review')) {
-      // For "assets_ready_for_review", we'll use the specific descriptiveText from video logic
-      return <span className={`${textColorClass} font-medium`}>{descriptiveText || `Completed: ${name}`}</span>;
-    }
+    const isActive = activeStatuses.includes(item.status);
+    const isCompleted = ['completed', 'succeeded', 'assets_ready_for_review'].includes(item.status);
+    const isFailed = ['failed', 'error'].includes(item.status);
 
-    const statusInfo = item.isMain ? '' : ' (in queue)'; 
-    return <span className={`${textColorClass} font-medium`}>{descriptiveText || name}{statusInfo}</span>;
+    return (
+      <div className="flex items-center">
+        <span className="text-white text-sm font-medium">
+          {descriptiveText}
+        </span>
+        {isActive && <DotLoader />}
+      </div>
+    );
   };
 
-  if ((generatingItem || commandQueue.length > 0) && !currentDisplayItem) {
-    return (
-      <motion.div
-        className={`flex items-center justify-center px-6 py-4 rounded-lg shadow-2xl transition-colors duration-200 ${isDarkMode ? 'bg-neutral-900/80 text-neutral-100 border border-neutral-700/50' : 'bg-white/90 text-neutral-800 border border-white/50'} backdrop-blur-xl`}
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.8 }}
-        transition={{ duration: 0.3 }}
-        style={{ width: 'fit-content', minWidth: 180 }}
-      >
-        <LungoLogoIcon className="w-5 h-5 text-lime-500 mr-3 flex-shrink-0 animate-pulse" />
-        <span className="text-sm font-medium">Loading tasks...</span>
-      </motion.div>
-    );
+  const hasActiveTask = !!currentDisplayItem;
+
+  if (!hasActiveTask) {
+    return null; // Don't show anything when no active tasks
   }
 
-  // Her zaman göster, ama state'e göre opacity değişsin
-  const hasActiveTask = !!currentDisplayItem;
-  const isLoading = (generatingItem || commandQueue.length > 0) && !currentDisplayItem;
+  // Position classes based on prop
+  const getPositionClasses = () => {
+    switch (position) {
+      case 'bottom-right':
+        return 'fixed bottom-6 right-6 z-50';
+      case 'top-center':
+      default:
+        return 'fixed top-4 left-1/2 transform -translate-x-1/2 z-50';
+    }
+  };
+
+  // Animation direction based on position
+  const getAnimationProps = () => {
+    switch (position) {
+      case 'bottom-right':
+        return {
+          initial: { opacity: 0, x: 20, y: 20 },
+          animate: { opacity: 1, x: 0, y: 0 },
+          exit: { opacity: 0, x: 20, y: 20 }
+        };
+      case 'top-center':
+      default:
+        return {
+          initial: { opacity: 0, y: -20 },
+          animate: { opacity: 1, y: 0 },
+          exit: { opacity: 0, y: -20 }
+        };
+    }
+  };
 
   return (
     <motion.div
-      className="relative flex justify-center items-start"
-      style={{ height: 40, zIndex: 20 }}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ 
-        opacity: hasActiveTask ? 1 : 0.4, 
-        scale: hasActiveTask ? 1 : 0.9 
-      }}
-      exit={{ opacity: 0, scale: 0.8 }}
+      className={getPositionClasses()}
+      {...getAnimationProps()}
       transition={{ duration: 0.3 }}
     >
       <motion.div
-        className={`relative flex flex-col overflow-hidden ${isDarkMode ? 'bg-neutral-900/80 text-neutral-100 border border-neutral-700/50' : 'bg-white/90 text-neutral-800 border border-white/50'} rounded-lg px-6 py-4 backdrop-blur-xl shadow-2xl`}
-        style={{ width: 'fit-content', minWidth: hasActiveTask ? 200 : 140 }}
-        whileHover={{ scale: hasActiveTask ? 1.02 : 0.95 }}
+        className="bg-neutral-900 text-white rounded-full px-4 py-2 shadow-2xl backdrop-blur-xl border border-neutral-700/50"
+        style={{ minWidth: 200 }}
+        whileHover={{ scale: 1.02 }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
       >
-        <motion.div 
-          className="flex items-center w-full"
-        >
-          <LungoLogoIcon className={`w-4 h-4 text-lime-500 mr-2 flex-shrink-0 ${hasActiveTask ? 'animate-pulse' : ''}`} />
-          <div className="flex-grow flex items-center gap-2 overflow-hidden">
-            {hasActiveTask && getIcon(currentDisplayItem)}
-            <span className={`text-sm font-medium text-ellipsis overflow-hidden ${hasActiveTask ? '' : 'text-xs'}`}>
-              {hasActiveTask ? getStatusText(currentDisplayItem) : (
-                isLoading ? (
-                  <span className={isDarkMode ? "text-neutral-50" : "text-neutral-800"}>
-                    Loading tasks...
-                  </span>
-                ) : (
-                  <span className={isDarkMode ? "text-neutral-50" : "text-neutral-800"}>
-                    Waiting for tasks
-                  </span>
-                )
-              )}
-            </span>
+        <div className="flex items-center gap-3">
+          {getIcon(currentDisplayItem, currentDisplayItem?.status)}
+          <div className="flex-1 min-w-0">
+            {getStatusText(currentDisplayItem)}
           </div>
-        </motion.div>
+        </div>
       </motion.div>
     </motion.div>
   );

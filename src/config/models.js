@@ -7,6 +7,7 @@ export const models = {
       name: "Google Imagen 4",
       type: "image",
       credits: 1,
+      tier: 1,
       params: {
         prompt: { required: true, type: "string" },
         aspect_ratio: { required: false, type: "string", default: "1:1" },
@@ -20,6 +21,7 @@ export const models = {
       name: "Google Imagen 4 Ultra",
       type: "image",
       credits: 2,
+      tier: 2,
       params: {
         prompt: { required: true, type: "string" },
         aspect_ratio: { required: false, type: "string", default: "1:1" },
@@ -36,6 +38,7 @@ export const models = {
   name: "Imagen 4 Fast",
   type: "image",
   credits: 1,
+  tier: 1,
   params: {
     prompt: { required: true, type: "string" },
     aspect_ratio: { required: false, type: "string", default: "1:1" },
@@ -53,6 +56,7 @@ export const models = {
       name: "Ideogram V3 Balanced",
       type: "image",
       credits: 2,
+      tier: 2,
       params: {
         prompt: { required: true, type: "string" },
         aspect_ratio: { required: false, type: "string", default: "1:1" },
@@ -69,29 +73,13 @@ export const models = {
         style_type: ["None", "Auto", "General", "Realistic", "Design"]
       }
     },
-    
-    "minimax/image-01": {
-      name: "MiniMax Image 01",
-      type: "image",
-      credits: 0.25,
-      params: {
-        prompt: { required: true, type: "string" },
-        aspect_ratio: { required: false, type: "string", default: "1:1" },
-        number_of_images: { required: false, type: "integer", default: 1 },
-        prompt_optimizer: { required: false, type: "boolean", default: true },
-        subject_reference: { required: false, type: "string", description: "An optional character reference image (human face) to use as the subject in the generated image(s)." }
-      },
-      options: {
-        aspect_ratio: ["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"],
-        number_of_images: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-        prompt_optimizer: [true, false]
-      }
-    },
+
     
 "black-forest-labs/flux-kontext-max": {
   name: "Flux Kontext Max",
   type: "image",
   credits: 2,
+  tier: 3,
   params: {
     prompt: { required: true, type: "string" },
     input_image: { required: false, type: "string", description: "Image to use as reference. Must be jpeg, png, gif, or webp." },
@@ -104,6 +92,29 @@ export const models = {
   options: {
     aspect_ratio: [
       "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
+      "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2"
+    ],
+    output_format: ["jpg", "png"]
+  }
+},
+
+"black-forest-labs/flux-kontext-pro": {
+  name: "Flux Kontext Pro",
+  type: "image",
+  credits: 1,
+  tier: 2,
+  params: {
+    prompt: { required: true, type: "string" },
+    input_image: { required: false, type: "string", description: "Image to use as reference. Must be jpeg, png, gif, or webp." },
+    aspect_ratio: { required: false, type: "string", default: "match_input_image" },
+    prompt_upsampling: { required: false, type: "boolean", default: false },
+    seed: { required: false, type: "integer" },
+    output_format: { required: false, type: "string", default: "png" },
+    safety_tolerance: { required: false, type: "integer", default: 2 }
+  },
+  options: {
+    aspect_ratio: [
+      "match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
       "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2"
     ],
     output_format: ["jpg", "png"]
@@ -298,4 +309,35 @@ export const supportsImageInput = (modelId) => {
 export const getModelType = (modelId) => {
   const model = getModelById(modelId);
   return model?.type || null;
+};
+
+// Tier hierarchy: 1 = Basic, 2 = Creator, 3 = Pro
+export const getUserTier = (subscriptionData) => {
+  if (!subscriptionData || !subscriptionData.subscriptionStatus || subscriptionData.subscriptionStatus !== 'active') {
+    return 0; // No subscription
+  }
+  
+  const planPriceId = subscriptionData.stripePriceId;
+  
+  // Starter plans
+  if (planPriceId === "price_1RMqEZDf8kAOBAT3ltD6n2lX" || planPriceId === "price_1RMqGbDf8kAOBAT3vgwkWLr6") {
+    return 1;
+  }
+  
+  // Creator plans
+  if (planPriceId === "price_1RRJ8tDf8kAOBAT3qBwC6qpM" || planPriceId === "price_1RRJ9SDf8kAOBAT3bA8Xbriq") {
+    return 2;
+  }
+  
+  // Pro plans
+  if (planPriceId === "price_1RMqHgDf8kAOBAT3m6kthIND" || planPriceId === "price_1RMqI1Df8kAOBAT3Xoy3M7Ho") {
+    return 3;
+  }
+  
+  return 0; // Unknown plan
+};
+
+export const canAccessModel = () => {
+  // Everyone can access all models now
+  return true;
 };

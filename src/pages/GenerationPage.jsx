@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { models, getModelById, getModelsByCategory } from '../config/models.js';
+import { models, getModelById, getModelsByCategory, getUserTier, canAccessModel } from '../config/models.js';
 import { 
 	Upload,
 	Image as ImageIcon,
@@ -7,13 +7,15 @@ import {
 	CaretDown,
 	X,
 	Plus,
-	CaretUp
+	CaretUp,
+	Lock
 } from '@phosphor-icons/react';
 import { auth, db } from '../firebase.js';
-import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import DynamicIsland from '../components/DynamicIsland.jsx';
+import MobileDesktopMessage from '../components/MobileDesktopMessage.jsx';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
@@ -30,6 +32,9 @@ const GenerationPage = () => {
 	const [openDropdowns, setOpenDropdowns] = useState({});
 	const [generatingItem, setGeneratingItem] = useState(null);
 	const [notifications, setNotifications] = useState([]);
+	const [user, setUser] = useState(null);
+	const [subscriptionData, setSubscriptionData] = useState(null);
+	const [authChecked, setAuthChecked] = useState(false);
 	const fileInputRef = useRef(null);
 	const dropAreaRef = useRef(null);
 	const navigate = useNavigate();
@@ -46,17 +51,25 @@ const GenerationPage = () => {
 		}, 5000);
 	};
 	
-	const [user, setUser] = useState(null);
-	const [authChecked, setAuthChecked] = useState(false);
-	
-	// Check authentication
+	// Check authentication and fetch subscription data
 	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+		const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
 			setUser(currentUser);
 			setAuthChecked(true);
 			
 			if (!currentUser) {
 				navigate('/signup');
+			} else {
+				// Fetch subscription data
+				try {
+					const userDocRef = doc(db, 'users', currentUser.uid);
+					const userDoc = await getDoc(userDocRef);
+					if (userDoc.exists()) {
+						setSubscriptionData(userDoc.data());
+					}
+				} catch (error) {
+					console.error('Error fetching subscription data:', error);
+				}
 			}
 		});
 		
@@ -111,6 +124,9 @@ const GenerationPage = () => {
 	const modelConfig = getModelById(selectedModel);
 	const availableModels = getModelsByCategory(activeType);
 	
+	// All models are now accessible to everyone
+	const accessibleModels = availableModels;
+	
 	// Load default settings when model changes
 	useEffect(() => {
 		const currentModelConfig = getModelById(selectedModel);
@@ -161,6 +177,34 @@ const GenerationPage = () => {
 			document.removeEventListener('mousedown', handleClickOutside);
 		};
 	}, []);
+
+	// Add wheel event listener for history scroll
+	useEffect(() => {
+		const historyContainer = document.querySelector('.history-container');
+		
+		const handleWheel = (e) => {
+			// Only handle wheel events when hovering over history images
+			if (e.target.closest('.history-container')) {
+				e.preventDefault();
+				
+				if (e.deltaY > 0) {
+					// Scroll down
+					scrollHistoryDown();
+				} else {
+					// Scroll up
+					scrollHistoryUp();
+				}
+			}
+		};
+
+		if (historyContainer) {
+			historyContainer.addEventListener('wheel', handleWheel, { passive: false });
+			
+			return () => {
+				historyContainer.removeEventListener('wheel', handleWheel);
+			};
+		}
+	}, [previousGenerations.length]);
 	
 	// Handle settings change
 	const handleSettingChange = (key, value) => {
@@ -168,6 +212,35 @@ const GenerationPage = () => {
 			...prev,
 			[key]: value
 		}));
+	};
+	
+	// Check if option is disabled due to constraints
+	const isOptionDisabled = (paramKey, optionValue) => {
+		if (selectedModel === 'minimax/hailuo-02') {
+			const currentResolution = getSettingValue('resolution') || '768p';
+			const currentDuration = getSettingValue('duration') || 6;
+			
+			if (paramKey === 'resolution' && optionValue === '1080p') {
+				// 1080p is disabled if duration is 10
+				return currentDuration === 10;
+			} else if (paramKey === 'duration' && optionValue === 10) {
+				// 10 seconds is disabled if resolution is 1080p
+				return currentResolution === '1080p';
+			}
+		}
+		return false;
+	};
+	
+	// Get tooltip text for disabled options
+	const getDisabledTooltip = (paramKey, optionValue) => {
+		if (selectedModel === 'minimax/hailuo-02') {
+			if (paramKey === 'resolution' && optionValue === '1080p') {
+				return '1080p is only available with 6 second duration';
+			} else if (paramKey === 'duration' && optionValue === 10) {
+				return '10 seconds is only available with 768p resolution';
+			}
+		}
+		return '';
 	};
 	
 	// Toggle dropdown open/close
@@ -225,7 +298,13 @@ const GenerationPage = () => {
 	};
 	
 	// Get dynamic aspect ratio class based on selected ratio or model type
+	// Don't apply aspect ratio constraints when image is uploaded
 	const getAspectRatioClass = () => {
+		// If there's an uploaded image, don't constrain the aspect ratio
+		if (uploadedImage) {
+			return '';
+		}
+		
 		const aspectRatio = getSettingValue('aspect_ratio');
 		if (aspectRatio) {
 			switch (aspectRatio) {
@@ -359,14 +438,14 @@ const GenerationPage = () => {
 		fileInputRef.current?.click();
 	};
 
-	// History scroll functions
+	// History scroll functions - now supports smooth multi-item scrolling
 	const scrollHistoryUp = () => {
-		setHistoryScrollIndex(prev => Math.max(0, prev - 1));
+		setHistoryScrollIndex(prev => Math.max(0, prev - 3));
 	};
 
 	const scrollHistoryDown = () => {
 		const maxIndex = Math.max(0, previousGenerations.length - 6);
-		setHistoryScrollIndex(prev => Math.min(maxIndex, prev + 1));
+		setHistoryScrollIndex(prev => Math.min(maxIndex, prev + 3));
 	};
 
 	const getVisibleHistory = () => {
@@ -407,6 +486,131 @@ const GenerationPage = () => {
 		} catch (error) {
 			console.error('Error adding history image:', error);
 		}
+	};
+
+	// Use generated image as input for next generation
+	const useGeneratedImageAsInput = () => {
+		if (!generatedImage || generatedImage.isVideo) return;
+		
+		try {
+			const newImage = {
+				id: Date.now() + Math.random(),
+				file: null, // Don't need file for generated images
+				url: generatedImage.url,
+				name: `generated-${Date.now()}.jpg`,
+				aspectRatio: 1, // Default to square, will be updated when image loads
+				isFromHistory: true // Treat like history image for backend processing
+			};
+			
+			setUploadedImage(newImage);
+			setGeneratedImage(null); // Clear the generated image display
+			console.log('✅ Using generated image as input:', newImage.name);
+			
+		} catch (error) {
+			console.error('Error using generated image as input:', error);
+		}
+	};
+
+	// Poll prediction status
+	const pollPrediction = async (predictionId, currentActiveType, currentPrompt, currentSelectedModel) => {
+		let attempts = 0;
+		const maxAttempts = 120; // 10 minutes max (5 second intervals)
+		
+		const poll = async () => {
+			attempts++;
+			
+			try {
+				const { httpsCallable } = await import('firebase/functions');
+				const { functions } = await import('../firebase.js');
+				const pollPredictions = httpsCallable(functions, 'pollPredictions');
+				
+				const result = await pollPredictions({ predictionId });
+				console.log('Poll result:', result.data);
+				
+				if (result.data.success) {
+					const { status, output, error } = result.data;
+					
+					// Update DynamicIsland status
+					setGeneratingItem(prev => prev ? {
+						...prev,
+						status: status
+					} : null);
+					
+					if (status === 'succeeded' && output) {
+						console.log('Async generation completed!', output);
+						
+						// Handle the completed generation
+						const contentUrl = Array.isArray(output) ? output[0] : output;
+						
+						if (currentActiveType === 'image') {
+							const newGeneratedImage = {
+								url: contentUrl,
+								prompt: currentPrompt.trim(),
+								model: currentSelectedModel,
+								timestamp: new Date()
+							};
+							setGeneratedImage(newGeneratedImage);
+							setUploadedImage(null);
+						} else if (currentActiveType === 'video') {
+							const newGeneratedVideo = {
+								url: contentUrl,
+								prompt: currentPrompt.trim(),
+								model: currentSelectedModel,
+								timestamp: new Date(),
+								isVideo: true
+							};
+							setGeneratedImage(newGeneratedVideo);
+							setUploadedImage(null);
+						}
+						
+						// Update to completed status
+						setGeneratingItem(prev => prev ? {
+							...prev,
+							status: 'completed'
+						} : null);
+						
+						addNotification(`${currentActiveType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+						
+						// Clear generating item after 3 seconds
+						setTimeout(() => setGeneratingItem(null), 3000);
+						
+					} else if (status === 'failed') {
+						console.error('Async generation failed:', error);
+						
+						setGeneratingItem(prev => prev ? {
+							...prev,
+							status: 'failed'
+						} : null);
+						
+						addNotification(`Generation failed: ${error || 'Unknown error'}`, 'error');
+						
+						// Clear generating item after 5 seconds
+						setTimeout(() => setGeneratingItem(null), 5000);
+						
+					} else if (status === 'starting' || status === 'processing') {
+						// Continue polling
+						if (attempts < maxAttempts) {
+							setTimeout(poll, 5000); // Poll every 5 seconds
+						} else {
+							console.error('Polling timeout reached');
+							addNotification('Generation is taking longer than expected. Please check back later.', 'warning');
+							setGeneratingItem(null);
+						}
+					}
+				}
+			} catch (error) {
+				console.error('Error polling prediction:', error);
+				if (attempts < maxAttempts) {
+					setTimeout(poll, 10000); // Longer interval on error
+				} else {
+					addNotification('Error checking generation status', 'error');
+					setGeneratingItem(null);
+				}
+			}
+		};
+		
+		// Start polling
+		setTimeout(poll, 5000); // First poll after 5 seconds
 	};
 
 	// Handle generate
@@ -514,12 +718,14 @@ const GenerationPage = () => {
 					setGeneratingItem({
 						type: activeType,
 						name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
-						status: 'processing',
+						status: 'starting',
 						model: selectedModel,
 						predictionId: result.data.predictionId
 					});
-					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generation started. Prediction ID: ${result.data.predictionId}`, 'info');
-					// TODO: Add polling logic here
+					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generation started. This may take a few minutes...`, 'info');
+					
+					// Start polling for async prediction
+					pollPrediction(result.data.predictionId, activeType, prompt, selectedModel);
 				} else if (result.data.imageUrl) {
 					console.log(`Image generated successfully! URL: ${result.data.imageUrl}`);
 					// Set the generated image to display in the center
@@ -639,7 +845,12 @@ const GenerationPage = () => {
 	}
 
 	return (
-		<div className="h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden flex">
+		<>
+			{/* Mobile Desktop Message */}
+			<MobileDesktopMessage />
+			
+			{/* Desktop Layout */}
+			<div className="hidden xl:flex h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden">
 			{/* CSS for notification animation */}
 			<style>
 				{`
@@ -659,12 +870,11 @@ const GenerationPage = () => {
 				`}
 			</style>
 			{/* DynamicIsland */}
-			<div className="fixed bottom-20 right-6 z-50">
-				<DynamicIsland 
-					generatingItem={generatingItem}
-					isDarkMode={true}
-				/>
-			</div>
+			<DynamicIsland 
+				generatingItem={generatingItem}
+				isDarkMode={true}
+				position="bottom-right"
+			/>
 			
 			{/* Custom Notifications */}
 			<div className="fixed top-4 right-4 z-50 space-y-2">
@@ -855,19 +1065,28 @@ const GenerationPage = () => {
 										{key.replace(/_/g, ' ')}
 									</div>
 									<div className="grid grid-cols-2 gap-2">
-										{options.map(option => (
-											<button
-												key={option}
-												onClick={() => handleSettingChange(key, option)}
-												className={`px-3 py-2 text-xs rounded-[10px] transition-colors ${
-													value === option
-														? 'bg-white text-black'
-														: 'bg-neutral-700 text-white hover:bg-neutral-600'
-												}`}
-											>
-												{option}
-											</button>
-										))}
+										{options.map(option => {
+											const disabled = isOptionDisabled(key, option);
+											const tooltip = getDisabledTooltip(key, option);
+											
+											return (
+												<button
+													key={option}
+													onClick={() => !disabled && handleSettingChange(key, option)}
+													disabled={disabled}
+													title={disabled ? tooltip : ''}
+													className={`px-3 py-2 text-xs rounded-[10px] transition-colors ${
+														value === option
+															? 'bg-white text-black'
+															: disabled
+															? 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50'
+															: 'bg-neutral-700 text-white hover:bg-neutral-600'
+													}`}
+												>
+													{option}
+												</button>
+											);
+										})}
 									</div>
 								</div>
 							);
@@ -891,20 +1110,33 @@ const GenerationPage = () => {
 										
 										{openDropdowns[key] && (
 											<div className="absolute top-full left-0 right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-												{options.map(option => (
-													<button
-														key={option}
-														onClick={() => {
-															handleSettingChange(key, option);
-															closeAllDropdowns();
-														}}
-														className={`w-full text-left px-3 py-2 text-sm hover:bg-neutral-700 transition-colors ${
-															value === option ? 'bg-neutral-700 text-white' : 'text-neutral-300'
-														}`}
-													>
-														{option}
-													</button>
-												))}
+												{options.map(option => {
+													const disabled = isOptionDisabled(key, option);
+													const tooltip = getDisabledTooltip(key, option);
+													
+													return (
+														<button
+															key={option}
+															onClick={() => {
+																if (!disabled) {
+																	handleSettingChange(key, option);
+																	closeAllDropdowns();
+																}
+															}}
+															disabled={disabled}
+															title={disabled ? tooltip : ''}
+															className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+																value === option 
+																	? 'bg-neutral-700 text-white' 
+																	: disabled
+																	? 'text-neutral-500 cursor-not-allowed opacity-50'
+																	: 'text-neutral-300 hover:bg-neutral-700'
+															}`}
+														>
+															{option}
+														</button>
+													);
+												})}
 											</div>
 										)}
 									</div>
@@ -915,11 +1147,21 @@ const GenerationPage = () => {
 						return null;
 					})}
 
+					{/* Fixed Aspect Ratio Info for models without aspect_ratio options */}
+					{selectedModel === 'minimax/hailuo-02' && !modelConfig?.options?.aspect_ratio && (
+						<div className="bg-neutral-900 rounded-[10px] p-3">
+							<div className="text-xs text-neutral-400 mb-2">Aspect ratio</div>
+							<div className="px-3 py-2 text-xs rounded-[10px] bg-neutral-700 text-neutral-300 text-center">
+								16:9 (Fixed)
+							</div>
+						</div>
+					)}
+
 					{/* Slider Parameters */}
 					{getSliderParameters().map(([key, param]) => {
 						const value = getSettingValue(key);
 						const min = key === 'seed' ? 1 : 1;
-						const max = key === 'seed' ? 999999 : (key.includes('number') ? 10 : 100);
+						const max = key === 'seed' ? 999999 : (key.includes('number') ? 10 : (key === 'safety_tolerance' ? 6 : 100));
 						const currentValue = value || param.default || min;
 						
 						return (
@@ -999,16 +1241,31 @@ const GenerationPage = () => {
 								<div className="text-white/80 text-xs truncate">{generatedImage.prompt}</div>
 							</div>
 							
-							{/* Clear/New Generation Button */}
-							<button
-								onClick={() => {
-									setGeneratedImage(null);
-									setPrompt('');
-								}}
-								className="absolute top-4 right-4 w-10 h-10 bg-neutral-800/80 hover:bg-neutral-700 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
-							>
-								<X size={20} className="text-white" />
-							</button>
+							{/* Action Buttons */}
+							<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10">
+								{/* Use as Input Button - only show for images that support image input */}
+								{!generatedImage.isVideo && modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') && (
+									<button
+										onClick={useGeneratedImageAsInput}
+										title="Use this image as input for next generation"
+										className="w-10 h-10 bg-lime-600/80 hover:bg-lime-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
+									>
+										<Plus size={20} className="text-white" />
+									</button>
+								)}
+								
+								{/* Clear/New Generation Button */}
+								<button
+									onClick={() => {
+										setGeneratedImage(null);
+										setPrompt('');
+									}}
+									title="Clear and start new generation"
+									className="w-10 h-10 bg-neutral-800/80 hover:bg-neutral-700 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110"
+								>
+									<X size={20} className="text-white" />
+								</button>
+							</div>
 						</div>
 					</div>
 				) : !uploadedImage ? (
@@ -1072,12 +1329,13 @@ const GenerationPage = () => {
 						onDrop={handleDrop}
 					>
 						<div 
-							className="relative group bg-neutral-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+							className="relative group bg-neutral-800 rounded-[60px] overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer"
 							style={{
 								aspectRatio: uploadedImage.aspectRatio || '3/4',
-								width: '500px',
-								maxWidth: '90%',
-								maxHeight: '90%'
+								maxWidth: '800px',
+								maxHeight: '600px',
+								width: 'fit-content',
+								height: 'fit-content'
 							}}
 							onClick={handleClickUpload}
 						>
@@ -1087,7 +1345,7 @@ const GenerationPage = () => {
 								className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
 							/>
 							{/* Image info overlay */}
-							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
 								<div className="text-white text-sm font-medium truncate">{uploadedImage.name}</div>
 								<div className="text-white/70 text-xs">Click to replace</div>
 							</div>
@@ -1097,7 +1355,7 @@ const GenerationPage = () => {
 									e.stopPropagation();
 									removeImage();
 								}}
-								className="absolute top-3 right-3 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
+								className="absolute top-6 right-6 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
 							>
 								<X size={16} className="text-white" />
 							</button>
@@ -1116,31 +1374,9 @@ const GenerationPage = () => {
 				
 				{/* Right sidebar with + button and history */}
 				<div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-center space-y-4">
-					{/* Add image button - show only when no image */}
-					{!uploadedImage && (() => {
-						const currentModelConfig = getModelById(selectedModel);
-						const supportsImages = Object.keys(currentModelConfig?.params || {})
-							.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
-						
-						return (
-							<button
-								onClick={supportsImages ? handleClickUpload : undefined}
-								disabled={!supportsImages}
-								className={`w-12 h-12 border-2 border-dashed rounded-xl flex items-center justify-center transition-colors group bg-neutral-900/80 backdrop-blur-sm ${
-									supportsImages 
-										? 'border-neutral-700 hover:border-lime-400 cursor-pointer' 
-										: 'border-neutral-800 cursor-not-allowed opacity-50'
-								}`}
-								title={supportsImages ? "Add image" : "This model doesn't support image input"}
-							>
-								<Plus size={20} className={supportsImages ? "text-neutral-600 group-hover:text-lime-400" : "text-neutral-700"} />
-							</button>
-						);
-					})()}
-					
 					{/* History section */}
 					{!isLoadingGenerations && previousGenerations.length > 0 && (
-						<div className="flex flex-col items-center space-y-2">
+						<div className="flex flex-col items-center space-y-2 history-container">
 							{/* Scroll up button */}
 							{historyScrollIndex > 0 && (
 								<button
@@ -1161,7 +1397,7 @@ const GenerationPage = () => {
 									return (
 										<div
 											key={generation.id}
-											className={`w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden transition-all duration-300 group relative ${
+											className={`w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden group relative ${
 												supportsImages 
 													? 'hover:ring-2 hover:ring-lime-400/50 cursor-pointer' 
 													: 'opacity-50 cursor-not-allowed'
@@ -1231,14 +1467,15 @@ const GenerationPage = () => {
 								>
 									{isGenerating ? 'GENERATING...' : 'GENERATE'}
 								</button>
-								<div className="text-xs text-neutral-500 text-center font-light tracking-wider uppercase">
-									Credits: {calculateCredits()}
+								<div className="text-xs text-lime-500 text-center font-bold tracking-wider uppercase">
+									{calculateCredits()} CREDITS
 								</div>
 							</div>
 						</div>
 					</div>
 				</div>
-			</div>
+			</div> {/* End Desktop Layout */}
+		</>
 	);
 };
 

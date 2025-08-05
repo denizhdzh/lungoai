@@ -420,6 +420,13 @@ function AppRouter() {
             <GenerationPage/>
           </ProtectedRoute>
         } />
+
+        <Route path="canvas" element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <CanvasWorkspace/>
+          </ProtectedRoute>
+        } />
+
         <Route path="models" element={<ModelsPage />} />
         <Route path="terms" element={<TermsPage />} />
         <Route path="privacy" element={<PrivacyPage />} />

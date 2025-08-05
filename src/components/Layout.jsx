@@ -1292,15 +1292,15 @@ function Layout() {
               />
             </button>
             
-            {/* Right: Credits/Settings for authenticated users, Sign Up for guests */}
+            {/* Right: Credits/Settings for desktop only, Sign Up for guests */}
             <div className="flex items-center gap-3">
               {user ? (
                 <>
-                  {/* Credit Display */}
+                  {/* Credit Display - Hidden on mobile */}
                   {firestoreUserData && (
                     <div 
                       onClick={() => setIsPricingModalOpen(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
+                      className="hidden xl:flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
                     >
                       <img 
                         src="/logonaked.png"
@@ -1313,10 +1313,10 @@ function Layout() {
                     </div>
                   )}
                   
-                  {/* Settings */}
+                  {/* Settings - Hidden on mobile */}
                   <button
                     onClick={() => navigate('/settings')}
-                    className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
+                    className="hidden xl:block p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
                     aria-label="Settings"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1325,10 +1325,10 @@ function Layout() {
                   </button>
                 </>
               ) : (
-                /* Sign Up button for non-authenticated users */
+                /* Sign Up button for non-authenticated users - Hidden on mobile */
                 <button
                   onClick={() => setIsPricingModalOpen(true)}
-                  className="px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
+                  className="hidden xl:block px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
                 >
                   Sign Up
                 </button>

@@ -80,7 +80,9 @@ async function saveToFirebaseStorage(fileUrl, userId, model, type) {
 }
 
 // --- generateImage Function (Updated for Replicate API) ---
-exports.generateImage = onCall(async (request) => {
+exports.generateImage = onCall(
+    { timeoutSeconds: 540, memory: '1GiB' }, // 9 minutes timeout, 1GB memory
+    async (request) => {
     const userId = request.auth?.uid;
     
     if (!userId) {
@@ -105,23 +107,14 @@ exports.generateImage = onCall(async (request) => {
 
         logger.info(`Starting image generation for user ${userId} with model ${model}`, { parameters });
 
-        // Check user credits first
+        // Check and deduct user credits first
         const userRef = db.collection('users').doc(userId);
-        const userDoc = await userRef.get();
-        
-        if (!userDoc.exists) {
-            throw new HttpsError('not-found', 'User not found.');
-        }
-
-        const userData = userDoc.data();
-        const currentCredits = userData.general_credits || 0;
         
         // Calculate credits needed based on model
         const creditsNeeded = getImageModelCredits(model);
         
-        if (currentCredits < creditsNeeded) {
-            throw new HttpsError('resource-exhausted', 'Insufficient credits for image generation.');
-        }
+        // Deduct credits (subs first, then one-time)
+        const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
         // Prepare input for Replicate
         const input = {
@@ -167,122 +160,58 @@ exports.generateImage = onCall(async (request) => {
         
         logger.info(`========================`);
 
-        // Try both sync (run) and async (predictions.create) approaches
-        let output;
-        let isAsync = false;
+        // ALWAYS use async predictions approach for reliability
         let predictionId = null;
         
         try {
-            // First try: synchronous run - fastest for quick models
-            logger.info(`Trying synchronous run approach...`);
-            output = await replicate.run(model, { input: input });
-        } catch (syncError) {
-            logger.warn(`Synchronous run failed: ${syncError.message}`);
-            logger.warn(`Sync error details:`, syncError);
-            try {
-                // Second try: async predictions - better for slow models
-                logger.info(`Trying async predictions.create approach...`);
-                const prediction = await replicate.predictions.create({
-                    model: model,
-                    input: input
-                });
-                
-                predictionId = prediction.id;
-                isAsync = true;
-                logger.info(`Created prediction ${predictionId} with status: ${prediction.status}`);
-                
-                // For async, we return immediately and let client poll
-                output = null; // Will be handled differently below
-                
-            } catch (asyncError) {
-                logger.error(`Both sync and async approaches failed:`, {
-                    syncError: syncError.message,
-                    asyncError: asyncError.message
-                });
-                throw asyncError;
-            }
+            logger.info(`Creating async prediction for reliable processing...`);
+            const prediction = await replicate.predictions.create({
+                model: model,
+                input: input
+            });
+            
+            predictionId = prediction.id;
+            logger.info(`Created prediction ${predictionId} with status: ${prediction.status}`);
+            
+        } catch (asyncError) {
+            logger.error(`Async prediction creation failed:`, {
+                error: asyncError.message,
+                model: model,
+                input: JSON.stringify(input, null, 2)
+            });
+            throw asyncError;
         }
 
         logger.info(`Image generation result for user ${userId}`, { 
             model, 
-            isAsync: isAsync,
             predictionId: predictionId,
-            output: output ? 'success' : (isAsync ? 'pending' : 'failed'),
-            outputType: typeof output,
-            outputValue: output
+            status: 'async_created'
         });
 
-        // Always deduct credits (even for async)
-        await userRef.update({
-            general_credits: currentCredits - creditsNeeded
+        // Store async prediction info for polling
+        await db.collection('predictions').doc(predictionId).set({
+            userId: userId,
+            type: 'image',
+            model: model,
+            status: 'starting',
+            input: input,
+            creditsUsed: creditsNeeded,
+            subsDeduction: subsDeduction,
+            oneTimeDeduction: oneTimeDeduction,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        if (isAsync && predictionId) {
-            // Store async prediction info for polling
-            await db.collection('predictions').doc(predictionId).set({
-                userId: userId,
-                type: 'image',
-                model: model,
-                status: 'starting',
-                input: input,
-                creditsUsed: creditsNeeded,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+        logger.info(`Stored async image prediction ${predictionId} for polling and deducted ${creditsNeeded} credits`);
 
-            logger.info(`Stored async prediction ${predictionId} for polling`);
-
-            return {
-                success: true,
-                predictionId: predictionId,
-                status: 'starting',
-                creditsUsed: creditsNeeded,
-                remainingCredits: currentCredits - creditsNeeded,
-                isAsync: true
-            };
-        } else if (output) {
-            // Handle different output formats
-            let imageUrl;
-            if (typeof output === 'string') {
-                imageUrl = output;
-            } else if (Array.isArray(output)) {
-                imageUrl = output[0];
-            } else if (output && typeof output.url === 'function') {
-                imageUrl = output.url();
-            } else if (output && output.url) {
-                imageUrl = output.url;
-            } else {
-                imageUrl = output;
-            }
-
-            // Save to Firebase Storage for permanent storage
-            const savedImageUrl = await saveToFirebaseStorage(imageUrl, userId, model, 'image');
-            
-            // Store generation result in user's generations subcollection
-            const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
-                type: 'image',
-                model: model,
-                prompt: input.prompt,
-                imageUrl: savedImageUrl, // Use Firebase Storage URL
-                settings: input,
-                creditsUsed: creditsNeeded,
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
-            logger.info(`Final image URL: ${savedImageUrl}`);
-
-            // Return success with Firebase Storage URL
-            return {
-                success: true,
-                imageUrl: savedImageUrl,
-                creditsUsed: creditsNeeded,
-                remainingCredits: currentCredits - creditsNeeded
-            };
-        } else {
-            throw new HttpsError('internal', 'Image generation failed - no output received');
-        }
+        return {
+            success: true,
+            predictionId: predictionId,
+            status: 'starting',
+            creditsUsed: creditsNeeded,
+            remainingCredits: currentCredits - creditsNeeded,
+            isAsync: true
+        };
 
     } catch (error) {
         logger.error(`Image generation failed for user ${userId}:`, error);
@@ -328,14 +257,12 @@ exports.createStripeCheckoutSession = onCall(async (request) => { // Removed sec
       line_items: [
         { price: priceId, quantity: 1 },
       ],
-      discounts: [{ 
-         coupon: 'lungolnch25',
-      }],
+      allow_promotion_codes: true,
       success_url: process.env.STRIPE_SUCCESS_URL, // Use configured success URL
       cancel_url: process.env.STRIPE_CANCEL_URL,   // Use configured cancel URL
     });
 
-    logger.info(`Created Stripe Checkout session ${session.id} for user ${userId}, customer ${stripeCustomerId} with discount 'lungolnch25'.`); // MODIFIED log message
+    logger.info(`Created Stripe Checkout session ${session.id} for user ${userId}, customer ${stripeCustomerId}`); // MODIFIED log message
     // Return the Session ID or URL
     // Using session.id is standard for redirecting with stripe.js
     // If you want to redirect directly from server, use session.url
@@ -549,8 +476,9 @@ exports.stripeWebhookHandler = onRequest(
                         subscriptionCanceledAt: deletedSubscription.canceled_at ? admin.firestore.Timestamp.fromDate(new Date(deletedSubscription.canceled_at * 1000)) : null, // Use canceled_at if available
                         subscriptionDeletedAt: admin.firestore.FieldValue.serverTimestamp(), // Add deletion timestamp
                         subscriptionLength: null,
-                        general_credits: 0, // Reset credits
-                        general_credits_limit: 0, // Reset limits
+                        general_credits: 0, // Reset subscription credits only
+                        general_credits_limit: 0, // Reset subscription limits only
+                        // Keep one_time_credits intact - they persist forever
                         subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
                     };
 
@@ -580,11 +508,11 @@ exports.stripeWebhookHandler = onRequest(
                             const userDoc = await userRef.get();
                             
                             if (userDoc.exists) {
-                                const currentCredits = userDoc.data().general_credits || 0;
-                                const newCredits = currentCredits + creditQuantity;
+                                const currentOneTimeCredits = userDoc.data().one_time_credits || 0;
+                                const newOneTimeCredits = currentOneTimeCredits + creditQuantity;
                                 
                                 await userRef.update({
-                                    general_credits: newCredits,
+                                    one_time_credits: newOneTimeCredits,
                                     lastCreditPurchase: {
                                         amount: creditQuantity,
                                         sessionId: session.id,
@@ -592,7 +520,7 @@ exports.stripeWebhookHandler = onRequest(
                                     }
                                 });
                                 
-                                logger.info(`Added ${creditQuantity} credits to user ${userId}. New total: ${newCredits}`);
+                                logger.info(`Added ${creditQuantity} one-time credits to user ${userId}. New one-time total: ${newOneTimeCredits}`);
             } else {
                                 logger.error(`User ${userId} not found for credit purchase`);
             }
@@ -741,7 +669,9 @@ exports.refreshMonthlyCredits = onSchedule(
 
 
 // --- NEW: Video Generation Function ---
-exports.generateVideo = onCall(async (request) => {
+exports.generateVideo = onCall(
+    { timeoutSeconds: 540, memory: '1GiB' }, // 9 minutes timeout, 1GB memory
+    async (request) => {
     const userId = request.auth?.uid;
     
     if (!userId) {
@@ -766,25 +696,14 @@ exports.generateVideo = onCall(async (request) => {
 
         logger.info(`Starting video generation for user ${userId} with model ${model}`, { parameters, duration });
 
-        // Check user credits first
+        // Check and deduct user credits first
         const userRef = db.collection('users').doc(userId);
-        const userDoc = await userRef.get();
         
-        if (!userDoc.exists) {
-            throw new HttpsError('not-found', 'User not found.');
-        }
-
-        const userData = userDoc.data();
-        const currentCredits = userData.general_credits || 0;
+        // Calculate credits needed based on duration and model parameters
+        const creditsNeeded = calculateVideoCredits(model, duration, parameters);
         
-        // Calculate credits needed based on duration and model
-        // Video models typically cost credits per second
-        const creditsPerSecond = getVideoModelCreditsPerSecond(model);
-        const creditsNeeded = Math.ceil(creditsPerSecond * duration);
-        
-        if (currentCredits < creditsNeeded) {
-            throw new HttpsError('resource-exhausted', `Insufficient credits for video generation. Need ${creditsNeeded}, have ${currentCredits}.`);
-        }
+        // Deduct credits (subs first, then one-time)
+        const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
         // Prepare input for Replicate
         const input = {
@@ -810,89 +729,61 @@ exports.generateVideo = onCall(async (request) => {
         logger.info(`Duration: ${duration}`);
         logger.info(`============================`);
 
-        // Try different Replicate API approaches for video
-        let output;
+        // ALWAYS use async predictions approach for video reliability
+        let predictionId = null;
+        
         try {
-            // First try: direct input
-            logger.info(`Trying direct input approach for video...`);
-            output = await replicate.run(model, input);
-        } catch (directError) {
-            logger.warn(`Direct input failed: ${directError.message}`);
-            try {
-                // Second try: nested input object
-                logger.info(`Trying nested input approach for video...`);
-                output = await replicate.run(model, { input: input });
-            } catch (nestedError) {
-                logger.warn(`Nested input failed: ${nestedError.message}`);
-                // Third try: simplified input with just prompt
-                logger.info(`Trying simplified prompt-only approach for video...`);
-                output = await replicate.run(model, { 
-                    input: { 
-                        prompt: parameters.prompt,
-                        duration: duration 
-                    }
-                });
-            }
+            logger.info(`Creating async video prediction for reliable processing...`);
+            const prediction = await replicate.predictions.create({
+                model: model,
+                input: input
+            });
+            
+            predictionId = prediction.id;
+            logger.info(`Created video prediction ${predictionId} with status: ${prediction.status}`);
+            
+        } catch (asyncError) {
+            logger.error(`Async video prediction creation failed:`, {
+                error: asyncError.message,
+                model: model,
+                input: JSON.stringify(input, null, 2)
+            });
+            throw asyncError;
         }
 
-        logger.info(`Video generated for user ${userId}`, { 
+        logger.info(`Video generation result for user ${userId}`, { 
             model, 
-            output: output ? 'success' : 'failed',
-            outputType: typeof output,
-            outputValue: output,
-            duration 
+            predictionId: predictionId,
+            status: 'async_created',
+            duration: duration
         });
 
-        // If output is successful, deduct credits
-        if (output) {
-            await userRef.update({
-                general_credits: currentCredits - creditsNeeded
-            });
+        // Store async prediction info for polling
+        await db.collection('predictions').doc(predictionId).set({
+            userId: userId,
+            type: 'video',
+            model: model,
+            status: 'starting',
+            input: input,
+            duration: duration,
+            creditsUsed: creditsNeeded,
+            subsDeduction: subsDeduction,
+            oneTimeDeduction: oneTimeDeduction,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
 
-            // Handle different output formats for video
-            let videoUrl;
-            if (typeof output === 'string') {
-                videoUrl = output;
-            } else if (Array.isArray(output)) {
-                videoUrl = output[0];
-            } else if (output && typeof output.url === 'function') {
-                videoUrl = output.url();
-            } else if (output && output.url) {
-                videoUrl = output.url;
-            } else {
-                videoUrl = output;
-            }
+        logger.info(`Stored async video prediction ${predictionId} for polling and deducted ${creditsNeeded} credits`);
 
-            // Save to Firebase Storage for permanent storage
-            const savedVideoUrl = await saveToFirebaseStorage(videoUrl, userId, model, 'video');
-            
-            // Store generation result in user's generations subcollection
-            const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            await db.collection('users').doc(userId).collection('generations').doc(generationId).set({
-                type: 'video',
-                model: model,
-                prompt: input.prompt,
-                videoUrl: savedVideoUrl, // Use Firebase Storage URL
-                settings: input,
-                duration: duration,
-                creditsUsed: creditsNeeded,
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            logger.info(`Deducted ${creditsNeeded} credits from user ${userId}. Remaining: ${currentCredits - creditsNeeded}`);
-            logger.info(`Final video URL: ${savedVideoUrl}`);
-
-            // Return success with Firebase Storage URL
-            return {
-                success: true,
-                videoUrl: savedVideoUrl,
-                creditsUsed: creditsNeeded,
-                remainingCredits: currentCredits - creditsNeeded,
-                duration: duration
-            };
-        } else {
-            throw new HttpsError('internal', 'Video generation failed - no output received');
-        }
+        return {
+            success: true,
+            predictionId: predictionId,
+            status: 'starting',
+            creditsUsed: creditsNeeded,
+            remainingCredits: currentCredits - creditsNeeded,
+            duration: duration,
+            isAsync: true
+        };
 
     } catch (error) {
         logger.error(`Video generation failed for user ${userId}:`, error);
@@ -905,6 +796,49 @@ exports.generateVideo = onCall(async (request) => {
     }
 });
 
+
+// Helper function to deduct credits (subs first, then one-time)
+async function deductCredits(userRef, creditsNeeded) {
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+    
+    const subsCredits = userData.general_credits || 0;
+    const oneTimeCredits = userData.one_time_credits || 0;
+    const totalCredits = subsCredits + oneTimeCredits;
+    
+    if (totalCredits < creditsNeeded) {
+        throw new HttpsError('failed-precondition', `Insufficient credits. Need ${creditsNeeded}, have ${totalCredits}`);
+    }
+    
+    let subsDeduction = 0;
+    let oneTimeDeduction = 0;
+    
+    if (subsCredits >= creditsNeeded) {
+        // Enough subs credits, use only those
+        subsDeduction = creditsNeeded;
+    } else {
+        // Use all subs credits + some one-time credits
+        subsDeduction = subsCredits;
+        oneTimeDeduction = creditsNeeded - subsCredits;
+    }
+    
+    await userRef.update({
+        general_credits: subsCredits - subsDeduction,
+        one_time_credits: oneTimeCredits - oneTimeDeduction,
+        daily_credits_used: admin.firestore.FieldValue.increment(creditsNeeded)
+    });
+    
+    return { subsDeduction, oneTimeDeduction };
+}
+
+// Helper function to refund credits (reverse the deduction)
+async function refundCredits(userRef, subsToRefund, oneTimeToRefund) {
+    await userRef.update({
+        general_credits: admin.firestore.FieldValue.increment(subsToRefund),
+        one_time_credits: admin.firestore.FieldValue.increment(oneTimeToRefund),
+        daily_credits_used: admin.firestore.FieldValue.increment(-(subsToRefund + oneTimeToRefund))
+    });
+}
 
 // Helper function to get credits for image models
 function getImageModelCredits(model) {
@@ -922,20 +856,65 @@ function getImageModelCredits(model) {
     return modelCosts[model] || 1; // Default fallback
 }
 
-// Helper function to get credits per second for video models
-function getVideoModelCreditsPerSecond(model) {
-    // Model-specific credit costs (credits per second)
+// Proper function to calculate video credits based on actual parameters
+function calculateVideoCredits(model, duration, parameters) {
+    // Model-specific credit costs based on actual parameters
     const modelCosts = {
-        'google/veo-3-fast': 10,
-        'google/veo-3': 20,
-        'bytedance/seedance-1-pro': 2, // Average between 480p (1) and 1080p (4)
-        'kwaivgi/kling-v2.1': 2.5, // Average between standard (2) and pro (3)
-        'minimax/hailuo-02': 1.5, // Average between 768p (1) and 1080p (2)
-        'leonardoai/motion-2.0': 3, // Fixed cost for Leonardo
-        'runwayml/gen4-turbo': 15
+        'google/veo-3-fast': 10, // Fixed rate per second
+        'google/veo-3': 20, // Fixed rate per second
+        'runwayml/gen4-turbo': 15, // Fixed rate per second
+        'leonardoai/motion-2.0': 3, // Fixed rate per second
+        
+        // Models with parameter-based pricing
+        'bytedance/seedance-1-pro': {
+            '480p': 1, // 1 credit per second for 480p
+            '1080p': 4 // 4 credits per second for 1080p
+        },
+        'kwaivgi/kling-v2.1': {
+            'standard': 2, // 2 credits per second for standard
+            'pro': 3 // 3 credits per second for pro
+        },
+        'minimax/hailuo-02': {
+            '768p': 2, // 1 credit per second for 768p
+            '1080p': 3 // 2 credits per second for 1080p
+        }
     };
     
-    return modelCosts[model] || 5; // Default fallback
+    const modelConfig = modelCosts[model];
+    
+    if (!modelConfig) {
+        logger.warn(`Unknown video model ${model}, using default 5 credits per second`);
+        return Math.ceil(5 * duration);
+    }
+    
+    // Fixed rate models
+    if (typeof modelConfig === 'number') {
+        return Math.ceil(modelConfig * duration);
+    }
+    
+    // Parameter-based models
+    if (typeof modelConfig === 'object') {
+        let creditsPerSecond = 1; // Default fallback
+        
+        if (model === 'bytedance/seedance-1-pro') {
+            const resolution = parameters.resolution || '480p';
+            creditsPerSecond = modelConfig[resolution] || modelConfig['480p'];
+        }
+        else if (model === 'kwaivgi/kling-v2.1') {
+            const mode = parameters.mode || 'standard';
+            creditsPerSecond = modelConfig[mode] || modelConfig['standard'];
+        }
+        else if (model === 'minimax/hailuo-02') {
+            const resolution = parameters.resolution || '768p';
+            creditsPerSecond = modelConfig[resolution] || modelConfig['768p'];
+        }
+        
+        logger.info(`Video credits calculation: ${model}, duration: ${duration}s, parameters: ${JSON.stringify(parameters)}, rate: ${creditsPerSecond}/s, total: ${Math.ceil(creditsPerSecond * duration)}`);
+        return Math.ceil(creditsPerSecond * duration);
+    }
+    
+    // Final fallback
+    return Math.ceil(5 * duration);
 }
 
 // Polling function to check prediction status and update Firestore
@@ -982,10 +961,56 @@ exports.pollPredictions = onCall(async (request) => {
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         };
 
-        // If prediction is completed, add output
+        // If prediction is completed, add output and save to user's generations
         if (prediction.status === 'succeeded' && prediction.output) {
             updateData.output = prediction.output;
             updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+            
+            // Handle different output formats
+            let contentUrl;
+            if (typeof prediction.output === 'string') {
+                contentUrl = prediction.output;
+            } else if (Array.isArray(prediction.output)) {
+                contentUrl = prediction.output[0];
+            } else if (prediction.output && prediction.output.url) {
+                contentUrl = prediction.output.url;
+            } else {
+                contentUrl = prediction.output;
+            }
+
+            // Save to Firebase Storage for permanent storage
+            const savedContentUrl = await saveToFirebaseStorage(
+                contentUrl, 
+                userId, 
+                predictionData.model, 
+                predictionData.type
+            );
+            
+            // Store generation result in user's generations subcollection
+            const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const generationData = {
+                type: predictionData.type,
+                model: predictionData.model,
+                prompt: predictionData.input.prompt,
+                settings: predictionData.input,
+                creditsUsed: predictionData.creditsUsed,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                predictionId: predictionId
+            };
+            
+            if (predictionData.type === 'image') {
+                generationData.imageUrl = savedContentUrl;
+            } else if (predictionData.type === 'video') {
+                generationData.videoUrl = savedContentUrl;
+                if (predictionData.duration) {
+                    generationData.duration = predictionData.duration;
+                }
+            }
+            
+            await db.collection('users').doc(userId).collection('generations').doc(generationId).set(generationData);
+            
+            updateData.savedUrl = savedContentUrl;
+            logger.info(`Async ${predictionData.type} generation completed and saved for user ${userId}: ${savedContentUrl}`);
         }
 
         // If prediction failed, add error info
@@ -993,18 +1018,15 @@ exports.pollPredictions = onCall(async (request) => {
             updateData.error = prediction.error;
             updateData.failedAt = admin.firestore.FieldValue.serverTimestamp();
             
-            // Refund credits on failure
+            // Refund credits on failure using stored deduction info
             const userRef = db.collection('users').doc(userId);
-            const userDoc = await userRef.get();
-            const currentCredits = userDoc.data()?.general_credits || 0;
-            const creditsToRefund = predictionData.creditsUsed || 0;
+            const subsToRefund = predictionData.subsDeduction || 0;
+            const oneTimeToRefund = predictionData.oneTimeDeduction || 0;
             
-            await userRef.update({
-                general_credits: currentCredits + creditsToRefund
-            });
+            await refundCredits(userRef, subsToRefund, oneTimeToRefund);
             
-            updateData.creditsRefunded = creditsToRefund;
-            logger.info(`Refunded ${creditsToRefund} credits to user ${userId} for failed prediction ${predictionId}`);
+            updateData.creditsRefunded = subsToRefund + oneTimeToRefund;
+            logger.info(`Refunded ${subsToRefund + oneTimeToRefund} credits to user ${userId} for failed prediction ${predictionId} (subs: ${subsToRefund}, one-time: ${oneTimeToRefund})`);
         }
 
         await predictionRef.update(updateData);
@@ -1030,29 +1052,32 @@ exports.pollPredictions = onCall(async (request) => {
     }
 });
 
-// Scheduled function to auto-poll active predictions
+// OPTIMIZED: Single unified prediction polling function with smart intervals
 exports.autoPollPredictions = onSchedule(
     { 
-        schedule: "every 1 minutes",
+        schedule: "every 1 minutes", // Balanced interval - not too frequent, not too slow
         timeZone: "UTC",
         timeoutSeconds: 540,
         memory: "512MiB"
     },
     async (event) => {
-        logger.info("Running auto prediction polling...");
+        logger.info("Running unified prediction polling...");
         
         try {
             const replicate = new Replicate({
                 auth: process.env.REPLICATE_API_TOKEN,
             });
 
-            // Get active predictions (not completed/failed)
+            // Get ALL active predictions with smart batching
             const activeStatuses = ['starting', 'processing'];
             const predictionsRef = db.collection('predictions');
+            const now = new Date();
+            const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000); // Extend to 2 hours max
+            
             const activeQuery = await predictionsRef
                 .where('status', 'in', activeStatuses)
-                .where('createdAt', '>', admin.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))) // Only last 24 hours
-                .limit(50) // Process max 50 at a time to avoid timeouts
+                .where('createdAt', '>', admin.firestore.Timestamp.fromDate(twoHoursAgo))
+                .limit(30) // Reasonable batch size
                 .get();
 
             if (activeQuery.empty) {
@@ -1060,10 +1085,36 @@ exports.autoPollPredictions = onSchedule(
                 return null;
             }
 
+            // Separate predictions by age for priority processing
+            const recentPredictions = []; // Last 5 minutes - high priority
+            const mediumPredictions = []; // 5-30 minutes - medium priority  
+            const oldPredictions = []; // 30+ minutes - low priority
+            
+            const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+            const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+            activeQuery.docs.forEach(doc => {
+                const predictionData = doc.data();
+                const createdAt = predictionData.createdAt.toDate();
+                
+                if (createdAt > fiveMinutesAgo) {
+                    recentPredictions.push(doc);
+                } else if (createdAt > thirtyMinutesAgo) {
+                    mediumPredictions.push(doc);
+                } else {
+                    oldPredictions.push(doc);
+                }
+            });
+
+            logger.info(`Predictions breakdown: Recent=${recentPredictions.length}, Medium=${mediumPredictions.length}, Old=${oldPredictions.length}`);
+
             const batch = db.batch();
             let updatedCount = 0;
 
-            for (const doc of activeQuery.docs) {
+            // Process recent predictions first (highest priority)
+            const allPredictions = [...recentPredictions, ...mediumPredictions, ...oldPredictions];
+            
+            for (const doc of allPredictions) {
                 const predictionData = doc.data();
                 const predictionId = doc.id;
 
@@ -1081,51 +1132,159 @@ exports.autoPollPredictions = onSchedule(
                         if (prediction.status === 'succeeded' && prediction.output) {
                             updateData.output = prediction.output;
                             updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+                            
+                            // Save generation record - do this outside batch to avoid blocking
+                            setTimeout(async () => {
+                                try {
+                                    // Handle different output formats
+                                    let contentUrl;
+                                    if (typeof prediction.output === 'string') {
+                                        contentUrl = prediction.output;
+                                    } else if (Array.isArray(prediction.output)) {
+                                        contentUrl = prediction.output[0];
+                                    } else if (prediction.output && prediction.output.url) {
+                                        contentUrl = prediction.output.url;
+                                    } else {
+                                        contentUrl = prediction.output;
+                                    }
+
+                                    // Save to Firebase Storage for permanent storage
+                                    const savedContentUrl = await saveToFirebaseStorage(
+                                        contentUrl, 
+                                        predictionData.userId, 
+                                        predictionData.model, 
+                                        predictionData.type
+                                    );
+                                    
+                                    // Store generation result in user's generations subcollection
+                                    const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                    const generationData = {
+                                        type: predictionData.type,
+                                        model: predictionData.model,
+                                        prompt: predictionData.input.prompt,
+                                        settings: predictionData.input,
+                                        creditsUsed: predictionData.creditsUsed,
+                                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                                        predictionId: predictionId
+                                    };
+                                    
+                                    if (predictionData.type === 'image') {
+                                        generationData.imageUrl = savedContentUrl;
+                                    } else if (predictionData.type === 'video') {
+                                        generationData.videoUrl = savedContentUrl;
+                                        if (predictionData.duration) {
+                                            generationData.duration = predictionData.duration;
+                                        }
+                                    }
+                                    
+                                    await db.collection('users').doc(predictionData.userId).collection('generations').doc(generationId).set(generationData);
+                                    
+                                    const ageCategory = recentPredictions.includes(doc) ? 'Recent' : 
+                                                       mediumPredictions.includes(doc) ? 'Medium' : 'Old';
+                                    logger.info(`${ageCategory}: Completed ${predictionData.type} generation and saved for user ${predictionData.userId}: ${savedContentUrl}`);
+                                } catch (saveError) {
+                                    logger.error(`Failed to save generation for prediction ${predictionId}:`, saveError);
+                                }
+                            }, 50); // Faster background processing
                         }
 
                         if (prediction.status === 'failed' && prediction.error) {
                             updateData.error = prediction.error;
                             updateData.failedAt = admin.firestore.FieldValue.serverTimestamp();
                             
-                            // Refund credits on failure - but do this outside batch
+                            // Refund credits on failure - do this outside batch
                             setTimeout(async () => {
                                 try {
                                     const userRef = db.collection('users').doc(predictionData.userId);
-                                    const userDoc = await userRef.get();
-                                    const currentCredits = userDoc.data()?.general_credits || 0;
-                                    const creditsToRefund = predictionData.creditsUsed || 0;
+                                    const subsToRefund = predictionData.subsDeduction || 0;
+                                    const oneTimeToRefund = predictionData.oneTimeDeduction || 0;
                                     
-                                    await userRef.update({
-                                        general_credits: currentCredits + creditsToRefund
-                                    });
+                                    await refundCredits(userRef, subsToRefund, oneTimeToRefund);
                                     
-                                    logger.info(`Auto-refunded ${creditsToRefund} credits to user ${predictionData.userId} for failed prediction ${predictionId}`);
+                                    logger.info(`Auto-refunded ${subsToRefund + oneTimeToRefund} credits to user ${predictionData.userId} for failed prediction ${predictionId} (subs: ${subsToRefund}, one-time: ${oneTimeToRefund})`);
                                 } catch (refundError) {
                                     logger.error(`Failed to refund credits for prediction ${predictionId}:`, refundError);
                                 }
-                            }, 100);
+                            }, 50);
                         }
 
                         batch.update(doc.ref, updateData);
                         updatedCount++;
                         
-                        logger.info(`Auto-updated prediction ${predictionId}: ${predictionData.status} -> ${prediction.status}`);
+                        const ageCategory = recentPredictions.includes(doc) ? 'Recent' : 
+                                           mediumPredictions.includes(doc) ? 'Medium' : 'Old';
+                        logger.info(`${ageCategory}: Updated prediction ${predictionId}: ${predictionData.status} -> ${prediction.status}`);
                     }
                 } catch (predictionError) {
-                    logger.error(`Failed to poll individual prediction ${predictionId}:`, predictionError);
+                    logger.error(`Failed to poll prediction ${predictionId}:`, predictionError);
                 }
             }
 
             if (updatedCount > 0) {
                 await batch.commit();
-                logger.info(`Auto-polling completed: Updated ${updatedCount} predictions`);
+                logger.info(`Unified polling completed: Updated ${updatedCount} predictions`);
             } else {
-                logger.info("Auto-polling completed: No predictions needed updates");
+                logger.info("Unified polling completed: No predictions needed updates");
             }
 
             return null;
         } catch (error) {
-            logger.error("Auto-polling failed:", error);
+            logger.error("Unified polling failed:", error);
+            return null;
+        }
+    }
+);
+
+// CLEANUP: Remove old prediction records to keep database clean
+exports.cleanupOldPredictions = onSchedule(
+    { 
+        schedule: "every day 02:00", // Run daily at 2 AM UTC
+        timeZone: "UTC",
+        timeoutSeconds: 300,
+        memory: "256MiB"
+    },
+    async (event) => {
+        logger.info("Running prediction cleanup...");
+        
+        try {
+            const predictionsRef = db.collection('predictions');
+            const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days old
+            
+            // Get old predictions that are completed or failed
+            const oldQuery = await predictionsRef
+                .where('createdAt', '<', admin.firestore.Timestamp.fromDate(threeDaysAgo))
+                .limit(100) // Process in batches
+                .get();
+
+            if (oldQuery.empty) {
+                logger.info("No old predictions to cleanup.");
+                return null;
+            }
+
+            const batch = db.batch();
+            let deletedCount = 0;
+
+            oldQuery.docs.forEach(doc => {
+                const predictionData = doc.data();
+                const status = predictionData.status;
+                
+                // Only delete completed/failed predictions, keep active ones
+                if (['succeeded', 'failed', 'canceled'].includes(status)) {
+                    batch.delete(doc.ref);
+                    deletedCount++;
+                }
+            });
+
+            if (deletedCount > 0) {
+                await batch.commit();
+                logger.info(`Cleanup completed: Deleted ${deletedCount} old prediction records`);
+            } else {
+                logger.info("Cleanup completed: No records deleted");
+            }
+
+            return null;
+        } catch (error) {
+            logger.error("Prediction cleanup failed:", error);
             return null;
         }
     }
@@ -1136,12 +1295,12 @@ exports.autoPollPredictions = onSchedule(
 exports.createOneTimeCheckoutSession = onCall(async (request) => {
   const { creditPackage, userId, userEmail } = request.data;
   
-  // Credit packages with new pricing: $6 per 100 credits
+  // Credit packages with higher base pricing, 20% discount for subscribers
   const creditPackages = {
-    200: { credits: 200, price: 1200 }, // $12.00 for 200 credits (in cents)
-    300: { credits: 300, price: 1800 }, // $18.00 for 300 credits (in cents)  
-    500: { credits: 500, price: 3000 }, // $30.00 for 500 credits (in cents)
-    1000: { credits: 1000, price: 6000 } // $60.00 for 1000 credits (in cents)
+    200: { credits: 200, price: 2000 }, 
+    500: { credits: 500, price: 4500 }, 
+    1000: { credits: 1000, price: 8000 },
+    2000: { credits: 2000, price: 14000 }
   };
 
   if (!creditPackages[creditPackage]) {
@@ -1155,7 +1314,11 @@ exports.createOneTimeCheckoutSession = onCall(async (request) => {
     stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
-    let stripeCustomerId = userDoc.data()?.stripeCustomerId;
+    const userData = userDoc.data();
+    let stripeCustomerId = userData?.stripeCustomerId;
+
+    // Check if user has active subscription for discount eligibility
+    const hasActiveSubscription = userData?.subscriptionStatus === 'active' || userData?.subscriptionStatus === 'trialing';
 
     // Create Stripe customer if not exists
     if (!stripeCustomerId) {
@@ -1169,7 +1332,7 @@ exports.createOneTimeCheckoutSession = onCall(async (request) => {
     }
 
     // Create one-time payment session
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig = {
       payment_method_types: ['card'],
       mode: 'payment', // One-time payment instead of subscription
       customer: stripeCustomerId,
@@ -1191,9 +1354,21 @@ exports.createOneTimeCheckoutSession = onCall(async (request) => {
       },
       success_url: process.env.STRIPE_SUCCESS_URL,
       cancel_url: process.env.STRIPE_CANCEL_URL,
-    });
+    };
 
-    logger.info(`Created one-time credit checkout session ${session.id} for user ${userId}: ${selectedPackage.credits} credits for $${(selectedPackage.price / 100).toFixed(2)}`);
+    // Apply subscriber discount if user has active subscription
+    if (hasActiveSubscription) {
+      sessionConfig.discounts = [{ 
+        coupon: 'lngosub20',
+      }];
+    } else {
+      sessionConfig.allow_promotion_codes = true;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    const discountInfo = hasActiveSubscription ? ' with 20% subscriber discount (lngosub20)' : ' at full price';
+    logger.info(`Created one-time credit checkout session ${session.id} for user ${userId}: ${selectedPackage.credits} credits for $${(selectedPackage.price / 100).toFixed(2)}${discountInfo}`);
     
     return { sessionId: session.id };
     

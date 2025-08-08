@@ -126,13 +126,14 @@ export const models = {
   video: {
     "google/veo-3-fast": {
       name: "Google Veo 3 Fast",
-      type: "text_to_video", // Primary mode is text-to-video
+      type: "both", // Supports both text-to-video and image-to-video
       creditsPerSecond: 10,
       params: {
         prompt: { required: true, type: "string" },
         negative_prompt: { required: false, type: "string" },
         duration: { required: false, type: "number", default: 8 },
         aspect_ratio: { required: false, type: "string", default: "9:16" },
+        image: { required: false, type: "string", description: "Input image for image-to-video generation" }
       },
       options: {
         duration: [8], // Fixed duration
@@ -142,13 +143,14 @@ export const models = {
     
     "google/veo-3": {
       name: "Google Veo 3",
-      type: "text_to_video", // Primary mode is text-to-video
+      type: "both", // Supports both text-to-video and image-to-video
       creditsPerSecond: 20,
       params: {
         prompt: { required: true, type: "string" },
         negative_prompt: { required: false, type: "string" },
         duration: { required: false, type: "number", default: 8 },
         aspect_ratio: { required: false, type: "string", default: "9:16" },
+        image: { required: false, type: "string", description: "Input image for image-to-video generation" }
       },
       options: {
         duration: [8], // Fixed duration

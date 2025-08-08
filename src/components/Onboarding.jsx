@@ -161,7 +161,7 @@ function Onboarding({ setOnboardingComplete }) {
       
       await updateDoc(userDocRef, {
         onboardingCompleted: true,
-        general_credits: currentCredits + 10, // Add 200 credits for completing onboarding
+        general_credits: currentCredits + 0, // Add 200 credits for completing onboarding
       });
       console.log('User onboarding status marked as completed. Added 200 credits.');
       

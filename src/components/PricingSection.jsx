@@ -269,6 +269,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(null);
   const [checkoutError, setCheckoutError] = useState(null);
   const [pricingMode, setPricingMode] = useState('subscription'); // 'subscription' or 'credits'
+  const [selectedCreditPackage, setSelectedCreditPackage] = useState(500); // Default to Medium package
 
   // Determine active subscription details from props
   const isActiveSubscription = (planPriceId) => {
@@ -458,98 +459,153 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
     }
   };
 
-  // Credit packages component for reuse
-  const renderCreditPackages = () => (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-      {creditPackages.map((pkg, index) => {
-        const isLoadingThisPackage = isLoadingCheckout === `credit-${pkg.id}`;
-        
-        return (
-          <div
-            key={pkg.id}
-            className={`relative bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
-              pkg.popular ? 'ring-1 ring-lime-400/50' : ''
-            }`}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
-                {pkg.name.toUpperCase()}_PACK
-              </span>
-              {pkg.popular && (
-                <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
-                  MOST_POPULAR
-                </span>
-              )}
-            </div>
+  // Single credit box component
+  const renderSingleCreditBox = () => {
+    const selectedPkg = creditPackages.find(pkg => pkg.id === selectedCreditPackage);
+    const isLoadingThisPackage = isLoadingCheckout === `credit-${selectedCreditPackage}`;
+    
+    return (
+      <div className="w-full">
+        <div className="relative bg-neutral-950/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50 transition-all duration-300">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
+              CREDIT_PURCHASE
+            </span>
+            <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
+              ONE_TIME
+            </span>
+          </div>
 
-            {/* Title and Credits */}
-            <div className="mb-6">
-              <h2 className="text-2xl font-normal text-white mb-1">
-                {pkg.name} <span className="text-lime-400 font-light tracking-wide">Pack</span>
-              </h2>
-              <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
-              
-              <AnimatedCredits 
-                credits={pkg.credits} 
-                imageCount={pkg.imageCount}
-                videoCount={pkg.videoCount}
-                duration={800 + index * 100} 
-                key={`credit-${pkg.id}`}
-              />
-            </div>
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
+            {/* Left - Title & Selection */}
+            <div className="space-y-6">
+              {/* Title */}
+              <div>
+                <h2 className="text-3xl font-normal text-white mb-2">
+                  {selectedPkg.name} <span className="text-lime-400 font-light tracking-wide">Pack</span>
+                </h2>
+                <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent"></div>
+              </div>
 
-            {/* Pricing */}
-            <div className="mb-6">
-              <div className="space-y-1">
-                {hasActiveOverallSubscription ? (
-                  <>
-                    <div className="text-3xl font-normal text-white">
-                      ${pkg.subscriberPrice.toFixed(2)}
-                    </div>
-                    <div className="text-xs text-lime-400 mt-1">
-                      20% subscriber discount applied
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-3xl font-normal text-white">
-                      ${pkg.price.toFixed(2)}
-                    </div>
-                    <div className="text-xs text-lime-400 mt-1">
-                      Subscribe to get 20% off all credit purchases
-                    </div>
-                  </>
-                )}
+              {/* Package Selection */}
+              <div>
+                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">SELECT_PACKAGE</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {creditPackages.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      onClick={() => setSelectedCreditPackage(pkg.id)}
+                      className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                        selectedCreditPackage === pkg.id
+                          ? 'bg-lime-400 text-black'
+                          : 'bg-neutral-800/60 text-neutral-300 hover:bg-neutral-700/60'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <div className="font-semibold">{pkg.name}</div>
+                        <div className="text-xs opacity-80">{pkg.credits.toLocaleString()} CR</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {/* Center - Credits Info */}
+            <div className="space-y-6">
+              <div>
+                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">WHAT_YOU_GET</p>
+                <AnimatedCredits 
+                  credits={selectedPkg.credits} 
+                  imageCount={selectedPkg.imageCount}
+                  videoCount={selectedPkg.videoCount}
+                  duration={600} 
+                  key={`selected-${selectedCreditPackage}`}
+                />
+              </div>
               
-            <button
-              onClick={() => handleCreditPurchase(pkg.id)}
-              disabled={isLoadingThisPackage || isLoadingCheckout}
-              className={`w-full flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
-                isLoadingThisPackage
-                  ? 'bg-neutral-800 text-neutral-500 cursor-wait'
-                  : pkg.popular 
-                    ? 'bg-white text-black hover:bg-neutral-100' 
-                    : 'bg-neutral-800/60 text-white hover:bg-neutral-700/60'
-              } ${
-                isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
-              }`}
-            >
-              {isLoadingThisPackage ? (
-                <>
-                  <CircleNotch size={16} className="animate-spin mr-2" /> PROCESSING...
-                </>
-              ) : (
-                'PURCHASE CREDITS'
-              )}
-            </button>
+              {/* Additional Info */}
+              <div className="space-y-4">
+                <div className="p-4 bg-neutral-900/30 rounded-xl">
+                  <div className="text-center">
+                    <div className="text-neutral-400 text-sm">Per Credit</div>
+                    <div className="text-white font-medium text-lg">
+                      ${hasActiveOverallSubscription ? selectedPkg.subscriberUnitPrice.toFixed(3) : selectedPkg.unitPrice.toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-neutral-900/30 rounded-xl">
+                  <div className="text-center">
+                    <div className="text-neutral-400 text-sm">Expires</div>
+                    <div className="text-lime-400 font-medium text-lg">Never</div>
+                  </div>
+                </div>
+              </div>
             </div>
-        );
-      })}
-    </div>
-  );
+
+            {/* Right - Pricing & Purchase */}
+            <div className="space-y-6">
+              {/* Pricing */}
+              <div>
+                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">TOTAL_PRICE</p>
+                <div className="space-y-3">
+                  {hasActiveOverallSubscription ? (
+                    <>
+                      <div className="flex items-baseline gap-3">
+                        <AnimatedPrice price={selectedPkg.subscriberPrice} duration={600} key={`price-${selectedCreditPackage}`} />
+                        <span className="text-lg text-neutral-500 line-through">${selectedPkg.price.toFixed(2)}</span>
+                      </div>
+                      <div className="text-sm text-lime-400 font-medium">
+                        20% subscriber discount applied<br/>
+                        <span className="text-xs">Save ${(selectedPkg.price - selectedPkg.subscriberPrice).toFixed(2)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <AnimatedPrice price={selectedPkg.price} duration={600} key={`price-${selectedCreditPackage}`} />
+                      <div className="text-sm text-lime-400">
+                        Subscribe to get 20% off<br/>
+                        <span className="text-xs">Save ${(selectedPkg.price - selectedPkg.subscriberPrice).toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Purchase Button */}
+              <button
+                onClick={() => handleCreditPurchase(selectedCreditPackage)}
+                disabled={isLoadingThisPackage || isLoadingCheckout}
+                className={`w-full flex items-center justify-center px-8 py-4 rounded-2xl text-base font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
+                  isLoadingThisPackage
+                    ? 'bg-neutral-800 text-neutral-500 cursor-wait'
+                    : 'bg-white text-black hover:bg-neutral-100'
+                } ${
+                  isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              >
+                {isLoadingThisPackage ? (
+                  <>
+                    <CircleNotch size={20} className="animate-spin mr-3" /> PROCESSING...
+                  </>
+                ) : (
+                  'PURCHASE CREDITS'
+                )}
+              </button>
+
+              {/* Security Note */}
+              <div className="text-center text-xs text-neutral-500 mt-4">
+                <Lock size={12} className="inline-block mr-1" />
+                Secure payment with Stripe
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div id={id} className="w-full"> 
@@ -749,7 +805,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 Tiered pricing • Buy more, save more
               </div>
             </div>
-            {renderCreditPackages()}
+            {renderSingleCreditBox()}
           </>
         )}
 

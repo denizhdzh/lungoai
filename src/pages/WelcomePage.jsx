@@ -470,15 +470,15 @@ const WelcomePage = () => {
             // Show platform update for non-logged users
             <div className="bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 flex-1">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">PLATFORM_UPDATE</span>
-                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">NEW</span>
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">ONE_FOR_ALL</span>
+                <span className="text-xs text-neutral-100 uppercase tracking-wider font-light tracking-wide">HIGH QUALITY</span>
               </div>
               
               <div>
-                <h2 className="text-2xl font-normal text-white mb-1">Fresh <span className="text-lime-400 font-light tracking-wide">Features</span></h2>
+                <h2 className="text-2xl font-normal text-white mb-1">Save ~$200 <span className="text-lime-400 font-light tracking-wide">Monthly</span></h2>
                 <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
                 <p className="text-sm text-neutral-400">
-                  Batch uploads & faster processing.
+                  Don't need to buy each AI models, just use Lungo AI.
                 </p>
               </div>
             </div>
@@ -598,12 +598,6 @@ const WelcomePage = () => {
         </div>
       </div>
         
-        {/* Welcome Text */}
-        <div className="px-3 pb-1">
-          <h1 className="text-6xl font-bold text-white mb-4">
-            AI CREATIVE STUDIO, LUNGO AI
-          </h1>
-        </div>
         
         {/* Bottom Action Bar - Only show if user is logged in */}
         {user ? (

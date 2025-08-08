@@ -1327,7 +1327,7 @@ function Layout() {
               ) : (
                 /* Sign Up button for non-authenticated users - Hidden on mobile */
                 <button
-                  onClick={() => setIsPricingModalOpen(true)}
+                  onClick={() => navigate('/signup')}
                   className="hidden xl:block px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
                 >
                   Sign Up

@@ -1446,10 +1446,10 @@ function Settings() {
 
               {/* Customer Portal Access */}
               <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4">
                   <div>
-                    <h3 className="text-white font-semibold text-xl mb-2">Billing Portal</h3>
-                    <p className="text-neutral-400 text-sm max-w-lg">
+                    <h3 className="text-white font-semibold text-lg mb-2">Billing Portal</h3>
+                    <p className="text-neutral-400 text-sm">
                       Access the secure customer portal to update payment methods, view invoices, 
                       download receipts, and manage your subscription settings.
                     </p>
@@ -1458,18 +1458,18 @@ function Settings() {
                     <button 
                       onClick={handleManageBilling}
                       disabled={isPortalLoading || !userSubscription?.stripeCustomerId}
-                      className="bg-lime-400/20 hover:bg-lime-400/30 disabled:bg-neutral-700/60 text-lime-400 disabled:text-neutral-500 px-6 py-3 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 disabled:border-neutral-600/50 flex items-center gap-2 disabled:cursor-not-allowed"
+                      className="bg-lime-400/20 hover:bg-lime-400/30 disabled:bg-neutral-700/60 text-lime-400 disabled:text-neutral-500 px-4 py-2 rounded-xl text-sm font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 disabled:border-neutral-600/50 flex items-center gap-2 disabled:cursor-not-allowed w-fit"
                     >
                       {isPortalLoading ? (
-                        <CircleNotch size={16} className="animate-spin" />
+                        <CircleNotch size={14} className="animate-spin" />
                       ) : (
-                        <ArrowSquareOut size={16} />
+                        <ArrowSquareOut size={14} />
                       )}
                       {isPortalLoading ? 'Opening...' : 'Open Portal'}
                     </button>
                     
                     {!userSubscription?.stripeCustomerId && (
-                      <p className="text-xs text-neutral-500 text-center max-w-32">
+                      <p className="text-xs text-neutral-500">
                         Subscribe first to access portal
                       </p>
                     )}
@@ -1483,30 +1483,6 @@ function Settings() {
                 )}
               </div>
 
-              {/* Usage Overview */}
-              <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
-                <h3 className="text-white font-semibold text-xl mb-6">Usage Overview</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-lime-400 mb-2">
-                      {layoutFirestoreUserData?.general_credits?.toLocaleString() || '0'}
-                    </div>
-                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Credits Remaining</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-400 mb-2">
-                      {layoutFirestoreUserData?.daily_credits_used?.toLocaleString() || '0'}
-                    </div>
-                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Used Today</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-400 mb-2">
-                      {layoutFirestoreUserData?.monthly_credits_used?.toLocaleString() || '0'}
-                    </div>
-                    <div className="text-sm text-neutral-400 uppercase tracking-wider">Used This Month</div>
-                  </div>
-                </div>
-              </div>
 
             </div>
           )}

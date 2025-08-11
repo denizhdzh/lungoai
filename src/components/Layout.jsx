@@ -582,6 +582,19 @@ function Layout() {
   }, [user]); // Rerun if user object changes
   // --- END NEW ---
 
+  // --- NEW: Onboarding check effect ---
+  useEffect(() => {
+    // Protected routes that require authentication
+    const protectedRoutes = ['/generation', '/studio', '/settings', '/history'];
+    const currentPath = location.pathname;
+    
+    if (protectedRoutes.includes(currentPath) && !user) {
+      console.log('Protected route accessed without authentication, redirecting to signup');
+      navigate('/signup');
+    }
+  }, [user, location.pathname, navigate]);
+  // --- END NEW ---
+
   // Effect to update header based on location
   useEffect(() => {
     const path = location.pathname;
@@ -1249,17 +1262,15 @@ function Layout() {
   const isCanvasPage = location.pathname === '/studio';
 
   return (
-    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
+    <div className="h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
       {/* Conditional Background */}
       {location.pathname === '/' ? (
-        // Background image for index pages
+        // Image background for index pages
         <div className="absolute inset-0 h-full w-full">
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{
-              backgroundImage: 'url(/surreal3.png)',
-              backgroundPosition: 'center left'
-            }}
+          <img 
+            src="/im8.png" 
+            alt="Background" 
+            className="absolute inset-0 w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/30" />
         </div>
@@ -1275,7 +1286,7 @@ function Layout() {
       ) : null}
       
       {/* Main content container with relative positioning */}
-      <div className="relative z-10 pb-28 flex flex-col min-h-screen"> {/* Ensure layout fills height */}
+      <div className="relative z-10 flex flex-col h-full"> {/* Ensure layout fills height */}
         
         {/* --- Top Navigation Bar --- */}
         <header className="fixed top-3 left-3 right-3 z-40 bg-neutral-900/40 backdrop-blur-xl transition-colors duration-200 rounded-2xl h-12">
@@ -1292,7 +1303,7 @@ function Layout() {
               />
             </button>
             
-            {/* Right: Credits/Settings for desktop only, Sign Up for guests */}
+            {/* Right: Credits/Pricing/Settings for desktop only, Sign Up for guests */}
             <div className="flex items-center gap-3">
               {user ? (
                 <>
@@ -1312,6 +1323,22 @@ function Layout() {
                       </span>
                     </div>
                   )}
+
+                  {/* Models Button - Hidden on mobile */}
+                  <button
+                    onClick={() => navigate('/models')}
+                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Models
+                  </button>
+
+                  {/* Pricing Button - Hidden on mobile */}
+                  <button
+                    onClick={() => setIsPricingModalOpen(true)}
+                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Pricing
+                  </button>
                   
                   {/* Settings - Hidden on mobile */}
                   <button
@@ -1325,13 +1352,30 @@ function Layout() {
                   </button>
                 </>
               ) : (
-                /* Sign Up button for non-authenticated users - Hidden on mobile */
-                <button
-                  onClick={() => navigate('/signup')}
-                  className="hidden xl:block px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
-                >
-                  Sign Up
-                </button>
+                <>
+                  {/* Models Button for non-authenticated users - Hidden on mobile */}
+                  <button
+                    onClick={() => navigate('/models')}
+                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Models
+                  </button>
+
+                  {/* Pricing Button for non-authenticated users - Hidden on mobile */}
+                  <button
+                    onClick={() => setIsPricingModalOpen(true)}
+                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Pricing
+                  </button>
+                  {/* Sign Up button for non-authenticated users - Hidden on mobile */}
+                  <button
+                    onClick={() => navigate('/signup')}
+                    className="hidden xl:block px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
+                  >
+                    Sign Up
+                  </button>
+                </>
               )}
             </div>
           </div>

@@ -161,9 +161,9 @@ function Onboarding({ setOnboardingComplete }) {
       
       await updateDoc(userDocRef, {
         onboardingCompleted: true,
-        general_credits: currentCredits + 0, // Add 200 credits for completing onboarding
+        general_credits: currentCredits + 0, // No free credits given
       });
-      console.log('User onboarding status marked as completed. Added 200 credits.');
+      console.log('User onboarding status marked as completed.');
       
       setOnboardingComplete(); 
       navigate('/'); 
@@ -396,15 +396,7 @@ function Onboarding({ setOnboardingComplete }) {
     <div className="max-w-md w-full bg-neutral-900/60 border border-neutral-700 rounded-xl mx-auto px-6 py-8">
       <div className="text-center mb-6">
         <h2 className="text-2xl font-medium text-white mb-2">You're all set! 🎉</h2>
-        <p className="text-neutral-300">Welcome to Lungo AI! You've received 10 free credits to get started.</p>
-      </div>
-      
-      <div className="bg-neutral-800/50 rounded-lg p-4 mb-6">
-        <div className="flex items-center justify-center mb-2">
-          <div className="text-3xl font-normal text-lime-400">10</div>
-          <div className="text-lg text-neutral-400 ml-2">Free Credits</div>
-        </div>
-        <p className="text-sm text-neutral-400 text-center">Start creating amazing content right away!</p>
+        <p className="text-neutral-300">Welcome to Lungo AI! Ready to start creating amazing content?</p>
       </div>
       
       <button

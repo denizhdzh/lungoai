@@ -26,7 +26,7 @@ const creditPackages = [
     credits: 200,
     price: 20.00,
     subscriberPrice: 16.00,
-    originalPrice: 20.00,
+    originalPrice: 25.00,
     unitPrice: 0.10,
     subscriberUnitPrice: 0.08,
     imageCount: Math.floor(200 / 1), // 200 images
@@ -39,12 +39,12 @@ const creditPackages = [
     credits: 500,
     price: 45.00,
     subscriberPrice: 35.00,
-    originalPrice: 45.00,
+    originalPrice: 56.25,
     unitPrice: 0.09,
     subscriberUnitPrice: 0.07,
     imageCount: Math.floor(500 / 1), // 500 images
     videoCount: Math.floor(500 / 5), // 100 videos
-    popular: true
+    popular: false
   },
   {
     id: 1000,
@@ -52,7 +52,7 @@ const creditPackages = [
     credits: 1000,
     price: 80.00,
     subscriberPrice: 60.00,
-    originalPrice: 80.00,
+    originalPrice: 100.00,
     unitPrice: 0.08,
     subscriberUnitPrice: 0.06,
     imageCount: Math.floor(1000 / 1), // 1000 images
@@ -65,12 +65,12 @@ const creditPackages = [
     credits: 2000,
     price: 140.00,
     subscriberPrice: 100.00,
-    originalPrice: 140.00,
+    originalPrice: 175.00,
     unitPrice: 0.07,
     subscriberUnitPrice: 0.05,
     imageCount: Math.floor(2000 / 1), // 2000 images
     videoCount: Math.floor(2000 / 5), // 400 videos
-    popular: false
+    popular: true
   }
 ];
 // --- End Credit Packages ---
@@ -81,7 +81,9 @@ const plans = [
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 14.00,
+    originalMonthlyPrice: 17.50,
     yearlyMonthlyPrice: Math.round(14.00 * 9 / 12),
+    originalYearlyMonthlyPrice: Math.round(17.50 * 9 / 12),
     monthlyPriceId: "price_1RqYZsBcrIf8H8FJgOq3dOFn", // Update with new Stripe price ID
     yearlyPriceId: "price_1RqYZsBcrIf8H8FJkaolnXfV", // Update with new Stripe price ID
     credits: 200,
@@ -102,7 +104,9 @@ const plans = [
     id: 'creator',
     name: 'Creator',
     monthlyPrice: 30.00,
+    originalMonthlyPrice: 37.50,
     yearlyMonthlyPrice: Math.round(30.00 * 9 / 12),
+    originalYearlyMonthlyPrice: Math.round(37.50 * 9 / 12),
     monthlyPriceId: "price_1RqYbBBcrIf8H8FJcwx4ubhh", // Update with new Stripe price ID
     yearlyPriceId: "price_1RqYbBBcrIf8H8FJHwvT8NcQ", // Update with new Stripe price ID
     credits: 500,
@@ -124,7 +128,9 @@ const plans = [
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 150.00,
+    originalMonthlyPrice: 187.50,
     yearlyMonthlyPrice: Math.round(150.00 * 9 / 12),
+    originalYearlyMonthlyPrice: Math.round(187.50 * 9 / 12),
     monthlyPriceId: "price_1RqYbrBcrIf8H8FJEyvN5vkw", // Update with new Stripe price ID
     yearlyPriceId: "price_1RqYbrBcrIf8H8FJQLDrUWC5", // Update with new Stripe price ID
     credits: 3000,
@@ -145,131 +151,12 @@ const plans = [
   },
 ];
 
-// Counter animation hook (Corrected dependencies and final value)
-function useCounterAnimation(endValue, duration = 1000, startValue = 0) {
-  const [count, setCount] = useState(startValue);
-  const countRef = useRef(startValue);
-  const prevEndValue = useRef(endValue);
-  
-  useEffect(() => {
-    // If the endValue changes, start animation from the current displayed value
-    if (prevEndValue.current !== endValue) {
-      countRef.current = count; // Start from the last rendered count
-      prevEndValue.current = endValue; // Update the target value ref
-    } // No else needed if component remounts due to key
-
-    const effectiveStartValue = countRef.current; // Use the value from the ref
-    const startTime = performance.now();
-    let animationFrameId;
-    
-    const updateCount = (currentTime) => {
-      const elapsedTime = currentTime - startTime;
-      const progress = Math.min(elapsedTime / duration, 1);
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      const nextCount = effectiveStartValue + (endValue - effectiveStartValue) * easeOutQuart;
-      setCount(nextCount);
-      
-      if (progress < 1) {
-        animationFrameId = requestAnimationFrame(updateCount);
-      } else {
-        setCount(endValue); // Ensure it ends exactly at the endValue
-      }
-    };
-    
-    animationFrameId = requestAnimationFrame(updateCount);
-    
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  // Dependencies should only be things that trigger a re-calculation/re-run
-  }, [endValue, duration]); 
-  
-  return count;
-}
-
-// Animated price component with dark mode support
-function AnimatedPrice({ price, duration = 800 }) {
-  const animatedPrice = useCounterAnimation(price, duration);
-  
-  return (
-    <span className="text-3xl font-normal text-white">
-      ${animatedPrice.toFixed(2)}
-    </span>
-  );
-}
-
-// --- NEW: Animated Credits Component ---
-function AnimatedCredits({ credits, imageCount, videoCount, duration = 800 }) {
-  const animatedCredits = useCounterAnimation(credits, duration);
-  const animatedImages = useCounterAnimation(imageCount || 0, duration);
-  const animatedVideos = useCounterAnimation(videoCount || 0, duration);
-  
-  return (
-    <div>
-      <span className="text-xl font-normal text-white">
-        {Math.round(animatedCredits).toLocaleString()} <span className="text-lime-400 font-light">Credits</span>
-      </span>
-      {(imageCount || videoCount) && (
-        <div className="text-sm text-neutral-200 mt-2 space-y-1 font-normal tracking-wide">
-          {imageCount && (
-            <div>Up to <span className="text-white font-semibold">{Math.round(animatedImages).toLocaleString()}</span> images</div>
-          )}
-          {videoCount && (
-            <div>Up to <span className="text-white font-semibold">{Math.round(animatedVideos).toLocaleString()}</span> videos</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-// --- End Animated Credits Component ---
-
-// Animated feature value component with dark mode support
-function AnimatedValue({ contentBefore, value, contentAfter = "", duration = 600 }) {
-  const [prevValue, setPrevValue] = useState(value);
-  const [animate, setAnimate] = useState(false);
-  
-  useEffect(() => {
-    if (value !== prevValue) {
-      setAnimate(true);
-      const timer = setTimeout(() => {
-        setPrevValue(value);
-        setAnimate(false);
-      }, duration);
-      return () => clearTimeout(timer);
-    }
-  }, [value, prevValue, duration]);
-  
-  const numericValue = parseInt(value, 10);
-  const prevNumericValue = parseInt(prevValue, 10);
-  const animatedValue = useCounterAnimation(numericValue, duration, prevNumericValue);
-  const isNumeric = !isNaN(numericValue);
-  
-  return (
-    <span className="inline text-stone-600 dark:text-stone-300">
-      {isNumeric ? (
-        <>
-          {contentBefore}
-          <span className="font-medium transition-all">
-            {Math.round(animatedValue)}
-          </span>
-          {contentAfter}
-        </>
-      ) : (
-        <span className={`transition-all duration-300 ${animate ? 'opacity-0 transform translate-y-1' : 'opacity-100'}`}>
-          {value}
-        </span>
-      )}
-    </span>
-  );
-}
 
 function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(null);
   const [checkoutError, setCheckoutError] = useState(null);
   const [pricingMode, setPricingMode] = useState('subscription'); // 'subscription' or 'credits'
-  const [selectedCreditPackage, setSelectedCreditPackage] = useState(500); // Default to Medium package
 
   // Determine active subscription details from props
   const isActiveSubscription = (planPriceId) => {
@@ -459,150 +346,80 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
     }
   };
 
-  // Single credit box component
-  const renderSingleCreditBox = () => {
-    const selectedPkg = creditPackages.find(pkg => pkg.id === selectedCreditPackage);
-    const isLoadingThisPackage = isLoadingCheckout === `credit-${selectedCreditPackage}`;
-    
+  // Simplified credit boxes component (4 boxes)
+  const renderCreditBoxes = () => {
     return (
-      <div className="w-full">
-        <div className="relative bg-neutral-950/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50 transition-all duration-300">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
-              CREDIT_PURCHASE
-            </span>
-            <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
-              ONE_TIME
-            </span>
-          </div>
-
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-            {/* Left - Title & Selection */}
-            <div className="space-y-6">
-              {/* Title */}
-              <div>
-                <h2 className="text-3xl font-normal text-white mb-2">
-                  {selectedPkg.name} <span className="text-lime-400 font-light tracking-wide">Pack</span>
-                </h2>
-                <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent"></div>
-              </div>
-
-              {/* Package Selection */}
-              <div>
-                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">SELECT_PACKAGE</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {creditPackages.map((pkg) => (
-                    <button
-                      key={pkg.id}
-                      onClick={() => setSelectedCreditPackage(pkg.id)}
-                      className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                        selectedCreditPackage === pkg.id
-                          ? 'bg-lime-400 text-black'
-                          : 'bg-neutral-800/60 text-neutral-300 hover:bg-neutral-700/60'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <div className="font-semibold">{pkg.name}</div>
-                        <div className="text-xs opacity-80">{pkg.credits.toLocaleString()} CR</div>
-                      </div>
-                    </button>
-                  ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {creditPackages.map((pkg) => {
+          const isLoadingThisPackage = isLoadingCheckout === `credit-${pkg.id}`;
+          const finalPrice = hasActiveOverallSubscription ? pkg.subscriberPrice : pkg.price;
+          
+          return (
+            <div key={pkg.id} className={`relative bg-neutral-950/40 backdrop-blur-xl p-4 rounded-2xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${pkg.popular ? 'ring-1 ring-lime-400/50' : ''}`}>
+              {pkg.popular && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-lime-400 text-black text-xs px-3 py-1 rounded-md font-medium">
+                  BEST DEAL
                 </div>
+              )}
+              {/* Header */}
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-normal text-white mb-1">{pkg.name}</h3>
+                <div className="text-xs text-neutral-400 mb-3">{pkg.credits.toLocaleString()} Credits</div>
               </div>
-            </div>
 
-            {/* Center - Credits Info */}
-            <div className="space-y-6">
-              <div>
-                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">WHAT_YOU_GET</p>
-                <AnimatedCredits 
-                  credits={selectedPkg.credits} 
-                  imageCount={selectedPkg.imageCount}
-                  videoCount={selectedPkg.videoCount}
-                  duration={600} 
-                  key={`selected-${selectedCreditPackage}`}
-                />
-              </div>
-              
-              {/* Additional Info */}
-              <div className="space-y-4">
-                <div className="p-4 bg-neutral-900/30 rounded-xl">
-                  <div className="text-center">
-                    <div className="text-neutral-400 text-sm">Per Credit</div>
-                    <div className="text-white font-medium text-lg">
-                      ${hasActiveOverallSubscription ? selectedPkg.subscriberUnitPrice.toFixed(3) : selectedPkg.unitPrice.toFixed(3)}
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4 bg-neutral-900/30 rounded-xl">
-                  <div className="text-center">
-                    <div className="text-neutral-400 text-sm">Expires</div>
-                    <div className="text-lime-400 font-medium text-lg">Never</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right - Pricing & Purchase */}
-            <div className="space-y-6">
               {/* Pricing */}
-              <div>
-                <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-4">TOTAL_PRICE</p>
-                <div className="space-y-3">
-                  {hasActiveOverallSubscription ? (
-                    <>
-                      <div className="flex items-baseline gap-3">
-                        <AnimatedPrice price={selectedPkg.subscriberPrice} duration={600} key={`price-${selectedCreditPackage}`} />
-                        <span className="text-lg text-neutral-500 line-through">${selectedPkg.price.toFixed(2)}</span>
-                      </div>
-                      <div className="text-sm text-lime-400 font-medium">
-                        20% subscriber discount applied<br/>
-                        <span className="text-xs">Save ${(selectedPkg.price - selectedPkg.subscriberPrice).toFixed(2)}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <AnimatedPrice price={selectedPkg.price} duration={600} key={`price-${selectedCreditPackage}`} />
-                      <div className="text-sm text-lime-400">
-                        Subscribe to get 20% off<br/>
-                        <span className="text-xs">Save ${(selectedPkg.price - selectedPkg.subscriberPrice).toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
+              <div className="text-center mb-4">
+                <div className="text-2xl font-bold text-white mb-1">
+                  ${finalPrice.toFixed(0)}
+                </div>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <span className="text-sm text-neutral-500 line-through">
+                    ${pkg.originalPrice.toFixed(0)}
+                  </span>
+                  <span className="text-xs text-lime-400 font-medium bg-lime-400/10 px-2 py-0.5 rounded-full">25% OFF</span>
+                </div>
+                <div className="text-xs text-neutral-500">
+                  ${(finalPrice / pkg.credits).toFixed(3)} per credit
                 </div>
               </div>
 
-              {/* Purchase Button */}
+              {/* Capacity */}
+              <div className="text-center mb-4 space-y-1">
+                <div className="text-xs text-neutral-300">~{pkg.imageCount} images</div>
+                <div className="text-xs text-neutral-300">~{pkg.videoCount} videos</div>
+              </div>
+
+              {/* Button */}
               <button
-                onClick={() => handleCreditPurchase(selectedCreditPackage)}
+                onClick={() => {
+                  if (!user) {
+                    window.location.href = '/signup';
+                  } else {
+                    handleCreditPurchase(pkg.id);
+                  }
+                }}
                 disabled={isLoadingThisPackage || isLoadingCheckout}
-                className={`w-full flex items-center justify-center px-8 py-4 rounded-2xl text-base font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
+                className={`w-full flex items-center justify-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
                   isLoadingThisPackage
                     ? 'bg-neutral-800 text-neutral-500 cursor-wait'
-                    : 'bg-white text-black hover:bg-neutral-100'
+                    : pkg.popular
+                      ? 'bg-lime-400 text-black hover:bg-lime-300'
+                      : 'bg-neutral-800/60 text-white hover:bg-neutral-700/60'
                 } ${
                   isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               >
                 {isLoadingThisPackage ? (
                   <>
-                    <CircleNotch size={20} className="animate-spin mr-3" /> PROCESSING...
+                    <CircleNotch size={16} className="animate-spin mr-2" /> Loading...
                   </>
                 ) : (
-                  'PURCHASE CREDITS'
+                  user ? 'Buy Now' : 'Get Started'
                 )}
               </button>
-
-              {/* Security Note */}
-              <div className="text-center text-xs text-neutral-500 mt-4">
-                <Lock size={12} className="inline-block mr-1" />
-                Secure payment with Stripe
-              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
     );
   };
@@ -689,7 +506,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {plans.map((plan, index) => {
+              {plans.map((plan) => {
                 const displayPrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyMonthlyPrice;
                 const currentPriceId = billingCycle === 'yearly' ? plan.yearlyPriceId : plan.monthlyPriceId;
                 const isLoadingThisButton = isLoadingCheckout === (plan.id + '-' + billingCycle);
@@ -698,7 +515,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 return (
                   <div
                     key={`${plan.id}-${billingCycle}`}
-                    className={`relative bg-neutral-950/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
+                    className={`relative bg-neutral-950/40 backdrop-blur-xl p-5 rounded-2xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
                       plan.mostPopular ? 'ring-1 ring-lime-400/50' : ''
                     }`}
                   >
@@ -715,33 +532,39 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                     </div>
 
                     {/* Title and Price */}
-                    <div className="mb-6">
-                      <h2 className="text-2xl font-normal text-white mb-1">
-                        {plan.name} <span className="text-lime-400 font-light tracking-wide">Plan</span>
+                    <div className="mb-5">
+                      <h2 className="text-xl font-normal text-white mb-1">
+                        {plan.name}
                       </h2>
-                      <div className="w-24 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
+                      <div className="w-16 h-px bg-gradient-to-r from-lime-400 to-transparent mb-3"></div>
                       
                       <div className="flex items-baseline gap-2 mb-2">
-                        <AnimatedPrice price={displayPrice} duration={800 + index * 100} key={billingCycle + '-price'} />
-                        <span className="text-sm text-neutral-400">
-                          {billingCycle === 'monthly' ? '/mo' : '/mo (billed annually)'}
-                        </span>
+                        <div className="flex flex-col">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-normal text-white">${displayPrice.toFixed(2)}</span>
+                            <span className="text-xs text-neutral-400">/mo</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-neutral-500 line-through">
+                              ${(billingCycle === 'monthly' ? plan.originalMonthlyPrice : plan.originalYearlyMonthlyPrice).toFixed(2)}
+                            </span>
+                            <span className="text-xs text-lime-400 font-medium bg-lime-400/10 px-2 py-0.5 rounded-full">25% OFF</span>
+                          </div>
+                        </div>
                       </div>
                       
-                      <AnimatedCredits 
-                        credits={plan.credits} 
-                        imageCount={plan.imageCount}
-                        videoCount={plan.videoCount}
-                        duration={800 + index * 100} 
-                        key={billingCycle + '-credits'} 
-                      />
+                      <div className="text-base text-white">
+                        {plan.credits.toLocaleString()} <span className="text-lime-400 font-light">Credits</span>
+                      </div>
+                      <div className="text-xs text-neutral-400 mt-1">
+                        ~{plan.imageCount} images • ~{plan.videoCount} videos
+                      </div>
                     </div>
                     
                     {/* Features */}
-                    <div className="mb-6">
-                      <p className="text-xs text-neutral-500 uppercase tracking-wider font-light mb-3">FEATURES_INCLUDED</p>
-                      <ul role="list" className="space-y-2 text-sm text-neutral-300 font-light tracking-wide">
-                        {plan.features.map((feature, idx) => {
+                    <div className="mb-5">
+                      <ul role="list" className="space-y-1.5 text-xs text-neutral-300">
+                        {plan.features.slice(0, 4).map((feature, idx) => {
                           let baseFeature = feature;
                           let suffix = null;
                           const soonMatch = feature.match(/\((very soon|soon|coming soon)\)$/i);
@@ -752,11 +575,11 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                           }
                           
                           return (
-                            <li key={idx} className="flex gap-x-3 items-start">
-                              <div className="w-1.5 h-1.5 bg-lime-400 rounded-full mt-2 flex-shrink-0"></div>
-                              <span className="text-neutral-200">
+                            <li key={idx} className="flex gap-x-2 items-start">
+                              <div className="w-1 h-1 bg-lime-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                              <span className="text-neutral-300 leading-tight">
                                   {baseFeature}
-                                  {suffix && <span className="ml-1 text-xs text-neutral-500">{suffix}</span>}
+                                  {suffix && <span className="ml-1 text-neutral-500">{suffix}</span>}
                               </span>
                             </li>
                           );
@@ -765,7 +588,15 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                     </div>
 
                     <button
-                      onClick={() => handleCheckout(plan.id, billingCycle)}
+                      onClick={() => {
+                        if (!user) {
+                          // Redirect to signup if not logged in
+                          window.location.href = '/signup';
+                        } else {
+                          // Continue with normal checkout flow
+                          handleCheckout(plan.id, billingCycle);
+                        }
+                      }}
                       disabled={isCurrentPlan || isLoadingThisButton || isLoadingCheckout}
                       className={`w-full flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-normal tracking-wide transition-all duration-300 hover:scale-105 shadow-lg ${
                         isCurrentPlan
@@ -786,7 +617,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                           <CircleNotch size={16} className="animate-spin mr-2" /> PROCESSING...
                         </>
                       ) : (
-                        <>{plan.buttonText.toUpperCase()}</>
+                        <>START CREATING</>
                       )}
                     </button>
                   </div>
@@ -802,10 +633,10 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
             <div className="text-center mb-8">
               <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-lime-100 dark:bg-lime-900/30 text-lime-800 dark:text-lime-200 text-sm font-medium">
                 <span className="w-2 h-2 bg-lime-500 rounded-full mr-2"></span>
-                Tiered pricing • Buy more, save more
+                Credits never expire • Buy more, save more
               </div>
             </div>
-            {renderSingleCreditBox()}
+            {renderCreditBoxes()}
           </>
         )}
 

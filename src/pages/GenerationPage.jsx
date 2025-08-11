@@ -57,9 +57,7 @@ const GenerationPage = () => {
 			setUser(currentUser);
 			setAuthChecked(true);
 			
-			if (!currentUser) {
-				navigate('/signup');
-			} else {
+			if (currentUser) {
 				// Fetch subscription data
 				try {
 					const userDocRef = doc(db, 'users', currentUser.uid);
@@ -74,7 +72,7 @@ const GenerationPage = () => {
 		});
 		
 		return () => unsubscribe();
-	}, [navigate]);
+	}, []);
 	
 	// Fetch previous generations from Firestore
 	useEffect(() => {

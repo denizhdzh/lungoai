@@ -1262,13 +1262,13 @@ function Layout() {
   const isCanvasPage = location.pathname === '/studio';
 
   return (
-    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative transition-colors duration-200">
+    <div className="h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative transition-colors duration-200 overflow-hidden">
       {/* Conditional Background */}
       {location.pathname === '/' ? (
         // Image background for index pages
-        <div className="absolute inset-0 h-full w-full">
+        <div className="fixed inset-0 h-full w-full">
           <img 
-            src="/im8.png" 
+            src="/im10.png" 
             alt="Background" 
             className="absolute inset-0 w-full h-full object-cover"
           />
@@ -1290,7 +1290,7 @@ function Layout() {
         
         {/* --- Top Navigation Bar --- */}
         <header className="fixed top-3 left-3 right-3 z-40 bg-neutral-900/40 backdrop-blur-xl transition-colors duration-200 rounded-2xl h-12">
-          <div className="flex items-center justify-between h-full px-2">
+          <div className="flex items-center justify-between h-full px-5">
             {/* Left: Logo */}
             <button 
               onClick={() => navigate('/')}

@@ -1262,7 +1262,7 @@ function Layout() {
   const isCanvasPage = location.pathname === '/studio';
 
   return (
-    <div className="h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative overflow-hidden transition-colors duration-200">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 font-sans relative transition-colors duration-200">
       {/* Conditional Background */}
       {location.pathname === '/' ? (
         // Image background for index pages
@@ -1307,11 +1307,11 @@ function Layout() {
             <div className="flex items-center gap-3">
               {user ? (
                 <>
-                  {/* Credit Display - Hidden on mobile */}
+                  {/* Credit Display */}
                   {firestoreUserData && (
                     <div 
                       onClick={() => setIsPricingModalOpen(true)}
-                      className="hidden xl:flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
                     >
                       <img 
                         src="/logonaked.png"
@@ -1324,26 +1324,26 @@ function Layout() {
                     </div>
                   )}
 
-                  {/* Models Button - Hidden on mobile */}
+                  {/* Models Button */}
                   <button
                     onClick={() => navigate('/models')}
-                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
                   >
                     Models
                   </button>
 
-                  {/* Pricing Button - Hidden on mobile */}
+                  {/* Pricing Button */}
                   <button
                     onClick={() => setIsPricingModalOpen(true)}
-                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
                   >
                     Pricing
                   </button>
                   
-                  {/* Settings - Hidden on mobile */}
+                  {/* Settings */}
                   <button
                     onClick={() => navigate('/settings')}
-                    className="hidden xl:block p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
+                    className="p-2 rounded-full text-white hover:bg-neutral-800 transition-colors"
                     aria-label="Settings"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1353,25 +1353,25 @@ function Layout() {
                 </>
               ) : (
                 <>
-                  {/* Models Button for non-authenticated users - Hidden on mobile */}
+                  {/* Models Button for non-authenticated users */}
                   <button
                     onClick={() => navigate('/models')}
-                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
                   >
                     Models
                   </button>
 
-                  {/* Pricing Button for non-authenticated users - Hidden on mobile */}
+                  {/* Pricing Button for non-authenticated users */}
                   <button
                     onClick={() => setIsPricingModalOpen(true)}
-                    className="hidden xl:block px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
+                    className="px-3 py-1.5 text-white hover:bg-neutral-800 rounded-lg text-sm font-medium transition-colors"
                   >
                     Pricing
                   </button>
-                  {/* Sign Up button for non-authenticated users - Hidden on mobile */}
+                  {/* Sign Up button for non-authenticated users */}
                   <button
                     onClick={() => navigate('/signup')}
-                    className="hidden xl:block px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
+                    className="px-4 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-xl text-sm font-medium transition-colors"
                   >
                     Sign Up
                   </button>

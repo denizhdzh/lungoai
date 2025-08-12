@@ -30,7 +30,7 @@ function SignUp() {
   };
 
   return (
-    <div className="h-screen bg-neutral-950 flex font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-neutral-950 flex flex-col lg:flex-row font-sans relative overflow-auto">
       {/* Dot Grid Background */}
       <div className="absolute inset-0 h-full w-full bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_60%,transparent_100%)]"></div>
       
@@ -49,8 +49,8 @@ function SignUp() {
       <div className="diagonal-line line-1"></div>
       <div className="diagonal-line line-2"></div>
       
-      {/* Left side - SignUp Content */}
-      <div className="w-1/2 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8">
+      {/* SignUp Content - Full width on mobile, left half on desktop */}
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-12 lg:py-0 min-h-screen lg:min-h-0">
         <div className="max-w-sm w-full relative z-10">
           {/* Logo and Header Section */}
           <div className="text-center mb-10">
@@ -86,8 +86,8 @@ function SignUp() {
         </div>
       </div>
       
-      {/* Right side - Video */}
-      <div className="w-1/2 p-5 relative z-10 h-full">
+      {/* Video - Hidden on mobile, right half on desktop */}
+      <div className="hidden lg:block lg:w-1/2 p-5 relative z-10 h-full min-h-screen">
         <video autoPlay loop muted className="w-full h-full object-cover rounded-2xl">
           <source src="/vid2.mp4" type="video/mp4" />
         </video>

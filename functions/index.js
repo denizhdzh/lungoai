@@ -113,6 +113,11 @@ exports.generateImage = onCall(
         // Calculate credits needed based on model
         const creditsNeeded = getImageModelCredits(model);
         
+        // Get current credits before deduction
+        const userDoc = await userRef.get();
+        const userData = userDoc.data();
+        const currentCredits = (userData.general_credits || 0) + (userData.one_time_credits || 0);
+        
         // Deduct credits (subs first, then one-time)
         const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
@@ -189,12 +194,37 @@ exports.generateImage = onCall(
         });
 
         // Store async prediction info for polling
+        // Sanitize input for Firestore - remove complex nested objects and large data
+        const sanitizedInput = {};
+        Object.keys(input).forEach(key => {
+            const value = input[key];
+            if (value !== null && value !== undefined) {
+                if (typeof value === 'string') {
+                    // For strings, truncate very long ones (like base64 images) but keep metadata
+                    if (value.length > 100 && value.startsWith('data:image/')) {
+                        sanitizedInput[key] = '[BASE64_IMAGE_DATA]';
+                    } else if (value.length > 1000) {
+                        sanitizedInput[key] = value.substring(0, 100) + '... [TRUNCATED]';
+                    } else {
+                        sanitizedInput[key] = value;
+                    }
+                } else if (typeof value === 'object') {
+                    // For objects, store a simplified representation
+                    sanitizedInput[key] = '[OBJECT]';
+                } else if (typeof value === 'number' || typeof value === 'boolean') {
+                    sanitizedInput[key] = value;
+                } else {
+                    sanitizedInput[key] = String(value);
+                }
+            }
+        });
+        
         await db.collection('predictions').doc(predictionId).set({
             userId: userId,
             type: 'image',
             model: model,
             status: 'starting',
-            input: input,
+            input: sanitizedInput,
             creditsUsed: creditsNeeded,
             subsDeduction: subsDeduction,
             oneTimeDeduction: oneTimeDeduction,
@@ -702,6 +732,11 @@ exports.generateVideo = onCall(
         // Calculate credits needed based on duration and model parameters
         const creditsNeeded = calculateVideoCredits(model, duration, parameters);
         
+        // Get current credits before deduction
+        const userDoc = await userRef.get();
+        const userData = userDoc.data();
+        const currentCredits = (userData.general_credits || 0) + (userData.one_time_credits || 0);
+        
         // Deduct credits (subs first, then one-time)
         const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
@@ -759,12 +794,37 @@ exports.generateVideo = onCall(
         });
 
         // Store async prediction info for polling
+        // Sanitize input for Firestore - remove complex nested objects and large data
+        const sanitizedVideoInput = {};
+        Object.keys(input).forEach(key => {
+            const value = input[key];
+            if (value !== null && value !== undefined) {
+                if (typeof value === 'string') {
+                    // For strings, truncate very long ones (like base64 images) but keep metadata
+                    if (value.length > 100 && value.startsWith('data:image/')) {
+                        sanitizedVideoInput[key] = '[BASE64_IMAGE_DATA]';
+                    } else if (value.length > 1000) {
+                        sanitizedVideoInput[key] = value.substring(0, 100) + '... [TRUNCATED]';
+                    } else {
+                        sanitizedVideoInput[key] = value;
+                    }
+                } else if (typeof value === 'object') {
+                    // For objects, store a simplified representation
+                    sanitizedVideoInput[key] = '[OBJECT]';
+                } else if (typeof value === 'number' || typeof value === 'boolean') {
+                    sanitizedVideoInput[key] = value;
+                } else {
+                    sanitizedVideoInput[key] = String(value);
+                }
+            }
+        });
+        
         await db.collection('predictions').doc(predictionId).set({
             userId: userId,
             type: 'video',
             model: model,
             status: 'starting',
-            input: input,
+            input: sanitizedVideoInput,
             duration: duration,
             creditsUsed: creditsNeeded,
             subsDeduction: subsDeduction,

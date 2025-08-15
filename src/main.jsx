@@ -1,27 +1,34 @@
-import { StrictMode, useState, useEffect } from 'react'
+import { StrictMode, useState, useEffect, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './index.css'
-import SignUp from './components/SignUp.jsx';
-import Onboarding from './components/Onboarding.jsx';
-import Dashboard from './components/Dashboard.jsx';
-import Settings from './components/Settings.jsx';
-import Layout from './components/Layout.jsx';
-import Admin from './components/Admin.jsx';
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import PricingSection from './components/PricingSection.jsx';
-import CommandInfo from './components/CommandInfo.jsx';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
-import { motion } from 'framer-motion';
-import CanvasWorkspace from './pages/CanvasWorkspace.jsx';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
-import GenerationPage from './pages/GenerationPage.jsx';
-import WelcomePage from './pages/WelcomePage.jsx';
-import ModelsPage from './pages/ModelsPage.jsx';
-import TermsPage from './pages/TermsPage.jsx';
-import PrivacyPage from './pages/PrivacyPage.jsx';
+
+// Loading component for lazy routes
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-[400px] bg-neutral-950">
+    <div className="text-lime-400 text-sm">Loading...</div>
+  </div>
+);
+
+// Lazy load components to reduce initial bundle size
+const SignUp = lazy(() => import('./components/SignUp.jsx'));
+const Onboarding = lazy(() => import('./components/Onboarding.jsx'));
+const Dashboard = lazy(() => import('./components/Dashboard.jsx'));
+const Settings = lazy(() => import('./components/Settings.jsx'));
+const Admin = lazy(() => import('./components/Admin.jsx'));
+const PricingSection = lazy(() => import('./components/PricingSection.jsx'));
+const CommandInfo = lazy(() => import('./components/CommandInfo.jsx'));
+const CanvasWorkspace = lazy(() => import('./pages/CanvasWorkspace.jsx'));
+const GenerationPage = lazy(() => import('./pages/GenerationPage.jsx'));
+const WelcomePage = lazy(() => import('./pages/WelcomePage.jsx'));
+const ModelsPage = lazy(() => import('./pages/ModelsPage.jsx'));
+const TermsPage = lazy(() => import('./pages/TermsPage.jsx'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage.jsx'));
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -355,7 +362,17 @@ function AppRouter() {
 
   return (
     <Routes>
-      {/* Updated /signup Route using userData */}
+      {/* Welcome Page - Standalone */}
+      <Route 
+        path="/" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <WelcomePage />
+          </Suspense>
+        }
+      />
+
+      {/* Auth Routes */}
       <Route 
         path="/signup" 
         element={
@@ -366,11 +383,13 @@ function AppRouter() {
               <Navigate to="/onboarding" replace />
             )
           ) : (
-            <SignUp />
+            <Suspense fallback={<LoadingFallback />}>
+              <SignUp />
+            </Suspense>
           )
         }
       />
-      {/* Updated /onboarding Route using userData */}
+      
       <Route 
         path="/onboarding" 
         element={
@@ -378,62 +397,119 @@ function AppRouter() {
             userData?.onboardingCompleted ? (
               <Navigate to="/" replace />
             ) : (
-              <Onboarding setOnboardingComplete={handleSetOnboardingComplete} />
+              <Suspense fallback={<LoadingFallback />}>
+                <Onboarding setOnboardingComplete={handleSetOnboardingComplete} />
+              </Suspense>
             )
           ) : (
-            <Navigate to="/signup" replace /> // If no user, cannot be on onboarding
+            <Navigate to="/signup" replace />
           )
         }
       />
 
-      {/* Main Layout Routes - No auth required for layout */}
+      {/* Protected Routes */}
       <Route 
-        path="/" 
+        path="/history" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched} requireAuth={false}>
-            <Layout /> 
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <Suspense fallback={<LoadingFallback />}>
+              <Dashboard />
+            </Suspense>
           </ProtectedRoute>
         }
-      >
-        {/* Default child route (Dashboard) - No auth required */}
-        <Route index element={<WelcomePage />} /> 
-        {/* Other child routes - Auth required */}
-        <Route path="history" element={
+      />
+      
+      <Route 
+        path="/settings" 
+        element={
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <Dashboard />
+            <Suspense fallback={<LoadingFallback />}>
+              <Settings />
+            </Suspense>
           </ProtectedRoute>
-        } />
-        <Route path="settings" element={
+        }
+      />
+      
+      <Route 
+        path="/admin" 
+        element={
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <Settings />
+            <Suspense fallback={<LoadingFallback />}>
+              <Admin />
+            </Suspense>
           </ProtectedRoute>
-        } />
-        <Route path="pricing" element={<PricingSection id="pricing" />} />
-        <Route path="aiguide" element={<CommandInfo />} />
-        <Route path="admin" element={
+        }
+      />
+      
+      <Route 
+        path="/studio" 
+        element={
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <Admin />
+            <Suspense fallback={<LoadingFallback />}>
+              <GenerationPage/>
+            </Suspense>
           </ProtectedRoute>
-        } />
-        <Route path="studio" element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <GenerationPage/>
-          </ProtectedRoute>
-        } />
+        }
+      />
 
-        <Route path="canvas" element={
+      <Route 
+        path="/canvas" 
+        element={
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <CanvasWorkspace/>
+            <Suspense fallback={<LoadingFallback />}>
+              <CanvasWorkspace/>
+            </Suspense>
           </ProtectedRoute>
-        } />
+        }
+      />
 
-        <Route path="models" element={<ModelsPage />} />
-        <Route path="terms" element={<TermsPage />} />
-        <Route path="privacy" element={<PrivacyPage />} />
-      </Route>
+      {/* Public Routes */}
+      <Route 
+        path="/pricing" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PricingSection id="pricing" />
+          </Suspense>
+        }
+      />
+      
+      <Route 
+        path="/models" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <ModelsPage />
+          </Suspense>
+        }
+      />
+      
+      <Route 
+        path="/aiguide" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <CommandInfo />
+          </Suspense>
+        }
+      />
+      
+      <Route 
+        path="/terms" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <TermsPage />
+          </Suspense>
+        }
+      />
+      
+      <Route 
+        path="/privacy" 
+        element={
+          <Suspense fallback={<LoadingFallback />}>
+            <PrivacyPage />
+          </Suspense>
+        }
+      />
 
-
-      {/* Fallback Route - Simplified (ProtectedRoute handles logic) */}
+      {/* Fallback Route */}
       <Route 
         path="*" 
         element={<Navigate to="/" replace />}

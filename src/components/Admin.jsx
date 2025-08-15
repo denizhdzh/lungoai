@@ -894,9 +894,6 @@ function Admin() {
               opacityTo: 1,
               stops: [0, 50, 65, 91],
               gradientToColors: CHART_COLORS.chartOrange, // <-- Add orange colors
-              inverseColors: false,
-              opacityFrom: 1,
-              opacityTo: 1,
               type: 'horizontal' // Ensure gradient direction suits radial bars
           },
         },

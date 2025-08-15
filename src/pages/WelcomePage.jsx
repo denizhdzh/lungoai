@@ -1,273 +1,718 @@
-import { useOutletContext } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { models, getModelById, getModelsByCategory } from '../config/models.js';
+import LazyVideo from '../components/LazyVideo.jsx';
+import Header from '../components/Header.jsx';
+import { auth, db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const WelcomePage = () => {
-  const { user, setIsPricingModalOpen, firestoreUserData } = useOutletContext() || {};
+  const user = auth.currentUser;
   const navigate = useNavigate();
+  const [firestoreUserData, setFirestoreUserData] = useState(null);
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+
+  // Generation state
+  const [activeType, setActiveType] = useState('image');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('4:3');
+  const [uploadedImage, setUploadedImage] = useState(null);
+  
+  // Progress state
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState('');
+  const [generatedResult, setGeneratedResult] = useState(null);
+  const [showResultModal, setShowResultModal] = useState(false);
+  
+  // User generations state
+  const [userGenerations, setUserGenerations] = useState([]);
+  const [loadingGenerations, setLoadingGenerations] = useState(true);
+  
+  
+  // Get available models based on active type (copied from GenerationPage.jsx)
+  const availableModels = getModelsByCategory(activeType);
+  
+  // Check if current model supports image input (copied from GenerationPage.jsx)
+  const modelConfig = getModelById(selectedModel);
+  const supportsImageInput = modelConfig && Object.keys(modelConfig?.params || {})
+    .some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
+  
+  // Set default model when type changes (copied from GenerationPage.jsx)
+  useEffect(() => {
+    if (activeType === 'image') {
+      setSelectedModel('black-forest-labs/flux-kontext-max');
+    } else if (activeType === 'video') {
+      setSelectedModel('google/veo-3-fast');
+    }
+  }, [activeType]);
+
+  // Fetch Firestore user data
+  useEffect(() => {
+    if (user && user.uid) {
+      const userDocRef = doc(db, 'users', user.uid);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setFirestoreUserData(docSnap.data());
+        } else {
+          console.log("User document not found in Firestore for WelcomePage.");
+          setFirestoreUserData(null);
+        }
+      }, (error) => {
+        console.error("Error fetching user document from Firestore for WelcomePage:", error);
+        setFirestoreUserData(null);
+      });
+      return () => unsubscribe();
+    } else {
+      setFirestoreUserData(null);
+    }
+  }, [user]);
+  
+  // Fetch user's recent generations
+  useEffect(() => {
+    const fetchUserGenerations = async () => {
+      if (!user) {
+        setLoadingGenerations(false);
+        return;
+      }
+      
+      try {
+        setLoadingGenerations(true);
+        const { collection, query, where, orderBy, limit, getDocs, Timestamp } = await import('firebase/firestore');
+        const { db } = await import('../firebase.js');
+        
+        const generationsRef = collection(db, 'users', user.uid, 'generations');
+        const recentQuery = query(
+          generationsRef,
+          orderBy('timestamp', 'desc'),
+          limit(6) // Get 6 most recent
+        );
+        
+        const querySnapshot = await getDocs(recentQuery);
+        const generations = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const timestamp = data.timestamp instanceof Timestamp 
+            ? data.timestamp.toDate() 
+            : (data.timestamp ? new Date(data.timestamp) : new Date());
+            
+          generations.push({
+            id: doc.id,
+            ...data,
+            timestamp,
+            url: data.imageUrl || data.videoUrl || data.url // Handle different URL field names
+          });
+        });
+        
+        setUserGenerations(generations.filter(gen => gen.url)); // Only include ones with valid URLs
+        console.log('📸 Fetched user generations:', generations.length);
+        
+      } catch (error) {
+        console.error('❌ Error fetching user generations:', error);
+      } finally {
+        setLoadingGenerations(false);
+      }
+    };
+    
+    fetchUserGenerations();
+  }, [user]);
+  
+  
+  // Calculate credits (copied from GenerationPage.jsx)
+  const calculateCredits = () => {
+    if (!modelConfig) return 0;
+    
+    // For image models
+    if (modelConfig.credits !== undefined) {
+      const baseCredits = modelConfig.credits;
+      const numImages = 1; // Always 1 for quick generation
+      return baseCredits * numImages;
+    }
+    
+    // For video models with creditsPerSecond
+    if (modelConfig.creditsPerSecond !== undefined) {
+      const duration = 5; // Default duration for quick generation
+      
+      // Handle object-based creditsPerSecond
+      if (typeof modelConfig.creditsPerSecond === 'object') {
+        const firstKey = Object.keys(modelConfig.creditsPerSecond)[0];
+        return modelConfig.creditsPerSecond[firstKey] * duration;
+      }
+      
+      // Handle simple number creditsPerSecond
+      return modelConfig.creditsPerSecond * duration;
+    }
+    
+    return 0;
+  };
+  
+  // Handle real generation
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    
+    setIsGenerating(true);
+    setProgress(0);
+    
+    // Determine duration based on type for progress simulation
+    const estimatedDuration = activeType === 'image' ? 20000 : 240000; // 20s for images, 4min for videos
+    const steps = 100;
+    const stepDuration = estimatedDuration / steps;
+    
+    const statusMessages = activeType === 'image' 
+      ? [
+          'Initializing AI model...',
+          'Processing your prompt...',
+          'Understanding context...',
+          'Generating base composition...',
+          'Adding fine details...',
+          'Applying artistic style...',
+          'Enhancing colors and lighting...',
+          'Finalizing your image...',
+          'Almost ready...'
+        ]
+      : [
+          'Initializing video model...',
+          'Processing your prompt...',
+          'Planning video sequence...',
+          'Generating first frames...',
+          'Creating motion paths...',
+          'Rendering intermediate frames...',
+          'Adding smooth transitions...',
+          'Optimizing video quality...',
+          'Finalizing video...'
+        ];
+    
+    // Start progress animation
+    let currentStep = 0;
+    const progressInterval = setInterval(() => {
+      currentStep++;
+      const newProgress = (currentStep / steps) * 100;
+      setProgress(newProgress);
+      
+      // Update status text based on progress
+      const messageIndex = Math.floor((newProgress / 100) * (statusMessages.length - 1));
+      setProgressText(statusMessages[messageIndex] || statusMessages[statusMessages.length - 1]);
+      
+      if (currentStep >= steps) {
+        clearInterval(progressInterval);
+      }
+    }, stepDuration);
+    
+    try {
+      // Prepare generation data
+      const generationData = {
+        model: selectedModel,
+        prompt: prompt.trim(),
+        ...(activeType === 'image' && { aspect_ratio: aspectRatio })
+      };
+      
+      // Add image input if uploaded
+      if (uploadedImage && supportsImageInput) {
+        if (uploadedImage.file) {
+          const base64DataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(uploadedImage.file);
+          });
+          
+          // Find the image parameter for this model
+          const imageParams = Object.keys(modelConfig?.params || {}).filter(key => 
+            key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference'
+          );
+          
+          if (imageParams.length > 0) {
+            generationData[imageParams[0]] = base64DataUri;
+          }
+        }
+      }
+      
+      console.log('🔥 Starting real generation with data:', generationData);
+      
+      // Call Firebase function
+      const { httpsCallable } = await import('firebase/functions');
+      const { functions } = await import('../firebase.js');
+      
+      let result;
+      if (activeType === 'image') {
+        const generateImage = httpsCallable(functions, 'generateImage');
+        result = await generateImage(generationData);
+      } else {
+        const generateVideo = httpsCallable(functions, 'generateVideo');
+        result = await generateVideo(generationData);
+      }
+      
+      console.log('✅ Generation result:', result.data);
+      
+      if (result.data.success) {
+        clearInterval(progressInterval);
+        setProgress(100);
+        setProgressText('Complete!');
+        
+        const generatedResult = {
+          type: activeType,
+          url: result.data.imageUrl || result.data.videoUrl,
+          prompt: prompt.trim(),
+          model: selectedModel,
+          timestamp: new Date()
+        };
+        
+        setGeneratedResult(generatedResult);
+        setIsGenerating(false);
+        setShowResultModal(true);
+        setPrompt(''); // Clear prompt
+      } else {
+        throw new Error(result.data.error || 'Generation failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Generation error:', error);
+      clearInterval(progressInterval);
+      setIsGenerating(false);
+      setProgress(0);
+      alert(`Generation failed: ${error.message}`);
+    }
+  };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Mobile Layout */}
-      <div className="xl:hidden min-h-screen relative overflow-hidden">
-        {/* Mobile - Simple centered layout */}
-        <div className="flex items-center justify-center min-h-screen px-4">
-          <div className="text-center space-y-6 max-w-md">
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-white mb-4">
-                Introducing <span className="text-lime-400">Lungo AI</span>
-              </h1>
-              <p className="text-lg text-neutral-300 mb-6">
-                The all-in-one studio to create images and videos in seconds, no tabs to switch, no setups needed.
-              </p>
-            </div>
-            
-            <div className="space-y-4">
-              <button 
-                onClick={() => user ? navigate('/generation') : navigate('/signup')}
-                className="w-full bg-lime-400 hover:bg-lime-300 text-black px-8 py-4 rounded-2xl font-semibold text-lg transition-all"
-              >
-                {user ? 'START CREATING' : 'GET STARTED FREE'}
-              </button>
-              
-              {!user && (
-                <button 
-                  onClick={() => setIsPricingModalOpen && setIsPricingModalOpen(true)}
-                  className="w-full border border-white/20 text-white px-8 py-4 rounded-2xl font-medium transition-all hover:bg-white/5"
-                >
-                  View Pricing
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop Layout */}
-      <div className="hidden xl:block min-h-screen relative">
+    <>
+      <style>{`
+        @keyframes imageSwap1 {
+          0%, 45% { 
+            opacity: 1; 
+            transform: scale(1); 
+          }
+          50%, 95% { 
+            opacity: 0; 
+            transform: scale(1.05); 
+          }
+          100% { 
+            opacity: 1; 
+            transform: scale(1); 
+          }
+        }
         
-        {/* Ana Container - Yan Yana 2 Div */}
+        @keyframes imageSwap2 {
+          0%, 45% { 
+            opacity: 0; 
+            transform: scale(1.05); 
+          }
+          50%, 95% { 
+            opacity: 1; 
+            transform: scale(1); 
+          }
+          100% { 
+            opacity: 0; 
+            transform: scale(1.05); 
+          }
+        }
+        
+        @keyframes editSweep {
+          0%, 40% { 
+            opacity: 0; 
+            transform: translateX(-100%) skewX(-12deg); 
+          }
+          45% { 
+            opacity: 1; 
+            transform: translateX(-50%) skewX(-12deg); 
+          }
+          55% { 
+            opacity: 1; 
+            transform: translateX(50%) skewX(-12deg); 
+          }
+          60%, 100% { 
+            opacity: 0; 
+            transform: translateX(100%) skewX(-12deg); 
+          }
+        }
+        
+        @keyframes videoPlay {
+          0%, 80% { 
+            opacity: 1; 
+            transform: scale(1);
+          }
+          85%, 95% { 
+            opacity: 0.3; 
+            transform: scale(1.05);
+          }
+          100% { 
+            opacity: 1; 
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes playButton {
+          0%, 80% { 
+            opacity: 0; 
+            transform: scale(0.8);
+          }
+          85%, 95% { 
+            opacity: 1; 
+            transform: scale(1);
+          }
+          100% { 
+            opacity: 0; 
+            transform: scale(0.8);
+          }
+        }
+      `}</style>
+      
+      <div className="font-sans min-h-screen bg-neutral-950 relative">
+        {/* Image Background */}
+        <div className="fixed inset-0 w-full h-full z-0">
+          <img 
+            src="/Glowing Abstract Flower.png" 
+            alt="Background" 
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/30" />
+        </div>
+        
+        {/* Header Component */}
+        <Header />
+      
+        {/* Desktop Layout - Boxes */}
         {!user && (
-          <div className="fixed bottom-8 left-8 right-8 z-20 flex gap-2 items-end">
-          
-          {/* Sol Taraf - All Models Included Box (Full Width) */}
-          <div className="flex-1">
-            <div className="bg-neutral-900/70 backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20">
-              <div className="flex items-center gap-4">
-                <span className="text-md text-neutral-300 font-medium uppercase tracking-wider">ALL MODELS INCLUDED</span>
-                <div className="w-1.5 h-1.5 bg-neutral-500 rounded-full"></div>
-                <div className="flex items-center gap-6">
-                  <img src="/logos/google_logo.png" alt="Google" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/flux_logo.png" alt="Flux" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/runway_logo.png" alt="Runway" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/kling_logo.png" alt="Kling" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/bytedance_logo.png" alt="ByteDance" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/ideogram_logo.png" alt="Ideogram" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/leonardo_logo.png" alt="Leonardo" className="w-12 h-12 opacity-80"/>
-                  <img src="/logos/minimax_logo.png" alt="Minimax" className="w-12 h-12 opacity-80"/>
+          <div className="hidden md:block">
+            <div className="md:fixed bottom-4 md:bottom-8 left-4 md:left-8 right-4 md:right-8 z-20 flex flex-col lg:flex-row gap-4 lg:items-end py-16 md:p-0 relative mt-16 md:mt-0">
+              
+              {/* Left Side - All-in-one Studio Box */}
+              <div className="w-full lg:flex-1 lg:order-1 order-1 space-y-2">
+                
+                {/* All-in-one Studio Box */}
+                <div className="w-full bg-neutral-900/5 backdrop-blur-sm p-4 md:p-6 rounded-3xl">
+                  <h2 className="text-2xl md:text-4xl lg:text-6xl font-light text-white mb-2 md:mb-3">All-in-one AI Studio</h2>
+                  <p className="text-sm md:text-lg lg:text-xl text-white/60 leading-relaxed">
+                    Introducing <span className="text-white">Lungo AI</span>, the <span className="text-white">all-in-one studio</span> to create <span className="text-white">images & videos</span> in seconds, <span className="text-white">no tabs</span> to switch, <span className="text-white">no setups</span> needed.
+                  </p>
                 </div>
+                
+                
               </div>
+              
+              {/* Right Side - 3 Feature Boxes */}
+              <div className="space-y-4 w-full lg:max-w-lg lg:order-2 order-2">
+                
+                {/* 1. Advanced Image Editing */}
+                <div className="w-full bg-neutral-900/70 backdrop-blur-sm p-3 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors group">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+                    {/* Title & Subtitle - Left */}
+                    <div className="flex-1 order-1">
+                      <h3 className="text-base md:text-lg font-semibold text-white mb-1">Advanced Image Editing</h3>
+                      <p className="text-xs text-neutral-400 mb-2">Edit any part of your image while maintaining perfect coherence</p>
+                      {/* Model Logos Row */}
+                      <div className="flex items-center gap-2">
+                        <img src="/logos/flux_logo.webp" alt="Flux" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/ideogram_logo.webp" alt="Ideogram" className="w-4 h-4 opacity-60"/>
+                      </div>
+                    </div>
+                    
+                    {/* Visual Content - Right */}
+                    <div className="w-full md:w-48 lg:w-64 h-32 md:h-48 lg:h-64 relative overflow-hidden rounded-lg md:flex-shrink-0 order-2">
+                      <img 
+                        src="/Futuristic Pod in Urban Jungle copy.webp" 
+                        alt="AI Model Example" 
+                        className="w-full h-full object-cover absolute inset-0 transition-all duration-1000"
+                        style={{
+                          animation: 'imageSwap1 8s infinite ease-in-out'
+                        }}
+                      />
+                      <img 
+                        src="/generation-d5d746f2-bd7e-40ba-a093-04ced3885491 copy.png" 
+                        alt="Generated Example" 
+                        className="w-full h-full object-cover absolute inset-0 transition-all duration-1000"
+                        style={{
+                          animation: 'imageSwap2 8s infinite ease-in-out'
+                        }}
+                      />
+                      {/* Edit effect overlay */}
+                      <div 
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 opacity-0"
+                        style={{
+                          animation: 'editSweep 8s infinite ease-in-out',
+                          animationDelay: '3.5s'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 2. Professional Video Creation */}
+                <div className="w-full bg-neutral-900/70 backdrop-blur-sm p-3 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors group">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+                    {/* Visual Content - Left */}
+                    <div className="w-full md:w-48 lg:w-64 h-32 md:h-32 lg:h-48 relative overflow-hidden rounded-lg md:flex-shrink-0 order-2 md:order-1">
+                      <video 
+                        autoPlay 
+                        muted 
+                        loop 
+                        playsInline
+                        className="w-full h-full object-cover"
+                      >
+                        <source src="/vid1.mp4" type="video/mp4" />
+                      </video>
+                    </div>
+                    
+                    {/* Title & Subtitle - Right */}
+                    <div className="flex-1 order-1 md:order-2">
+                      <h3 className="text-base md:text-lg font-semibold text-white mb-1">Professional Video Creation</h3>
+                      <p className="text-xs text-neutral-400 mb-2">Generate high-quality videos from text prompts in minutes</p>
+                      {/* Model Logos Row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <img src="/logos/google_logo.webp" alt="Google" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/bytedance_logo.webp" alt="ByteDance" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/kling_logo.webp" alt="Kling" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/minimax_logo.webp" alt="Minimax" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/leonardo_logo.webp" alt="Leonardo" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/runway_logo.webp" alt="Runway" className="w-4 h-4 opacity-60"/>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 3. Stunning Image Generation */}
+                <div className="w-full bg-neutral-900/70 backdrop-blur-sm p-3 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors group">
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+                    {/* Title & Subtitle - Left */}
+                    <div className="flex-1 order-1">
+                      <h3 className="text-base md:text-lg font-semibold text-white mb-1">Stunning Image Generation</h3>
+                      <p className="text-xs text-neutral-400 mb-2">Create ultra-high quality images with perfect prompt understanding</p>
+                      {/* Model Logos Row */}
+                      <div className="flex items-center gap-2">
+                        <img src="/logos/google_logo.webp" alt="Google" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/flux_logo.webp" alt="Flux" className="w-4 h-4 opacity-60"/>
+                        <img src="/logos/ideogram_logo.webp" alt="Ideogram" className="w-4 h-4 opacity-60"/>
+                      </div>
+                    </div>
+                    
+                    {/* Visual Content - Right */}
+                    <div className="w-full md:w-48 lg:w-64 h-32 md:h-32 lg:h-48 relative overflow-hidden rounded-lg md:flex-shrink-0 order-2">
+                      <img 
+                        src="/im10.webp" 
+                        alt="Generated Image Example" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+              
             </div>
           </div>
-          
-          {/* Sağ Taraf - 3 Kutu Alt Alta */}
-          <div className="space-y-2 max-w-lg">
-            
-            {/* 1. Introducing Box - Regular Text */}
-            <div className="bg-neutral-900/70 backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20">
-              <p className="text-xl text-white/60 leading-relaxed">
-                Introducing <span className="text-white">Lungo AI</span>, the <span className="text-white">all-in-one studio</span> to create <span className="text-white">images & videos</span> in seconds, <span className="text-white">no tabs</span> to switch, <span className="text-white">no setups</span> needed.
+        )}
+
+        {/* Mobile Landing Layout */}
+        <div className="md:hidden relative z-10 px-6 py-16 mt-16 space-y-12">
+        {!user ? (
+          <>
+            {/* Hero Section */}
+            <div className="text-center space-y-6">
+              <h1 className="text-4xl font-light text-white">All-in-one AI Studio</h1>
+              <p className="text-lg text-white/70 leading-relaxed max-w-md mx-auto">
+                Create <span className="text-white">images & videos</span> in seconds with <span className="text-white">Lungo AI</span>. No tabs to switch, no setups needed.
               </p>
             </div>
-            
-            {/* 2. Latest AI Model Box */}
-            <div 
-              className="bg-neutral-900/70 backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors"
-              onClick={() => navigate('/models')}
-            >
-              {/* Header with pulse and title */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-2 h-2 bg-lime-400 rounded-full animate-pulse"></div>
-                <div className="text-sm text-neutral-400 uppercase tracking-wider">LATEST AI MODEL</div>
-              </div>
-              
-              {/* Content area with 2 divs */}
-              <div className="flex gap-6 items-center">
-                {/* Left content */}
-                <div className="flex-1">
-                  <h3 className="text-2xl font-semibold text-white mb-2">Flux Kontext</h3>
-                  <h4 className="text-2xl font-semibold text-white mb-2">Max</h4>
-                  <p className="text-base text-neutral-400 mb-3">Best Model for editing</p>
-                  <div className="inline-block px-3 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-xs text-neutral-300 font-medium uppercase tracking-wider">
-                    IMAGE MODEL
-                  </div>
-                </div>
-                
-                {/* Right image */}
-                <div className="w-48 h-48 flex-shrink-0">
-                  <img src="/Futuristic Pod in Urban Jungle copy.png" alt="AI Model Example" className="w-full h-full object-cover rounded-xl"/>
-                </div>
-              </div>
-            </div>
-            
-            {/* 3. Simple Pricing Box */}
-            <div 
-              className="bg-neutral-900/70 backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors"
-              onClick={() => setIsPricingModalOpen(true)}
-            >
-              <div className="text-sm text-neutral-400 mb-6 uppercase tracking-wider text-left font-medium">SIMPLE PRICING FOR ALL MODELS</div>
-              
-              <div className="grid grid-cols-3 gap-6">
-                <div className="text-left">
-                  <div className="text-sm text-neutral-400 mb-2">STARTER</div>
-                  <div className="text-xs text-white mb-2">~200 images</div>
-                  <div className="text-xs text-white mb-2">~40 videos</div>
 
-                  <div className="text-lg font-bold text-lime-500">$11.00*<span className="text-sm font-normal">/mo</span></div>
-                </div>
-                <div className="text-left">
-                  <div className="text-sm text-neutral-400 mb-2">PRO</div>
-                  <div className="text-xs text-white mb-2">~500 images</div>
-                  <div className="text-xs text-white mb-2">~100 videos</div>
-                  <div className="text-lg font-bold text-lime-500">$24.00*<span className="text-sm font-normal">/mo</span></div>
-                </div>
-                <div className="text-left">
-                  <div className="text-sm text-neutral-400 mb-2">CREATOR</div>
-                  <div className="text-xs text-white mb-2">~3000 images</div>
-                  <div className="text-xs text-white mb-2">~600 videos</div>
-                  <div className="text-lg font-bold text-lime-500">$113.00*<span className="text-sm font-normal">/mo</span></div>
-                </div>
-              </div>
+            {/* Features Section */}
+            <div className="space-y-12">
               
-              <div className="mt-4 text-center">
-                <p className="text-neutral-500" style={{fontSize: '10px'}}>*Prices shown are for annual billing plans</p>
-              </div>
-            </div>
-            
-          </div>
-          
-        </div>
-        )}
-        
-        {/* Logged In User Layout */}
-        {user && (
-          <div className="fixed bottom-8 inset-x-0 z-20 px-4">
-            
-            {/* Top Section - Right Aligned Boxes */}
-            <div className="flex justify-end mb-6">
-              <div className="w-full max-w-md space-y-4 flex flex-col items-end">
-                
-                {/* Credits Box */}
-                <div 
-                  className="bg-neutral-900/70 max-w-xs backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors"
-                  onClick={() => setIsPricingModalOpen(true)}
-                >
-                  <h3 className="text-white text-lg font-semibold mb-4 text-center">Credits</h3>
-                  <div className="flex items-center justify-center">
-                    <div className="relative">
-                      <img 
-                        src="/Union.png" 
-                        alt="Credits" 
-                        className="w-36 h-36"
-                      />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-white text-3xl font-bold z-10">
-                          {((firestoreUserData?.general_credits || 0) + (firestoreUserData?.one_time_credits || 0)).toLocaleString()}
-                        </span>
-                        <span className="text-white/50 text-xs font-medium mt-1">
-                          Get more
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Recent Generations Box */}
-                <div className="bg-neutral-900/70 backdrop-blur-sm p-6 rounded-3xl border border-neutral-100/20 max-w-xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-white text-lg font-semibold">Recent Generations</h3>
-                    <button 
-                      onClick={() => navigate('/history')}
-                      className="text-lime-400 text-sm hover:text-lime-300 transition-colors"
-                    >
-                      View All
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-3">
-                    {/* Mock generated images - replace with real data */}
-                    <div className="aspect-square bg-neutral-800/50 rounded-2xl overflow-hidden hover:scale-105 transition-transform cursor-pointer">
-                      <img 
-                        src="/im8.png" 
-                        alt="Generated content" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="aspect-square bg-neutral-800/50 rounded-2xl overflow-hidden hover:scale-105 transition-transform cursor-pointer">
-                      <img 
-                        src="/Futuristic Pod in Urban Jungle copy.png" 
-                        alt="Generated content" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="aspect-square bg-neutral-800/50 rounded-2xl overflow-hidden hover:scale-105 transition-transform cursor-pointer">
-                      <div className="w-full h-full bg-gradient-to-br from-neutral-800 to-neutral-700 flex items-center justify-center">
-                        <span className="text-neutral-500 text-xs text-center">+12<br/>more</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-              </div>
-            </div>
-            
-            {/* Bottom Bar - Generation Interface */}
-            <div className="bg-neutral-900/70 backdrop-blur-sm p-4 rounded-3xl border border-neutral-100/20">
-              <div className="flex items-center gap-4">
-                
-                {/* Type Toggle */}
-                <div className="flex gap-2">
-                  <button className="px-3 py-2 bg-white text-black text-xs font-medium rounded-xl">
-                    Image
-                  </button>
-                  <button className="px-3 py-2 bg-neutral-800/50 text-white text-xs rounded-xl hover:bg-neutral-700">
-                    Video
-                  </button>
-                </div>
-                
-                {/* Model Selector */}
-                <div className="relative">
-                  <select className="bg-neutral-800/50 text-white text-sm rounded-xl px-3 py-2 border border-neutral-700/50 focus:outline-none focus:border-lime-400">
-                    <option>Imagen 4</option>
-                    <option>Flux Dev</option>
-                    <option>Ideogram V3</option>
-                  </select>
-                </div>
-                
-                {/* Prompt Input */}
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    placeholder="Describe what you want to create..."
-                    className="w-full bg-transparent text-white placeholder-neutral-500 text-sm focus:outline-none"
+              {/* Feature 1: Image Generation */}
+              <div className="space-y-4">
+                <div className="w-full h-64 relative overflow-hidden rounded-2xl">
+                  <img 
+                    src="/im10.webp" 
+                    alt="Generated Image Example" 
+                    className="w-full h-full object-cover"
                   />
                 </div>
-                
-                {/* Generate Button */}
-                <div className="flex items-center gap-3">
-                  <div className="text-lime-400 text-xs font-medium">90 CR</div>
-                  <button className="px-6 py-2.5 bg-lime-400 hover:bg-lime-300 text-black font-semibold text-sm rounded-xl transition-colors">
-                    Generate
-                  </button>
+                <div className="text-center space-y-3">
+                  <h3 className="text-xl font-semibold text-white">Stunning Image Generation</h3>
+                  <p className="text-sm text-white/60 leading-relaxed">
+                    Create ultra-high quality images with perfect prompt understanding
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <img src="/logos/google_logo.webp" alt="Google" className="w-6 h-6 opacity-60"/>
+                    <img src="/logos/flux_logo.webp" alt="Flux" className="w-6 h-6 opacity-60"/>
+                    <img src="/logos/ideogram_logo.webp" alt="Ideogram" className="w-6 h-6 opacity-60"/>
+                  </div>
                 </div>
-                
+              </div>
+
+              {/* Feature 2: Video Creation */}
+              <div className="space-y-4">
+                <div className="w-full h-64 relative overflow-hidden rounded-2xl">
+                  <video 
+                    autoPlay 
+                    muted 
+                    loop 
+                    playsInline
+                    className="w-full h-full object-cover"
+                  >
+                    <source src="/vid1.mp4" type="video/mp4" />
+                  </video>
+                </div>
+                <div className="text-center space-y-3">
+                  <h3 className="text-xl font-semibold text-white">Professional Video Creation</h3>
+                  <p className="text-sm text-white/60 leading-relaxed">
+                    Generate high-quality videos from text prompts in minutes
+                  </p>
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <img src="/logos/google_logo.webp" alt="Google" className="w-5 h-5 opacity-60"/>
+                    <img src="/logos/bytedance_logo.webp" alt="ByteDance" className="w-5 h-5 opacity-60"/>
+                    <img src="/logos/kling_logo.webp" alt="Kling" className="w-5 h-5 opacity-60"/>
+                    <img src="/logos/minimax_logo.webp" alt="Minimax" className="w-5 h-5 opacity-60"/>
+                    <img src="/logos/leonardo_logo.webp" alt="Leonardo" className="w-5 h-5 opacity-60"/>
+                    <img src="/logos/runway_logo.webp" alt="Runway" className="w-5 h-5 opacity-60"/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature 3: Image Editing */}
+              <div className="space-y-4">
+                <div className="w-full h-64 relative overflow-hidden rounded-2xl">
+                  <img 
+                    src="/Futuristic Pod in Urban Jungle copy.webp" 
+                    alt="AI Model Example" 
+                    className="w-full h-full object-cover absolute inset-0 transition-all duration-1000"
+                    style={{
+                      animation: 'imageSwap1 8s infinite ease-in-out'
+                    }}
+                  />
+                  <img 
+                    src="/generation-d5d746f2-bd7e-40ba-a093-04ced3885491 copy.png" 
+                    alt="Generated Example" 
+                    className="w-full h-full object-cover absolute inset-0 transition-all duration-1000"
+                    style={{
+                      animation: 'imageSwap2 8s infinite ease-in-out'
+                    }}
+                  />
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 opacity-0"
+                    style={{
+                      animation: 'editSweep 8s infinite ease-in-out',
+                      animationDelay: '3.5s'
+                    }}
+                  ></div>
+                </div>
+                <div className="text-center space-y-3">
+                  <h3 className="text-xl font-semibold text-white">Advanced Image Editing</h3>
+                  <p className="text-sm text-white/60 leading-relaxed">
+                    Edit any part of your image while maintaining perfect coherence
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <img src="/logos/flux_logo.webp" alt="Flux" className="w-6 h-6 opacity-60"/>
+                    <img src="/logos/ideogram_logo.webp" alt="Ideogram" className="w-6 h-6 opacity-60"/>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Models Section */}
+            <div className="space-y-6">
+              <div className="text-center">
+                <h3 className="text-2xl font-semibold text-white mb-2">Powered by Leading AI Models</h3>
+                <p className="text-sm text-white/60">Access the most advanced AI models from top companies</p>
+              </div>
+              
+              {/* Image Models */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-white text-center">Image Generation</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/google_logo.webp" alt="Google" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Imagen 4</p>
+                    <p className="text-xs text-white/50">Ultra</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/flux_logo.webp" alt="Flux" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Flux Kontext</p>
+                    <p className="text-xs text-white/50">Max & Pro</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/ideogram_logo.webp" alt="Ideogram" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Ideogram V3</p>
+                    <p className="text-xs text-white/50">Balanced</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/google_logo.webp" alt="Google" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Imagen 4</p>
+                    <p className="text-xs text-white/50">Fast</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Models */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-white text-center">Video Generation</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/google_logo.webp" alt="Google" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Veo 3</p>
+                    <p className="text-xs text-white/50">Fast & Ultra</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/bytedance_logo.webp" alt="ByteDance" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Seedance</p>
+                    <p className="text-xs text-white/50">Pro</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/kling_logo.webp" alt="Kling" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Kling v2.1</p>
+                    <p className="text-xs text-white/50">Standard & Pro</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/minimax_logo.webp" alt="Minimax" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Hailuo 02</p>
+                    <p className="text-xs text-white/50">768p & 1080p</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/leonardo_logo.webp" alt="Leonardo" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Motion 2.0</p>
+                    <p className="text-xs text-white/50">Text & Image</p>
+                  </div>
+                  <div className="bg-neutral-900/40 p-3 rounded-xl border border-neutral-700/50 text-center">
+                    <img src="/logos/runway_logo.webp" alt="Runway" className="w-8 h-8 mx-auto mb-2 opacity-70"/>
+                    <p className="text-xs text-white font-medium">Gen4 Turbo</p>
+                    <p className="text-xs text-white/50">Image to Video</p>
+                  </div>
+                </div>
               </div>
             </div>
-            
+
+            {/* CTA Section */}
+            <div className="bg-white/95 backdrop-blur-sm p-6 rounded-2xl border border-white/20 text-center space-y-4">
+              <h3 className="text-xl font-semibold text-black">Start Creating Now</h3>
+              <p className="text-sm text-black/70">
+                ⚠️ Currently works best on desktop. Mobile experience coming soon!
+              </p>
+              <button
+                onClick={() => navigate('/signup')}
+                className="bg-black text-white px-6 py-3 rounded-xl text-sm font-medium w-full"
+              >
+                Get Started Free
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="text-center space-y-6">
+            <h1 className="text-4xl font-light text-white">Welcome back!</h1>
+            <p className="text-lg text-white/70 leading-relaxed max-w-md mx-auto">
+              Ready to create amazing content with AI? Use desktop for full experience.
+            </p>
+            <button
+              onClick={() => navigate('/generation')}
+              className="bg-lime-400 text-black px-6 py-3 rounded-xl text-lg font-medium"
+            >
+              Start Creating
+            </button>
           </div>
         )}
-        
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -355,38 +355,44 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
           const finalPrice = hasActiveOverallSubscription ? pkg.subscriberPrice : pkg.price;
           
           return (
-            <div key={pkg.id} className={`relative bg-neutral-950/40 backdrop-blur-xl p-4 rounded-2xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${pkg.popular ? 'ring-1 ring-lime-400/50' : ''}`}>
+            <div key={pkg.id} className={`relative bg-gradient-to-br from-neutral-900/90 to-neutral-950/90 backdrop-blur-xl p-6 rounded-3xl border transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${pkg.popular ? 'border-white/20 shadow-xl' : 'border-neutral-700/30 hover:border-neutral-600/50'}`}>
               {pkg.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-lime-400 text-black text-xs px-3 py-1 rounded-md font-medium">
-                  BEST DEAL
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-white to-neutral-100 text-black text-xs px-3 py-1 rounded-full font-semibold shadow-lg">
+                  POPULAR
                 </div>
               )}
               {/* Header */}
-              <div className="text-center mb-4">
-                <h3 className="text-lg font-normal text-white mb-1">{pkg.name}</h3>
-                <div className="text-xs text-neutral-400 mb-3">{pkg.credits.toLocaleString()} Credits</div>
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-semibold text-white mb-2">{pkg.name}</h3>
+                <div className="text-sm text-neutral-300 font-medium">{pkg.credits.toLocaleString()} Credits</div>
               </div>
 
               {/* Pricing */}
-              <div className="text-center mb-4">
-                <div className="text-2xl font-bold text-white mb-1">
+              <div className="text-center mb-6">
+                <div className="text-3xl font-bold text-white mb-2">
                   ${finalPrice.toFixed(0)}
                 </div>
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <span className="text-sm text-neutral-500 line-through">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="text-sm text-neutral-400 line-through">
                     ${pkg.originalPrice.toFixed(0)}
                   </span>
-                  <span className="text-xs text-lime-400 font-medium bg-lime-400/10 px-2 py-0.5 rounded-full">25% OFF</span>
+                  <span className="text-xs text-lime-400 font-semibold bg-lime-400/10 px-2 py-1 rounded-full border border-lime-400/20">25% OFF</span>
                 </div>
-                <div className="text-xs text-neutral-500">
+                <div className="text-xs text-neutral-400">
                   ${(finalPrice / pkg.credits).toFixed(3)} per credit
                 </div>
               </div>
 
               {/* Capacity */}
-              <div className="text-center mb-4 space-y-1">
-                <div className="text-xs text-neutral-300">~{pkg.imageCount} images</div>
-                <div className="text-xs text-neutral-300">~{pkg.videoCount} videos</div>
+              <div className="text-center mb-6 space-y-2">
+                <div className="flex items-center justify-center gap-2 text-sm text-neutral-300">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                  ~{pkg.imageCount} images
+                </div>
+                <div className="flex items-center justify-center gap-2 text-sm text-neutral-300">
+                  <span className="w-2 h-2 bg-purple-400 rounded-full"></span>
+                  ~{pkg.videoCount} videos
+                </div>
               </div>
 
               {/* Button */}
@@ -399,12 +405,12 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   }
                 }}
                 disabled={isLoadingThisPackage || isLoadingCheckout}
-                className={`w-full flex items-center justify-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                className={`w-full flex items-center justify-center px-6 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 hover:scale-105 shadow-lg ${
                   isLoadingThisPackage
                     ? 'bg-neutral-800 text-neutral-500 cursor-wait'
                     : pkg.popular
-                      ? 'bg-lime-400 text-black hover:bg-lime-300'
-                      : 'bg-neutral-800/60 text-white hover:bg-neutral-700/60'
+                      ? 'bg-gradient-to-r from-white to-neutral-100 text-black hover:from-neutral-100 hover:to-white'
+                      : 'bg-gradient-to-r from-neutral-800 to-neutral-700 text-white hover:from-neutral-700 hover:to-neutral-600'
                 } ${
                   isLoadingCheckout && !isLoadingThisPackage ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
@@ -453,7 +459,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
             >
               Subscriptions
               <span className="ml-2 text-xs text-lime-500 rounded-full font-semibold">
-                | Best Value
+                Best Value
               </span>
             </button>
             <button 
@@ -500,7 +506,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                   onClick={() => setBillingCycle('yearly')}
                 >
                   Yearly 
-                  <span className="ml-2 text-xs font-medium text-lime-600 dark:text-lime-500">3 months free</span>
+                  <span className="ml-2 text-xs font-semibold text-lime-600 dark:text-lime-400 bg-lime-400/10 px-2 py-0.5 rounded-full">3 months free</span>
                 </button>
               </div>
             </div>
@@ -515,18 +521,18 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                 return (
                   <div
                     key={`${plan.id}-${billingCycle}`}
-                    className={`relative bg-neutral-950/40 backdrop-blur-xl p-5 rounded-2xl border border-neutral-700/50 transition-all duration-300 hover:bg-neutral-950/60 hover:border-neutral-600/70 ${
-                      plan.mostPopular ? 'ring-1 ring-lime-400/50' : ''
+                    className={`relative bg-gradient-to-br from-neutral-900/90 to-neutral-950/90 backdrop-blur-xl p-6 rounded-3xl border transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
+                      plan.mostPopular ? 'border-white/20 shadow-xl' : 'border-neutral-700/30 hover:border-neutral-600/50'
                     }`}
                   >
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs text-neutral-400 uppercase tracking-wider font-light">
-                        {plan.name.toUpperCase()}_PLAN
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-xs text-neutral-400 uppercase tracking-wider font-medium">
+                        {plan.name}
                       </span>
                       {plan.mostPopular && (
-                        <span className="text-xs text-lime-400 uppercase tracking-wider font-light">
-                          MOST_POPULAR
+                        <span className="text-xs text-white bg-gradient-to-r from-neutral-700 to-neutral-600 px-2 py-1 rounded-full font-semibold">
+                          POPULAR
                         </span>
                       )}
                     </div>
@@ -536,7 +542,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                       <h2 className="text-xl font-normal text-white mb-1">
                         {plan.name}
                       </h2>
-                      <div className="w-16 h-px bg-gradient-to-r from-lime-400 to-transparent mb-3"></div>
+                      <div className="w-20 h-px bg-gradient-to-r from-white/40 to-transparent mb-4"></div>
                       
                       <div className="flex items-baseline gap-2 mb-2">
                         <div className="flex flex-col">
@@ -548,13 +554,13 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                             <span className="text-sm text-neutral-500 line-through">
                               ${(billingCycle === 'monthly' ? plan.originalMonthlyPrice : plan.originalYearlyMonthlyPrice).toFixed(2)}
                             </span>
-                            <span className="text-xs text-lime-400 font-medium bg-lime-400/10 px-2 py-0.5 rounded-full">25% OFF</span>
+                            <span className="text-xs text-lime-400 font-semibold bg-lime-400/10 px-2 py-1 rounded-full border border-lime-400/20">25% OFF</span>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="text-base text-white">
-                        {plan.credits.toLocaleString()} <span className="text-lime-400 font-light">Credits</span>
+                      <div className="text-base text-white font-medium">
+                        {plan.credits.toLocaleString()} <span className="text-neutral-300 font-normal">Credits</span>
                       </div>
                       <div className="text-xs text-neutral-400 mt-1">
                         ~{plan.imageCount} images • ~{plan.videoCount} videos
@@ -576,7 +582,7 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
                           
                           return (
                             <li key={idx} className="flex gap-x-2 items-start">
-                              <div className="w-1 h-1 bg-lime-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                              <div className="w-1.5 h-1.5 bg-white/60 rounded-full mt-1.5 flex-shrink-0"></div>
                               <span className="text-neutral-300 leading-tight">
                                   {baseFeature}
                                   {suffix && <span className="ml-1 text-neutral-500">{suffix}</span>}
@@ -631,8 +637,8 @@ function PricingSection({ id, subscriptionData, user, onSubscriptionSuccess }) {
         {pricingMode === 'credits' && (
           <>
             <div className="text-center mb-8">
-              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-lime-100 dark:bg-lime-900/30 text-lime-800 dark:text-lime-200 text-sm font-medium">
-                <span className="w-2 h-2 bg-lime-500 rounded-full mr-2"></span>
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-lime-50 to-green-50 dark:from-lime-900/20 dark:to-green-900/20 text-lime-800 dark:text-lime-200 text-sm font-semibold border border-lime-200/50 dark:border-lime-700/50">
+                <span className="w-2 h-2 bg-lime-500 rounded-full mr-2 animate-pulse"></span>
                 Credits never expire • Buy more, save more
               </div>
             </div>

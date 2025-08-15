@@ -1188,7 +1188,7 @@ function Settings() {
               {/* Make the parent div rounded for circular hover effect */}
               <div className="relative group flex-shrink-0 w-24 h-24 rounded-full">
                 <img 
-                  src={previewURL || photoURL || '/pp-placeholder.jpeg'} 
+                  src={previewURL || photoURL || '/pp-placeholder.webp'} 
                   alt="Profile" 
                   className="w-24 h-24 rounded-full object-cover shadow-sm hover:shadow-md transition-all duration-200"
                 />

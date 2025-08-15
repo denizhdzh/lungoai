@@ -424,7 +424,7 @@ function Onboarding({ setOnboardingComplete }) {
         <div className="max-w-md w-full relative z-10">
           {/* Logo and Header Section */}
           <div className="text-center mb-10">
-            <img src="/logonaked.png" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
+            <img src="/logonaked.webp" alt="Lungo AI Logo" className="h-8 mx-auto mb-5" />
             <h1 className="text-3xl font-normal tracking-wide text-white mb-2">Welcome to lungo</h1>
             <p className="text-base text-neutral-400">Let's get your account set up</p>
           </div>

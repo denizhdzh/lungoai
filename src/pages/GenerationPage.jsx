@@ -256,15 +256,15 @@ const GenerationPage = () => {
 	
 	// Get logo for model
 	const getModelLogo = (modelId) => {
-		if (modelId.includes('google')) return '/logos/google_logo.png';
-		if (modelId.includes('flux')) return '/logos/flux_logo.png';
-		if (modelId.includes('ideogram')) return '/logos/ideogram_logo.png';
-		if (modelId.includes('minimax')) return '/logos/minimax_logo.png';
-		if (modelId.includes('bytedance')) return '/logos/bytedance_logo.png';
-		if (modelId.includes('kling')) return '/logos/kling_logo.png';
-		if (modelId.includes('runway')) return '/logos/runway_logo.png';
-		if (modelId.includes('leonardo')) return '/logos/leonardo_logo.png';
-		return '/logos/google_logo.png'; // default
+		if (modelId.includes('google')) return '/logos/google_logo.webp';
+		if (modelId.includes('flux')) return '/logos/flux_logo.webp';
+		if (modelId.includes('ideogram')) return '/logos/ideogram_logo.webp';
+		if (modelId.includes('minimax')) return '/logos/minimax_logo.webp';
+		if (modelId.includes('bytedance')) return '/logos/bytedance_logo.webp';
+		if (modelId.includes('kling')) return '/logos/kling_logo.webp';
+		if (modelId.includes('runway')) return '/logos/runway_logo.webp';
+		if (modelId.includes('leonardo')) return '/logos/leonardo_logo.webp';
+		return '/logos/google_logo.webp'; // default
 	};
 	
 	// Get support info for model

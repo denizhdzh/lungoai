@@ -129,11 +129,11 @@ const ModelsPage = () => {
                         <div className="w-6 h-6 bg-white/10 rounded-lg flex items-center justify-center p-1">
                           <img 
                             src={`/logos/${
-                              modelId.includes('google') ? 'google_logo.png' :
-                              modelId.includes('flux') ? 'flux_logo.png' :
-                              modelId.includes('ideogram') ? 'ideogram_logo.png' :
-                              modelId.includes('minimax') ? 'minimax_logo.png' :
-                              'google_logo.png'
+                              modelId.includes('google') ? 'google_logo.webp' :
+                              modelId.includes('flux') ? 'flux_logo.webp' :
+                              modelId.includes('ideogram') ? 'ideogram_logo.webp' :
+                              modelId.includes('minimax') ? 'minimax_logo.webp' :
+                              'google_logo.webp'
                             }`}
                             alt={model.name}
                             className="w-full h-full object-contain"
@@ -195,12 +195,12 @@ const ModelsPage = () => {
                         <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center p-2">
                           <img 
                             src={`/logos/${
-                              modelId.includes('google') ? 'google_logo.png' :
-                              modelId.includes('bytedance') ? 'bytedance_logo.png' :
-                              modelId.includes('kling') ? 'kling_logo.png' :
-                              modelId.includes('minimax') ? 'minimax_logo.png' :
-                              modelId.includes('runway') ? 'runway_logo.png' :
-                              'google_logo.png'
+                              modelId.includes('google') ? 'google_logo.webp' :
+                              modelId.includes('bytedance') ? 'bytedance_logo.webp' :
+                              modelId.includes('kling') ? 'kling_logo.webp' :
+                              modelId.includes('minimax') ? 'minimax_logo.webp' :
+                              modelId.includes('runway') ? 'runway_logo.webp' :
+                              'google_logo.webp'
                             }`}
                             alt={model.name}
                             className="w-full h-full object-contain"

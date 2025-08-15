@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 // Component imports
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import WelcomePage from './pages/WelcomePage';
 import Generation from './pages/Generation';
 import GenerationPage from './pages/GenerationPage';
 import CampaignCreator from './pages/CampaignCreator';
@@ -47,40 +48,43 @@ function App() {
             }}
           />
           <Routes>
+            {/* Welcome Page - Standalone without Layout */}
+            <Route path="/" element={<WelcomePage />} />
+            
+            {/* Other pages with Layout */}
             <Route path="/auth" element={<Layout />} />
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="dashboard" element={
+            <Route path="/dashboard" element={<Layout />}>
+              <Route index element={
                 <ProtectedRoute>
                   <Dashboard />
                 </ProtectedRoute>
               } />
-              <Route path="generation" element={
-                <ProtectedRoute>
-                  <Generation />
-                </ProtectedRoute>
-              } />
-              <Route path="gen" element={
-                <ProtectedRoute>
-                  <GenerationPage />
-                </ProtectedRoute>
-              } />
-              <Route path="campaigns" element={
-                <ProtectedRoute>
-                  <CampaignCreator />
-                </ProtectedRoute>
-              } />
-              <Route path="studio" element={
-                <ProtectedRoute>
-                  <CanvasWorkspace />
-                </ProtectedRoute>
-              } />
-              <Route path="creative" element={
-                <ProtectedRoute>
-                  <CreativeStudio />
-                </ProtectedRoute>
-              } />
             </Route>
+            <Route path="/generation" element={
+              <ProtectedRoute>
+                <Generation />
+              </ProtectedRoute>
+            } />
+            <Route path="/gen" element={
+              <ProtectedRoute>
+                <GenerationPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/campaigns" element={
+              <ProtectedRoute>
+                <CampaignCreator />
+              </ProtectedRoute>
+            } />
+            <Route path="/studio" element={
+              <ProtectedRoute>
+                <CanvasWorkspace />
+              </ProtectedRoute>
+            } />
+            <Route path="/creative" element={
+              <ProtectedRoute>
+                <CreativeStudio />
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
       </Router>

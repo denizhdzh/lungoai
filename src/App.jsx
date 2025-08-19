@@ -31,6 +31,21 @@ function ProtectedRoute({ children, requireAuth = true }) {
   return user ? children : <Navigate to="/auth" />;
 }
 
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0f0f23] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+  
+  // If user is logged in, redirect to gen page, otherwise to welcome
+  return user ? <Navigate to="/gen" /> : <Navigate to="/welcome" />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -49,7 +64,10 @@ function App() {
           />
           <Routes>
             {/* Welcome Page - Standalone without Layout */}
-            <Route path="/" element={<WelcomePage />} />
+            <Route path="/welcome" element={<WelcomePage />} />
+            
+            {/* Root redirect - logged in users go to gen, logged out to welcome */}
+            <Route path="/" element={<RootRedirect />} />
             
             {/* Other pages with Layout */}
             <Route path="/auth" element={<Layout />} />

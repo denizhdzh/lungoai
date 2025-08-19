@@ -43,9 +43,9 @@ const Header = () => {
             className="flex items-center group"
           >
             <img 
-              src="/logonaked.webp"
+              src="/logonaked.png"
               alt="Lungo AI Logo"
-              className="h-4 w-auto"
+              className="h-6 w-auto"
             />
           </button>
           
@@ -80,7 +80,7 @@ const Header = () => {
                 {/* Studio Button */}
                 <button
                   onClick={() => navigate('/studio')}
-                  className="px-3 py-1.5 bg-white hover:bg-neutral-100 text-black rounded-lg text-sm font-medium transition-colors"
+                  className="px-3 py-1.5 bg-lime-400 hover:bg-lime-600 text-black rounded-lg text-sm font-medium transition-colors"
                 >
                   Create+
                 </button>

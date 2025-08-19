@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { models, getModelById, getModelsByCategory } from '../config/models.js';
 import LazyVideo from '../components/LazyVideo.jsx';
 import Header from '../components/Header.jsx';
+import PricingSection from '../components/PricingSection.jsx';
 import { auth, db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const WelcomePage = () => {
   const user = auth.currentUser;
@@ -373,26 +375,27 @@ const WelcomePage = () => {
         <Header />
       
         {/* Desktop Layout - Boxes */}
-        {!user && (
-          <div className="hidden md:block">
+        <div className="hidden md:block">
             <div className="md:fixed bottom-4 md:bottom-8 left-4 md:left-8 right-4 md:right-8 z-20 flex flex-col lg:flex-row gap-4 lg:items-end py-16 md:p-0 relative mt-16 md:mt-0">
               
-              {/* Left Side - All-in-one Studio Box */}
-              <div className="w-full lg:flex-1 lg:order-1 order-1 space-y-2">
-                
-                {/* All-in-one Studio Box */}
-                <div className="w-full bg-neutral-900/5 backdrop-blur-sm p-4 md:p-6 rounded-3xl">
-                  <h2 className="text-2xl md:text-4xl lg:text-6xl font-light text-white mb-2 md:mb-3">All-in-one AI Studio</h2>
-                  <p className="text-sm md:text-lg lg:text-xl text-white/60 leading-relaxed">
-                    Introducing <span className="text-white">Lungo AI</span>, the <span className="text-white">all-in-one studio</span> to create <span className="text-white">images & videos</span> in seconds, <span className="text-white">no tabs</span> to switch, <span className="text-white">no setups</span> needed.
-                  </p>
-                </div>
-                
-                
-              </div>
-              
-              {/* Right Side - 3 Feature Boxes */}
-              <div className="space-y-4 w-full lg:max-w-lg lg:order-2 order-2">
+              {!user ? (
+                <>
+                  {/* Left Side - All-in-one Studio Box */}
+                  <div className="w-full lg:flex-1 lg:order-1 order-1 space-y-2">
+                    
+                    {/* All-in-one Studio Box */}
+                    <div className="w-full bg-neutral-900/5 backdrop-blur-sm p-4 md:p-6 rounded-3xl">
+                      <h2 className="text-2xl md:text-4xl lg:text-6xl font-light text-white mb-2 md:mb-3">All-in-one AI Studio</h2>
+                      <p className="text-sm md:text-lg lg:text-xl text-white/60 leading-relaxed">
+                        Introducing <span className="text-white">Lungo AI</span>, the <span className="text-white">all-in-one studio</span> to create <span className="text-white">images & videos</span> in seconds, <span className="text-white">no tabs</span> to switch, <span className="text-white">no setups</span> needed.
+                      </p>
+                    </div>
+                    
+                    
+                  </div>
+                  
+                  {/* Right Side - 3 Feature Boxes */}
+                  <div className="space-y-4 w-full lg:max-w-lg lg:order-2 order-2">
                 
                 {/* 1. Advanced Image Editing */}
                 <div className="w-full bg-neutral-900/70 backdrop-blur-sm p-3 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors group">
@@ -497,11 +500,106 @@ const WelcomePage = () => {
                   </div>
                 </div>
                 
-              </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Left Side - Welcome Box for logged in users */}
+                  <div className="w-full lg:flex-1 lg:order-1 order-1 space-y-2">
+                    
+                    {/* Welcome Box */}
+                    <div className="w-full bg-neutral-900/5 backdrop-blur-sm p-4 md:p-6 rounded-3xl">
+                      <h2 className="text-2xl md:text-4xl lg:text-6xl font-light text-white mb-2 md:mb-3">
+                        Welcome back, {(user?.displayName || user?.email?.split('@')[0] || 'Creator').split(' ')[0]}
+                      </h2>
+                      <p className="text-sm md:text-lg lg:text-xl text-white/60 leading-relaxed">
+                        Ready to create amazing <span className="text-white">images & videos</span> with AI? Your creative workspace awaits.
+                      </p>
+                    </div>
+                    
+                  </div>
+                  
+                  {/* Right Side - Credits & Generations */}
+                  <div className="space-y-4 w-full lg:max-w-lg lg:order-2 order-2 flex flex-col items-end">
+                    
+                    {/* Credits Box */}
+                    <div 
+                      onClick={() => setIsPricingModalOpen(true)}
+                      className="aspect-square w-64 bg-neutral-900/70 backdrop-blur-sm rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-colors group relative overflow-hidden"
+                    >
+                      <div 
+                        className="absolute inset-4 bg-cover bg-center opacity-100"
+                        style={{backgroundImage: 'url(/Union.webp)'}}
+                      ></div>
+                      <div className="relative z-10 p-4 h-full flex flex-col items-center justify-center text-center">
+                        <div className="text-5xl font-bold text-white mb-1">
+                          {(firestoreUserData?.general_credits || 0) + (firestoreUserData?.one_time_credits || 0)}
+                        </div>
+                        <div className="text-xs text-white/60 font-medium mb-2">
+                          credits
+                        </div>
+                        <div className="text-xs text-lime-400 font-medium">
+                          {!firestoreUserData?.subscriptionStatus || firestoreUserData?.subscriptionStatus !== 'active' 
+                            ? 'UPGRADE' 
+                            : 'Get More Credits'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Last Generations Box */}
+                    <div 
+                      onClick={() => navigate('/history')}
+                      className="w-full bg-neutral-900/70 backdrop-blur-sm p-4 rounded-3xl border border-neutral-100/20 hover:border-lime-400 cursor-pointer transition-all duration-300 group hover:scale-[1.02]"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-semibold text-white group-hover:text-lime-400 transition-colors">
+                          Recent Creations
+                        </h3>
+                        <div className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded-full">
+                          {userGenerations.length} total
+                        </div>
+                      </div>
+                      
+                      {loadingGenerations ? (
+                        <div className="flex items-center justify-center h-20">
+                          <div className="w-5 h-5 border-2 border-lime-400/30 border-t-lime-400 rounded-full animate-spin"></div>
+                        </div>
+                      ) : userGenerations.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {userGenerations.slice(0, 3).map((gen, index) => (
+                            <div key={gen.id} className="aspect-square bg-neutral-800 rounded-xl overflow-hidden hover:ring-2 hover:ring-lime-400/50 transition-all duration-200 group-hover:scale-[1.02]">
+                              {gen.type === 'video' ? (
+                                <video 
+                                  src={gen.url} 
+                                  className="w-full h-full object-cover"
+                                  muted
+                                />
+                              ) : (
+                                <img 
+                                  src={gen.url} 
+                                  alt={`Generation ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-white/50 text-sm">
+                          <div className="mb-2">🎨</div>
+                          <div>No creations yet</div>
+                          <div className="text-xs text-white/30 mt-1">Start creating to see your work here</div>
+                        </div>
+                      )}
+                    </div>
+                    
+                  </div>
+                </>
+              )}
               
             </div>
-          </div>
-        )}
+        </div>
 
         {/* Mobile Landing Layout */}
         <div className="md:hidden relative z-10 px-6 py-16 mt-16 space-y-12">
@@ -688,12 +786,6 @@ const WelcomePage = () => {
               <p className="text-sm text-black/70">
                 ⚠️ Currently works best on desktop. Mobile experience coming soon!
               </p>
-              <button
-                onClick={() => navigate('/signup')}
-                className="bg-black text-white px-6 py-3 rounded-xl text-sm font-medium w-full"
-              >
-                Get Started Free
-              </button>
             </div>
           </>
         ) : (
@@ -711,6 +803,43 @@ const WelcomePage = () => {
           </div>
         )}
         </div>
+        
+        {/* Pricing Modal */}
+        <AnimatePresence>
+        {isPricingModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] bg-white dark:bg-neutral-950"
+            onClick={() => setIsPricingModalOpen(false)}
+          >
+            {/* Close button */}
+            <button 
+              onClick={() => setIsPricingModalOpen(false)}
+              className="fixed top-6 right-6 z-20 p-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-full text-stone-800 dark:text-stone-200 transition-colors shadow-lg"
+              aria-label="Close pricing plans"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Full Page Content */}
+            <div 
+              className="h-full w-full overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="min-h-full flex items-center justify-center py-20 px-6">
+                <div className="w-full max-w-6xl">
+                  <PricingSection id="pricing-modal" subscriptionData={firestoreUserData} user={user} />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        </AnimatePresence>
       </div>
     </>
   );

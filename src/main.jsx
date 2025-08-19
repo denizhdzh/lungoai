@@ -9,21 +9,14 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 
 // Loading component for lazy routes
-const LoadingFallback = () => (
-  <div className="flex items-center justify-center min-h-[400px] bg-neutral-950">
-    <div className="text-lime-400 text-sm">Loading...</div>
-  </div>
-);
+const LoadingFallback = () => null;
 
 // Lazy load components to reduce initial bundle size
 const SignUp = lazy(() => import('./components/SignUp.jsx'));
 const Onboarding = lazy(() => import('./components/Onboarding.jsx'));
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'));
 const Settings = lazy(() => import('./components/Settings.jsx'));
-const Admin = lazy(() => import('./components/Admin.jsx'));
 const PricingSection = lazy(() => import('./components/PricingSection.jsx'));
-const CommandInfo = lazy(() => import('./components/CommandInfo.jsx'));
-const CanvasWorkspace = lazy(() => import('./pages/CanvasWorkspace.jsx'));
 const GenerationPage = lazy(() => import('./pages/GenerationPage.jsx'));
 const WelcomePage = lazy(() => import('./pages/WelcomePage.jsx'));
 const ModelsPage = lazy(() => import('./pages/ModelsPage.jsx'));
@@ -430,16 +423,6 @@ function AppRouter() {
         }
       />
       
-      <Route 
-        path="/admin" 
-        element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <Suspense fallback={<LoadingFallback />}>
-              <Admin />
-            </Suspense>
-          </ProtectedRoute>
-        }
-      />
       
       <Route 
         path="/studio" 
@@ -447,17 +430,6 @@ function AppRouter() {
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <GenerationPage/>
-            </Suspense>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route 
-        path="/canvas" 
-        element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
-            <Suspense fallback={<LoadingFallback />}>
-              <CanvasWorkspace/>
             </Suspense>
           </ProtectedRoute>
         }
@@ -482,14 +454,6 @@ function AppRouter() {
         }
       />
       
-      <Route 
-        path="/aiguide" 
-        element={
-          <Suspense fallback={<LoadingFallback />}>
-            <CommandInfo />
-          </Suspense>
-        }
-      />
       
       <Route 
         path="/terms" 

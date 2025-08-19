@@ -15,7 +15,7 @@ import { collection, query, where, orderBy, limit, getDocs, Timestamp, doc, getD
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import DynamicIsland from '../components/DynamicIsland.jsx';
-import MobileDesktopMessage from '../components/MobileDesktopMessage.jsx';
+import Header from '../components/Header.jsx';
 
 const GenerationPage = () => {
 	const [activeType, setActiveType] = useState('image');
@@ -843,12 +843,22 @@ const GenerationPage = () => {
 	}
 
 	return (
-		<>
-			{/* Mobile Desktop Message */}
-			<MobileDesktopMessage />
+		<div className="min-h-screen bg-neutral-950 relative">
+			{/* Image Background */}
+			<div className="fixed inset-0 w-full h-full z-0">
+				<img 
+					src="/Glowing Abstract Flower.png" 
+					alt="Background" 
+					className="w-full h-full object-cover"
+				/>
+				<div className="absolute inset-0 bg-black/30" />
+			</div>
 			
-			{/* Desktop Layout */}
-			<div className="hidden xl:flex h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden">
+			{/* Header Component */}
+			<Header />
+			
+			{/* Main Layout - Responsive */}
+			<div className="flex h-[calc(100vh-200px)] bg-transparent text-white relative overflow-hidden z-10">
 			{/* CSS for notification animation */}
 			<style>
 				{`
@@ -916,8 +926,8 @@ const GenerationPage = () => {
 					</div>
 				))}
 			</div>
-			{/* Left Sidebar - Minimal Design */}
-			<div className="fixed left-2 top-15 z-10 w-64">
+			{/* Left Sidebar - Minimal Design - Hidden on mobile */}
+			<div className="hidden lg:block fixed left-2 top-20 z-10 w-64">
 				<div className="bg-transparent space-y-1 shadow-2xl max-h-[80vh]">
 					
 					{/* Type Selection */}
@@ -1211,7 +1221,7 @@ const GenerationPage = () => {
 			</div>
 
 			{/* Main content area */}
-			<div className="flex items-center justify-center p-4 h-full w-full ml-64 mr-20">
+			<div className="flex items-center justify-center p-4 h-full w-full lg:ml-64 lg:mr-20">
 				{generatedImage ? (
 					/* Generated Image Display */
 					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
@@ -1370,8 +1380,8 @@ const GenerationPage = () => {
 					onChange={(e) => handleFileUpload(e.target.files)}
 				/>
 				
-				{/* Right sidebar with + button and history */}
-				<div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-center space-y-4">
+				{/* Right sidebar with + button and history - Hidden on mobile */}
+				<div className="hidden lg:flex fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex-col items-center space-y-4">
 					{/* History section */}
 					{!isLoadingGenerations && previousGenerations.length > 0 && (
 						<div className="flex flex-col items-center space-y-2 history-container">
@@ -1439,41 +1449,193 @@ const GenerationPage = () => {
 				</div>
 			</div>
 			
-			{/* Bottom menu */}
-			<div className="fixed bottom-5 left-1/2 transform -translate-x-1/2 rounded-3xl p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-full max-w-3xl">
-				<div>
-						<div className="flex items-stretch gap-3 h-16">
-							
-							{/* Prompt input */}
-							<div className="flex-1 relative h-full">
-								<textarea
-									value={prompt}
-									onChange={(e) => setPrompt(e.target.value)}
-									placeholder="Describe a scene and click generate"
-									className="w-full h-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-2 pb-8 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide"
-								/>
-								
-							
-							</div>
-							
-							{/* Generate Section */}
-							<div className="flex flex-col gap-2 h-full justify-center">
-								<button
-									onClick={handleGenerate}
-									disabled={!prompt.trim() || isGenerating}
-									className="px-8 py-3 bg-white/90 hover:bg-white text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm"
-								>
-									{isGenerating ? 'GENERATING...' : 'GENERATE'}
-								</button>
-								<div className="text-xs text-lime-500 text-center font-bold tracking-wider uppercase">
-									{calculateCredits()} CREDITS
+
+			{/* Bottom menu - Responsive */}
+			<div className="fixed bottom-3 md:bottom-5 left-1/2 transform -translate-x-1/2 rounded-2xl md:rounded-3xl p-2 md:p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-[95%] md:w-full max-w-3xl">
+				{/* Mobile Layout - Stacked */}
+				<div className="flex lg:hidden flex-col gap-3">
+					{/* Top row - Type and Model Selection + Aspect Ratio */}
+					<div className="flex items-stretch gap-3 h-12">
+						{/* Type Selection - Mobile */}
+						<div className="flex gap-2 bg-neutral-900 rounded-xl p-2">
+							<button
+								onClick={() => {
+									setActiveType('image');
+									setSelectedModel('google/imagen-4');
+								}}
+								className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+									activeType === 'image' 
+										? 'bg-white text-black' 
+										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+								}`}
+							>
+								<ImageIcon size={14} />
+								Image
+							</button>
+							<button
+								onClick={() => {
+									setActiveType('video');
+									setSelectedModel('google/veo-3-fast');
+								}}
+								className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+									activeType === 'video' 
+										? 'bg-white text-black' 
+										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+								}`}
+							>
+								<VideoIcon size={14} />
+								Video
+							</button>
+						</div>
+						
+						{/* Model Selection - Mobile */}
+						<div className="flex-1 relative dropdown-container">
+							<button
+								onClick={() => toggleDropdown('model')}
+								className="w-full bg-neutral-900 rounded-xl px-3 py-2 text-white text-xs flex items-center justify-between h-full"
+							>
+								<div className="flex items-center gap-2">
+									<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
+										<img 
+											src={getModelLogo(selectedModel)}
+											alt={availableModels[selectedModel]?.name}
+											className="w-full h-full object-contain"
+											onError={(e) => {
+												e.target.style.display = 'none';
+											}}
+										/>
+									</div>
+									<span className="truncate">{availableModels[selectedModel]?.name || selectedModel}</span>
 								</div>
+								<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model ? 'rotate-180' : ''}`} />
+							</button>
+							
+							{openDropdowns.model && (
+								<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+									{Object.entries(availableModels).map(([id, model]) => (
+										<button
+											key={id}
+											onClick={() => {
+												setSelectedModel(id);
+												closeAllDropdowns();
+											}}
+											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+											}`}
+										>
+											<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+												<img 
+													src={getModelLogo(id)}
+													alt={model.name}
+													className="w-full h-full object-contain"
+													onError={(e) => {
+														e.target.style.display = 'none';
+													}}
+												/>
+											</div>
+											<div className="flex-1 min-w-0">
+												<div className="text-sm truncate">{model.name}</div>
+												<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
+											</div>
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+
+					</div>
+					
+					{/* Prompt input - Mobile */}
+					<div className="relative">
+						<textarea
+							value={prompt}
+							onChange={(e) => setPrompt(e.target.value)}
+							placeholder="Describe what you want to create..."
+							className="w-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-3 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide h-20"
+						/>
+					</div>
+					
+					{/* Generate button with Aspect Ratio - Mobile */}
+					<div className="flex items-stretch gap-3 h-12">
+						{/* Aspect Ratio - Mobile (if available) */}
+						{modelConfig?.options?.aspect_ratio && (
+							<div className="flex items-center gap-2 bg-neutral-900 rounded-xl px-3 py-2 min-w-[80px] dropdown-container relative">
+								<button
+									onClick={() => toggleDropdown('aspect_ratio_bottom')}
+									className="flex items-center justify-between text-white text-xs w-full"
+								>
+									<div className="font-medium">
+										{selectedModel === 'black-forest-labs/flux-kontext-pro' && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
+									</div>
+									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_bottom ? 'rotate-180' : ''}`} />
+								</button>
+								
+								{openDropdowns.aspect_ratio_bottom && (
+									<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+										{modelConfig.options.aspect_ratio.map(option => (
+											<button
+												key={option}
+												onClick={() => {
+													handleSettingChange('aspect_ratio', option);
+													closeAllDropdowns();
+												}}
+												className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+													getSettingValue('aspect_ratio') === option 
+														? 'bg-neutral-700 text-white' 
+														: 'text-neutral-300 hover:bg-neutral-700'
+												}`}
+											>
+												{selectedModel === 'black-forest-labs/flux-kontext-pro' && option === 'match_input_image' ? 'auto' : option}
+											</button>
+										))}
+									</div>
+								)}
 							</div>
+						)}
+
+						{/* Generate button - Mobile */}
+						<button
+							onClick={handleGenerate}
+							disabled={!prompt.trim() || isGenerating}
+							className="flex-1 bg-lime-400 hover:bg-lime-300 text-black font-medium tracking-wide rounded-xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all shadow-lg text-sm py-3 flex flex-col items-center justify-center gap-1"
+						>
+							<span>{isGenerating ? 'GENERATING...' : 'GENERATE'}</span>
+							<span className="text-black font-bold text-xs tracking-wider uppercase">
+								{calculateCredits()} CREDITS
+							</span>
+						</button>
+					</div>
+				</div>
+
+				{/* Desktop Layout - Single Row */}
+				<div className="hidden lg:flex items-stretch gap-3 h-16">
+					{/* Prompt input */}
+					<div className="flex-1 relative h-full">
+						<textarea
+							value={prompt}
+							onChange={(e) => setPrompt(e.target.value)}
+							placeholder="Describe a scene and click generate"
+							className="w-full h-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-2 pb-8 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide"
+						/>
+					</div>
+					
+					{/* Generate Section */}
+					<div className="flex flex-col gap-2 h-full justify-center">
+						<button
+							onClick={handleGenerate}
+							disabled={!prompt.trim() || isGenerating}
+							className="px-8 py-3 bg-white/90 hover:bg-white text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm"
+						>
+							{isGenerating ? 'GENERATING...' : 'GENERATE'}
+						</button>
+						<div className="text-xs text-lime-500 text-center font-bold tracking-wider uppercase">
+							{calculateCredits()} CREDITS
 						</div>
 					</div>
 				</div>
-			</div> {/* End Desktop Layout */}
-		</>
+			</div>
+		</div> {/* End Main Layout */}
+		</div>
 	);
 };
 

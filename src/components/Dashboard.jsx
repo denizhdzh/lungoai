@@ -8,6 +8,7 @@ import { ArrowRight, Sparkle, FileText, Lightning, Question, ChartLine, Bookmark
 import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc } from "@firebase/firestore"; // Added doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc
 import { motion, AnimatePresence } from 'framer-motion';
 import SimpleImageModal from './SimpleImageModal';
+import Header from './Header';
 
 // --- NEW: Plan Credit Limits ---
 const planCreditLimits = {
@@ -2237,45 +2238,23 @@ function Dashboard() {
   const displayedGenerations = generations;
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="font-sans min-h-screen bg-neutral-950 relative">
+      {/* Image Background */}
+      <div className="fixed inset-0 w-full h-full z-0">
+        <img 
+          src="/Glowing Abstract Flower.png" 
+          alt="Background" 
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/30" />
+      </div>
+      
+      {/* Header Component */}
+      <Header />
+      
+      <div className="max-w-6xl mx-auto relative z-10 pt-20">
       {/* Recent generations section */}
       <section className="mb-8">
-            <div className="flex items-center justify-center mb-8">
-              
-              {/* Filters */}
-              <div className="inline-flex items-center gap-8">
-                <button
-                  onClick={() => setActiveFilter('all')}
-                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
-                    activeFilter === 'all'
-                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
-                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setActiveFilter('image')}
-                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
-                    activeFilter === 'image'
-                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
-                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
-                  }`}
-                >
-                  Images
-                </button>
-                <button 
-                  onClick={() => setActiveFilter('favorites')}
-                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${ 
-                    activeFilter === 'favorites'
-                      ? 'text-stone-900 dark:text-stone-100 opacity-100'
-                      : 'text-stone-600 dark:text-stone-400 opacity-40 hover:opacity-70'
-                  }`}
-                >
-                  Favorites
-            </button>
-        </div>
-      </div>
             {isLoadingGenerations && displayedGenerations.length === 0 ? (
               <div className="w-full h-48 rounded-xl border border-stone-100 dark:border-stone-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center">
                 <div className="animate-pulse flex space-x-4 w-3/4">
@@ -2402,6 +2381,7 @@ function Dashboard() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }

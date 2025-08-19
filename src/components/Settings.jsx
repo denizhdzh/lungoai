@@ -8,6 +8,7 @@ import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } 
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
 import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash, Gavel } from '@phosphor-icons/react';
 import PricingSection from './PricingSection'; // Import the PricingSection component
+import Header from './Header';
 
 // Helper to format bytes
 function formatBytes(bytes, decimals = 2) {
@@ -34,9 +35,24 @@ const generateImageDescription = httpsCallable(functions, 'generateImageDescript
 const manuallyStandardizeProductVideo = httpsCallable(functions, 'manuallyStandardizeProductVideo');
 
 function Settings() {
-  const { user, isDarkMode, products, creators, backgrounds, refreshLayoutData, firestoreUserData: layoutFirestoreUserData, handleManageBilling: layoutHandleManageBilling, setIsPricingModalOpen: layoutSetIsPricingModalOpen } = useOutletContext() || {};
+  const { user: contextUser, isDarkMode, products, creators, backgrounds, refreshLayoutData, firestoreUserData: layoutFirestoreUserData, handleManageBilling: layoutHandleManageBilling, setIsPricingModalOpen: layoutSetIsPricingModalOpen } = useOutletContext() || {};
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Use Firebase auth user as fallback if context user is not available
+  const [currentUser, setCurrentUser] = useState(contextUser || auth.currentUser);
+  const user = currentUser;
+  
+  useEffect(() => {
+    if (!contextUser) {
+      const unsubscribe = auth.onAuthStateChanged((authUser) => {
+        setCurrentUser(authUser);
+      });
+      return unsubscribe;
+    } else {
+      setCurrentUser(contextUser);
+    }
+  }, [contextUser]);
 
   const [activeTab, setActiveTab] = useState('user'); // Default to user tab
   
@@ -368,6 +384,7 @@ function Settings() {
             }, "createdAt", "desc");
           } else if (activeTab === 'featureRequests') {
             // No initial fetch needed here as it's handled by fetchFeatureRequests
+            console.log('Fetching feature requests for tab:', activeTab);
             await fetchFeatureRequests(); // Fetch features when tab is active
           } else if (activeTab === 'plan') {
             await fetchSubscriptionData(); // Fetch subscription data when plan tab is active
@@ -439,45 +456,16 @@ function Settings() {
     if (!user) return;
     setIsFetchingRequests(true);
     try {
-      // 1. Fetch the public feature requests document
-      const requestsDocRef = doc(db, 'system', 'feature-requests');
-      const requestsDocSnap = await getDoc(requestsDocRef);
-
-      let featuresData = [];
-      if (requestsDocSnap.exists()) {
-        const data = requestsDocSnap.data();
-        featuresData = Object.entries(data).map(([key, value]) => ({
-          id: key, 
-          title: key, 
-          votes: value?.vote || 0 
-        }));
-      } else {
-        console.log("No public feature requests document found!");
-      }
-
-      // 2. Fetch user's upvoted features (for public requests)
-      const userVotesQuery = query(collection(db, 'users', user.uid, 'upvotedFeatures'));
-      const userVotesSnap = await getDocs(userVotesQuery);
-      const upvotedIds = new Set(userVotesSnap.docs.map(doc => doc.id));
-      // setUserUpvotedFeatures(upvotedIds); // This state is still for public ones
-
-      const combinedFeatures = featuresData.map(feature => ({
-        ...feature,
-        userUpvoted: upvotedIds.has(feature.id)
-      })); 
-      // SORT BY USER UPVOTED STATUS FIRST
-      setFeatureRequests(combinedFeatures.sort((a, b) => (b.userUpvoted ? 1 : 0) - (a.userUpvoted ? 1 : 0)));
-      // setFeatureRequests(combinedFeatures); // Set without sorting by votes
-
-      // 3. Fetch user's own private feature requests
+      // Fetch user's own private feature requests
       const privateRequestsCollectionRef = collection(db, 'users', user.uid, 'featureRequests');
       const privateRequestsQuery = query(privateRequestsCollectionRef, orderBy('createdAt', 'desc'));
       const privateRequestsSnapshot = await getDocs(privateRequestsQuery);
       const fetchedPrivateRequests = privateRequestsSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
-        // No voting mechanism for private requests for now, but can be added
+        ...doc.data()
       }));
+      // Set private requests as main feature requests (no public ones anymore)
+      setFeatureRequests(fetchedPrivateRequests);
       setUserPrivateRequests(fetchedPrivateRequests);
       console.log("Fetched User Private Requests:", fetchedPrivateRequests);
 
@@ -2464,81 +2452,18 @@ function Settings() {
           {/* Public feature requests list */}
           {featureRequests.length > 0 && (
             <>
-              <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-2 px-2 pt-2">Vote on Public Requests</h4>
-          <div className="divide-y divide-stone-100 dark:divide-stone-800">
-            {featureRequests.map((request) => (
-              <div 
-                key={request.id} 
-                className="flex items-center py-3.5 px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors"
-              >
-                <div className="mr-3">
-                  <button 
-                    onClick={() => handleVote(request.id, request.votes, request.userUpvoted)}
-                        disabled={votingCooldown[request.id] || isLoading || isSubmittingRequest} // Also disable if submitting new
-                    className={`relative flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 
-                      ${request.userUpvoted 
-                        ? 'bg-neutral-900 text-stone-100 dark:bg-neutral-100 dark:text-black' 
-                        : 'bg-neutral-50 hover:bg-neutral-100 text-stone-500 hover:text-stone-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-stone-400 dark:hover:text-stone-200'} 
-                      ${votingCooldown[request.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    aria-label={request.userUpvoted ? "Remove vote" : "Upvote"}
-                    title={request.userUpvoted ? "Remove vote" : "Upvote"}
-                  >
-                    <ArrowUp size={14} weight={request.userUpvoted ? "fill" : "regular"} />
-                    
-                    {votingCooldown[request.id] && (
-                      <span className="absolute inset-0 rounded-md border-2 border-stone-900 dark:border-stone-100 animate-ping opacity-30"></span>
-                    )}
-                  </button>
-                </div>
-                
-                <span className="text-sm text-stone-800 dark:text-stone-200">
-                  {request.title}
-                </span>
-                {/* REMOVE VOTE COUNT DISPLAY (Kept commented out) */}
-                {/* 
-                <span className="ml-auto text-xs font-medium text-stone-500 dark:text-stone-400 pr-2">
-                    {request.votes} {request.votes === 1 ? 'vote' : 'votes'}
-                </span>
-                */}
-              </div>
-            ))}
-          </div>
-          <div className="pt-3 px-2">
-            <p className="text-xs text-stone-500 dark:text-stone-500">
-                  Upvoting helps us prioritize which features to implement.
-            </p>
-          </div>
-            </>
-          )}
-          {/* End Public feature requests list */}
-
-          {/* User's Private Submitted Requests List */}
-          {userPrivateRequests.length > 0 && (
-            <div className="mt-8 pt-6 border-t border-stone-100 dark:border-stone-800">
-              <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3 px-2">My Submitted Ideas</h4>
+              <h4 className="text-sm font-semibold text-stone-700 dark:text-stone-300 mb-3 px-2">Submitted Feature Requests</h4>
               <div className="divide-y divide-stone-100 dark:divide-stone-800">
-                {userPrivateRequests.map((request) => (
+                {featureRequests.map((request) => (
                   <div key={request.id} className="flex items-center justify-between py-3 px-2 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
                     <span className="text-sm text-stone-700 dark:text-stone-300">{request.title}</span>
                     <span className="text-xs text-stone-400 dark:text-stone-500">
-                      Submitted: {request.createdAt?.toDate ? request.createdAt.toDate().toLocaleDateString() : 'Recently'}
+                      {request.createdAt?.toDate ? request.createdAt.toDate().toLocaleDateString() : 'Recently'}
                     </span>
-                    {/* Add delete button for private requests later if needed */}
                   </div>
                 ))}
               </div>
-        </div>
-      )}
-          {/* End User's Private Submitted Requests List */}
-          
-          {/* Show if no requests at all (public or private) */}
-          {featureRequests.length === 0 && userPrivateRequests.length === 0 && (
-             <div className="py-10 flex flex-col items-center justify-center text-center">
-               <Sparkle size={28} weight="light" className="text-stone-400 dark:text-stone-600 mb-3" />
-               <p className="text-sm text-stone-500 dark:text-stone-400">
-                 No feature requests yet. Be the first to suggest something!
-               </p>
-             </div>
+            </>
           )}
 
         </div>
@@ -2789,7 +2714,6 @@ function Settings() {
   const handleNewFeatureRequestSubmit = async (e) => {
     e.preventDefault();
     if (!user || !newFeatureRequestText.trim()) {
-      // alert('Please enter your feature idea before submitting.');
       showCustomToast('Please enter your feature idea before submitting.', 'error');
       return;
     }
@@ -2864,22 +2788,24 @@ function Settings() {
 
   // Main component return - Notion-style with sidebar
   return (
-    <div className="min-h-screen bg-neutral-950 p-6">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-12">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-white mb-4">SETTINGS</h1>
-          <p className="text-xl text-neutral-400">
-            Manage your account, preferences, and integrations
-          </p>
+    <div className="min-h-screen bg-neutral-950">
+      <Header />
+      <div className="pt-20 p-4 lg:p-6">
+        {/* Header */}
+        <div className="max-w-7xl mx-auto mb-8">
+          <div className="mb-6">
+            <h1 className="text-3xl font-medium text-white mb-2">Settings</h1>
+            <p className="text-neutral-400">
+              Manage your account and preferences
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Main content container with sidebar layout */}
-      <div className="flex max-w-7xl mx-auto gap-8">
+        {/* Main content container with sidebar layout */}
+        <div className="flex flex-col lg:flex-row max-w-7xl mx-auto gap-8">
         {/* Sidebar */}
-        <aside className="w-80 sticky top-0">
-          <div className="bg-neutral-900/50 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">            
+        <aside className="w-full lg:w-80 lg:sticky lg:top-0">
+          <div className="bg-neutral-900/50 backdrop-blur-xl p-4 lg:p-6 rounded-3xl border border-neutral-700/50">            
             <nav className="space-y-2">
               {tabs.map(tab => (
                 <button
@@ -2906,8 +2832,8 @@ function Settings() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
-          <div className="bg-neutral-900/50 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
+        <main className="flex-1 w-full lg:w-auto">
+          <div className="bg-neutral-900/50 backdrop-blur-xl p-4 lg:p-8 rounded-3xl border border-neutral-700/50">
             {renderTabContent()}
           </div>
 
@@ -3116,6 +3042,7 @@ function Settings() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { models } from '../config/models.js';
+import Header from '../components/Header';
 
 const ModelsPage = () => {
   const { user } = useOutletContext() || {};
@@ -52,16 +53,23 @@ const ModelsPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-neutral-950 p-6">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-12">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-white mb-4">AI MODELS</h1>
-          <p className="text-xl text-neutral-400">
-            Available AI models with specifications and technical details
-          </p>
-        </div>
+    <div className="min-h-screen bg-neutral-950 relative">
+      {/* Background */}
+      <div className="fixed inset-0 w-full h-full z-0">
+        <img src="/Glowing Abstract Flower.png" alt="Background" className="w-full h-full object-cover"/>
+        <div className="absolute inset-0 bg-black/30" />
       </div>
+      <Header />
+      <div className="relative z-10 pt-20 p-6">
+        {/* Header */}
+        <div className="max-w-7xl mx-auto mb-12">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-medium text-white mb-4">AI Models</h1>
+            <p className="text-neutral-400">
+              Available AI models with specifications and technical details
+            </p>
+          </div>
+        </div>
 
       {/* Bento Grid Layout */}
       <div className="max-w-7xl mx-auto">
@@ -174,7 +182,7 @@ const ModelsPage = () => {
               
               <div className="mb-8">
                 <h2 className="text-3xl font-normal text-white mb-1">VID <span className="text-neutral-500">&</span> MOTION</h2>
-                <div className="w-32 h-px bg-gradient-to-r from-purple-400 to-transparent mb-4"></div>
+                <div className="w-32 h-px bg-gradient-to-r from-lime-400 to-transparent mb-4"></div>
                 <p className="text-sm text-neutral-400 max-w-2xl">
                   Text-to-video and image-to-video models with generation times and technical specs.
                 </p>
@@ -209,7 +217,7 @@ const ModelsPage = () => {
                               e.target.nextSibling.style.display = 'flex';
                             }}
                           />
-                          <span className="text-purple-400 font-bold text-lg hidden">{model.name.charAt(0)}</span>
+                          <span className="text-lime-400 font-bold text-lg hidden">{model.name.charAt(0)}</span>
                         </div>
                         <div>
                           <h3 className="text-white font-semibold text-lg mb-1">{model.name}</h3>
@@ -228,7 +236,7 @@ const ModelsPage = () => {
                           <span className="bg-neutral-700/60 px-2 py-1 rounded-full text-xs text-white font-medium">TXT→VID</span>
                         )}
                         {(model.type === 'image_to_video' || model.type === 'both') && (
-                          <span className="bg-purple-400/20 px-2 py-1 rounded-full text-xs text-purple-400 font-medium">IMG→VID</span>
+                          <span className="bg-lime-400/20 px-2 py-1 rounded-full text-xs text-lime-400 font-medium">IMG→VID</span>
                         )}
                       </div>
 
@@ -249,7 +257,7 @@ const ModelsPage = () => {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-neutral-500">Generation:</span>
-                          <span className="text-purple-400 font-bold group-hover:text-purple-300">
+                          <span className="text-lime-400 font-bold group-hover:text-lime-300">
                             {modelId.includes('veo-3-fast') ? '~1MIN' : 
                              modelId.includes('veo-3') ? '~4MIN' :
                              modelId.includes('kling') ? '~6MIN' :
@@ -291,11 +299,11 @@ const ModelsPage = () => {
                 </div>
                 <div className="flex justify-between text-neutral-400">
                   <span>Cinematic Videos</span>
-                  <span className="text-purple-400">Veo 3</span>
+                  <span className="text-lime-400">Veo 3</span>
                 </div>
                 <div className="flex justify-between text-neutral-400">
                   <span>Animation</span>
-                  <span className="text-purple-400">Kling v2.1</span>
+                  <span className="text-lime-400">Kling v2.1</span>
                 </div>
               </div>
             </div>
@@ -320,7 +328,7 @@ const ModelsPage = () => {
                 </div>
                 <div className="flex justify-between text-neutral-400">
                   <span>Fastest Video Gen</span>
-                  <span className="text-purple-400">~1min</span>
+                  <span className="text-lime-400">~1min</span>
                 </div>
                 <div className="flex justify-between text-neutral-400">
                   <span>Lowest Cost</span>
@@ -334,6 +342,7 @@ const ModelsPage = () => {
             </div>
           </div>
 
+        </div>
         </div>
       </div>
     </div>

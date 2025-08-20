@@ -1437,3 +1437,55 @@ exports.createOneTimeCheckoutSession = onCall(async (request) => {
     throw new HttpsError('internal', `Failed to create credit purchase session: ${error.message}`);
   }
 });
+
+// Admin function to get statistics
+exports.getAdminStats = onCall(async (request) => {
+  try {
+    logger.info('Admin stats request received');
+    
+    // Get Auth user count (total registered users)
+    const authUsers = await admin.auth().listUsers();
+    const totalUsers = authUsers.users.length;
+    
+    // Get Firestore stats
+    const usersCollection = db.collection('users');
+    
+    // Count users with onboarding completed
+    const onboardingCompletedSnapshot = await usersCollection.where('onboardingCompleted', '==', true).get();
+    const onboardingCompleted = onboardingCompletedSnapshot.size;
+    
+    // Count users with active subscriptions
+    const activeSubscriptionsSnapshot = await usersCollection.where('subscriptionStatus', '==', 'active').get();
+    const activeSubscriptions = activeSubscriptionsSnapshot.size;
+    
+    // Count total generations (simplified approach)
+    let totalGenerations = 0;
+    const userDocs = await usersCollection.where('onboardingCompleted', '==', true).get();
+    
+    for (const userDoc of userDocs.docs) {
+      const generationsSnapshot = await usersCollection.doc(userDoc.id).collection('generations').get();
+      totalGenerations += generationsSnapshot.size;
+    }
+    
+    const stats = {
+      totalUsers,
+      onboardingCompleted,
+      activeSubscriptions,
+      totalGenerations
+    };
+    
+    logger.info('Admin stats retrieved:', stats);
+    
+    return {
+      success: true,
+      stats
+    };
+    
+  } catch (error) {
+    logger.error('Error getting admin stats:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});

@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import WelcomePage from './pages/WelcomePage';
+import AdminPage from './pages/AdminPage';
 import Generation from './pages/Generation';
 import GenerationPage from './pages/GenerationPage';
 import CampaignCreator from './pages/CampaignCreator';
@@ -101,6 +102,11 @@ function App() {
             <Route path="/creative" element={
               <ProtectedRoute>
                 <CreativeStudio />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <AdminPage />
               </ProtectedRoute>
             } />
           </Routes>

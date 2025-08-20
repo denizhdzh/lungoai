@@ -6,7 +6,7 @@ import { doc, collection, addDoc, getDocs, updateDoc, deleteDoc, setDoc, query, 
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from '@firebase/storage';
 // Import Firebase Functions
 import { getFunctions, httpsCallable } from 'firebase/functions'; 
-import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash, Gavel } from '@phosphor-icons/react';
+import { Sun, Moon, X, Plus, PencilSimple, Trash, User, Package, Camera, Image as ImageIcon, TiktokLogo, ClockCounterClockwise, CaretRight, CheckCircle, ImagesSquare, WarningCircle, FilmSlate, UserCircle, ArrowUp, Star, MagnifyingGlass, Sparkle, CircleNotch, SignOut, CreditCard, ArrowSquareOut, AppWindow, UserFocus, Mountains as BackgroundPlaceholderIcon, Lightbulb, UploadSimple, LinkBreak, Link as LinkIcon, Palette, Lock, Check, Info, Cube, UserPlus, ImageSquare as TikTokImageIcon, UsersThree, Eye, EyeSlash, Gavel, CaretDown } from '@phosphor-icons/react';
 import PricingSection from './PricingSection'; // Import the PricingSection component
 import Header from './Header';
 
@@ -55,6 +55,8 @@ function Settings() {
   }, [contextUser]);
 
   const [activeTab, setActiveTab] = useState('user'); // Default to user tab
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // For mobile dropdown
+  const mobileMenuRef = useRef(null);
   
   // --- Profile States ---
   const [firstName, setFirstName] = useState('');
@@ -283,7 +285,22 @@ function Settings() {
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
     navigate(`#${tabId}`); // Update URL hash
+    setIsMobileMenuOpen(false); // Close mobile menu after selection
   };
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isMobileMenuOpen]);
   // --- END NEW useEffect ---
 
   // --- NEW: Generic Firestore Data Fetcher ---
@@ -1152,36 +1169,38 @@ function Settings() {
     }
   };
 
-  // --- User Profile Tab - MINIMALISTIC DESIGN (LIKE PRICING) ---
+  // --- User Profile Tab - MOBILE RESPONSIVE ---
   const renderUserTab = () => (
     <div className="w-full"> 
-      <div className="px-6 lg:px-0"> 
+      <div className="px-2 sm:px-4 lg:px-0"> 
         <div className="text-left">
-          <div className="flex items-center mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center mb-4 gap-2">
             <span className="text-sm font-medium text-white uppercase tracking-wider">
               User Profile
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
-            <span className="text-sm text-neutral-400">
-              Manage your personal information
-            </span>
+            <div className="hidden sm:flex items-center">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
+                Manage your personal information
+              </span>
+            </div>
           </div>
           
-          <p className="mb-8 text-base text-stone-600 dark:text-stone-400 max-w-2xl">
+          <p className="mb-6 sm:mb-8 text-sm sm:text-base text-neutral-400 max-w-2xl">
             Update your profile details and manage your account settings.
           </p>
           
-          <div className="mb-12 border-b border-stone-100 dark:border-stone-800 pb-8">
-            <div className="flex flex-col md:flex-row gap-8">
-              {/* Make the parent div rounded for circular hover effect */}
-              <div className="relative group flex-shrink-0 w-24 h-24 rounded-full">
+          <div className="mb-8 sm:mb-12 border-b border-neutral-700/50 pb-6 sm:pb-8">
+            <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+              {/* Profile Picture */}
+              <div className="relative group flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto sm:mx-0">
                 <img 
                   src={previewURL || photoURL || '/pp-placeholder.webp'} 
                   alt="Profile" 
-                  className="w-24 h-24 rounded-full object-cover shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover shadow-sm hover:shadow-md transition-all duration-200"
                 />
                 <label className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <PencilSimple size={22} className="text-stone-100" />
+                  <PencilSimple size={18} className="text-stone-100 sm:w-5 sm:h-5" />
                   <input 
                     type="file" 
                     accept="image/*" 
@@ -1200,37 +1219,37 @@ function Settings() {
                 </label>
               </div>
               
-              <div className="space-y-6 flex-1 max-w-md">
+              <div className="space-y-4 sm:space-y-6 flex-1 max-w-md">
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
                     First Name
                   </label>
                   <input 
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-900 text-stone-900 dark:text-stone-100 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 placeholder:text-stone-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-stone-100 transition-all duration-200"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-neutral-800/50 text-white rounded-lg border border-neutral-700/50 placeholder:text-neutral-400 focus:ring-2 focus:ring-lime-400/50 focus:border-lime-400/50 transition-all duration-200 text-sm sm:text-base"
                     placeholder="First Name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
                     Last Name
                   </label>
                   <input 
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-neutral-100 dark:bg-neutral-900 text-stone-900 dark:text-stone-100 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 placeholder:text-stone-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-stone-100 transition-all duration-200"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-neutral-800/50 text-white rounded-lg border border-neutral-700/50 placeholder:text-neutral-400 focus:ring-2 focus:ring-lime-400/50 focus:border-lime-400/50 transition-all duration-200 text-sm sm:text-base"
                     placeholder="Last Name"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-2">
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
                     Email Address
                   </label>
-                  <div className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-900/50 text-stone-500 dark:text-stone-400 rounded-md border-0 shadow-sm ring-1 ring-inset ring-stone-200 dark:ring-stone-800 flex items-center">
+                  <div className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-neutral-800/30 text-neutral-400 rounded-lg border border-neutral-700/50 flex items-center text-sm sm:text-base">
                     {user?.email || 'No email available'}
                   </div>
                 </div>
@@ -1238,10 +1257,10 @@ function Settings() {
                 <button
                   onClick={updateUserProfile}
                   disabled={isLoading}
-                  className={`px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
                     isLoading 
-                      ? 'bg-neutral-100 dark:bg-neutral-800 text-stone-400 dark:text-stone-500 cursor-not-allowed' 
-                      : 'bg-black dark:bg-neutral-100 text-stone-100 dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200 shadow-sm hover:shadow'
+                      ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
+                      : 'bg-lime-400 text-black hover:bg-lime-500 shadow-sm hover:shadow'
                   }`}
                 >
                   {isLoading ? (
@@ -1258,45 +1277,47 @@ function Settings() {
 
           <div className="space-y-6">
             <div>
-              <div className="flex items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center mb-4 gap-2">
                 <span className="text-sm font-medium text-white uppercase tracking-wider">
                   Account Actions
                 </span>
-                <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
-                <span className="text-sm text-neutral-400">
-                  Manage your account
-                </span>
+                <div className="hidden sm:flex items-center">
+                  <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+                  <span className="text-sm text-neutral-400">
+                    Manage your account
+                  </span>
+                </div>
               </div>
               
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <button
                   onClick={handleLogout}
                   disabled={isLoading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center justify-center sm:justify-start gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isLoading
-                      ? 'bg-neutral-50 dark:bg-neutral-900 text-stone-400 dark:text-stone-500 cursor-not-allowed'
-                      : 'bg-neutral-100 dark:bg-neutral-900 shadow-sm hover:shadow text-stone-700 dark:text-stone-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 ring-1 ring-inset ring-stone-200 dark:ring-stone-800 hover:ring-stone-300 dark:hover:ring-stone-700'
+                      ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                      : 'bg-neutral-800/50 text-white hover:bg-neutral-700 border border-neutral-700/50'
                   }`}
                 >
-                  <SignOut size={18} weight="bold" />
+                  <SignOut size={16} weight="bold" />
                   Log Out
                 </button>
 
                 <button
                   onClick={handleDeleteAccountClick}
                   disabled={isLoading}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center justify-center sm:justify-start gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isLoading
-                      ? 'bg-red-50 dark:bg-red-900/10 text-red-300 dark:text-red-500 cursor-not-allowed'
-                      : 'bg-neutral-100 dark:bg-neutral-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 shadow-sm hover:shadow ring-1 ring-inset ring-red-200 dark:ring-red-900/30 hover:ring-red-300 dark:hover:ring-red-800/50'
+                      ? 'bg-red-900/20 text-red-500 cursor-not-allowed'
+                      : 'bg-red-900/20 text-red-400 hover:bg-red-900/30 border border-red-900/30'
                   }`}
                 >
-                  <Trash size={18} weight="bold" />
+                  <Trash size={16} weight="bold" />
                   Delete Account
                 </button>
               </div>
               
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-3">
+              <p className="text-xs text-neutral-400 mt-3">
                 Deleting your account is permanent and cannot be undone. All associated data will be removed.
               </p>
             </div>
@@ -1337,39 +1358,41 @@ function Settings() {
 
     return (
       <div className="w-full">
-        <div className="px-6 lg:px-0">
-          <div className="text-left mb-8">
-            <div className="flex items-center mb-4">
+        <div className="px-2 sm:px-4 lg:px-0">
+          <div className="text-left mb-6 sm:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center mb-4 gap-2">
               <span className="text-sm font-medium text-white uppercase tracking-wider">
                 Manage Billing
               </span>
-              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
-              <span className="text-sm text-neutral-400">
-                Subscription and payment management
-              </span>
+              <div className="hidden sm:flex items-center">
+                <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+                <span className="text-sm text-neutral-400">
+                  Subscription and payment management
+                </span>
+              </div>
             </div>
-            <p className="text-base text-neutral-400 max-w-2xl">
+            <p className="text-sm sm:text-base text-neutral-400 max-w-2xl">
               View your current subscription, manage payment methods, and access billing history.
             </p>
           </div>
 
           {isFetchingSubscription ? (
-            <div className="flex justify-center items-center py-20">
-              <CircleNotch size={28} weight="regular" className="animate-spin text-neutral-400 mr-3" />
-              <span className="text-base text-neutral-400">Loading subscription details...</span>
+            <div className="flex justify-center items-center py-16 sm:py-20">
+              <CircleNotch size={24} className="animate-spin text-neutral-400 mr-3" />
+              <span className="text-sm sm:text-base text-neutral-400">Loading subscription details...</span>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               
               {/* Current Subscription */}
-              <div className="bg-neutral-800/40 backdrop-blur-xl p-8 rounded-3xl border border-neutral-700/50">
-                <div className="flex items-center justify-between mb-6">
+              <div className="bg-neutral-800/40 backdrop-blur-xl p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-neutral-700/50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
                   <div>
-                    <h3 className="text-white font-semibold text-xl mb-2">Current Subscription</h3>
+                    <h3 className="text-white font-semibold text-lg sm:text-xl mb-1 sm:mb-2">Current Subscription</h3>
                     <span className="text-xs text-neutral-400 uppercase tracking-wider">ACTIVE PLAN</span>
                   </div>
-                  <div className="text-right">
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${
+                  <div className="self-start sm:text-right">
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider inline-block ${
                       userSubscription?.subscriptionStatus === 'active' 
                         ? 'bg-lime-400/20 text-lime-400 border border-lime-400/30'
                         : userSubscription?.subscriptionStatus === 'trialing'
@@ -1383,7 +1406,7 @@ function Settings() {
 
                 {userSubscription?.subscriptionStatus ? (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div>
                         <h4 className="text-white font-medium mb-2">Plan Details</h4>
                         <div className="space-y-2 text-sm">
@@ -1482,28 +1505,30 @@ function Settings() {
   // Legal & Privacy Tab
   const renderLegalTab = () => (
     <div className="w-full">
-      <div className="px-6 lg:px-0">
-        <div className="text-left mb-8">
-          <div className="flex items-center mb-4">
+      <div className="px-2 sm:px-4 lg:px-0">
+        <div className="text-left mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center mb-4 gap-2">
             <span className="text-sm font-medium text-white uppercase tracking-wider">
               Legal & Privacy
             </span>
-            <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
-            <span className="text-sm text-neutral-400">
-              Terms, privacy policy, and legal information
-            </span>
+            <div className="hidden sm:flex items-center">
+              <span className="mx-2 h-1 w-1 rounded-full bg-neutral-500"></span>
+              <span className="text-sm text-neutral-400">
+                Terms, privacy policy, and legal information
+              </span>
+            </div>
           </div>
-          <p className="text-base text-neutral-400 max-w-2xl">
+          <p className="text-sm sm:text-base text-neutral-400 max-w-2xl">
             Review our terms of service, privacy policy, and other legal documentation.
           </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Terms of Service */}
-          <div className="bg-neutral-800/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-white font-semibold text-lg mb-2">Terms of Service</h3>
+          <div className="bg-neutral-800/40 backdrop-blur-xl p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-neutral-700/50">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              <div className="flex-1">
+                <h3 className="text-white font-semibold text-base sm:text-lg mb-1 sm:mb-2">Terms of Service</h3>
                 <p className="text-neutral-400 text-sm">
                   Our terms and conditions for using Lungo AI services
                 </p>
@@ -1512,19 +1537,19 @@ function Settings() {
                 href="/terms"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-4 py-2 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center gap-2"
+                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-3 sm:px-4 py-2 rounded-xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center justify-center gap-2 text-sm"
               >
-                <ArrowSquareOut size={16} />
+                <ArrowSquareOut size={14} />
                 View Terms
               </a>
             </div>
           </div>
 
           {/* Privacy Policy */}
-          <div className="bg-neutral-800/40 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-white font-semibold text-lg mb-2">Privacy Policy</h3>
+          <div className="bg-neutral-800/40 backdrop-blur-xl p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-neutral-700/50">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              <div className="flex-1">
+                <h3 className="text-white font-semibold text-base sm:text-lg mb-1 sm:mb-2">Privacy Policy</h3>
                 <p className="text-neutral-400 text-sm">
                   How we collect, use, and protect your personal information
                 </p>
@@ -1533,9 +1558,9 @@ function Settings() {
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-4 py-2 rounded-2xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center gap-2"
+                className="bg-lime-400/20 hover:bg-lime-400/30 text-lime-400 px-3 sm:px-4 py-2 rounded-xl font-medium tracking-wide transition-all hover:scale-105 border border-lime-400/30 hover:border-lime-400/50 flex items-center justify-center gap-2 text-sm"
               >
-                <ArrowSquareOut size={16} />
+                <ArrowSquareOut size={14} />
                 View Policy
               </a>
             </div>
@@ -2786,79 +2811,127 @@ function Settings() {
   };
   */
 
-  // Main component return - Notion-style with sidebar
+  // Main component return - Mobile-first responsive design
   return (
     <div className="min-h-screen bg-neutral-950">
       <Header />
-      <div className="pt-20 p-4 lg:p-6">
+      <div className="pt-40 p-4 lg:p-6">
         {/* Header */}
-        <div className="max-w-7xl mx-auto mb-8">
+        <div className="max-w-7xl mx-auto mb-6" style={{marginTop: '80px'}}>
           <div className="mb-6">
-            <h1 className="text-3xl font-medium text-white mb-2">Settings</h1>
-            <p className="text-neutral-400">
+            <h1 className="text-2xl lg:text-3xl font-medium text-white mb-2">Settings</h1>
+            <p className="text-neutral-400 text-sm lg:text-base">
               Manage your account and preferences
             </p>
           </div>
         </div>
 
-        {/* Main content container with sidebar layout */}
-        <div className="flex flex-col lg:flex-row max-w-7xl mx-auto gap-8">
-        {/* Sidebar */}
-        <aside className="w-full lg:w-80 lg:sticky lg:top-0">
-          <div className="bg-neutral-900/50 backdrop-blur-xl p-4 lg:p-6 rounded-3xl border border-neutral-700/50">            
-            <nav className="space-y-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabClick(tab.id)}
-                  className={`
-                    w-full text-left px-4 py-3 rounded-2xl flex items-center gap-3 transition-all duration-200
-                    ${activeTab === tab.id
-                      ? 'bg-neutral-800/60 text-white font-medium border border-neutral-700/50' 
-                      : 'text-neutral-400 hover:bg-neutral-800/30 hover:text-white'}
-                  `}
-                  aria-current={activeTab === tab.id ? 'page' : undefined}
-                >
-                  {React.cloneElement(tab.icon, { weight: activeTab === tab.id ? 'fill' : 'regular', size: 20 })} 
-                  <span className="text-sm font-medium tracking-wide">{tab.label}</span>
-                  
-                  {activeTab === tab.id && (
-                    <span className="ml-auto h-2 w-2 bg-lime-400 rounded-full"></span> 
-                  )}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 w-full lg:w-auto">
-          <div className="bg-neutral-900/50 backdrop-blur-xl p-4 lg:p-8 rounded-3xl border border-neutral-700/50">
-            {renderTabContent()}
-          </div>
-
-          {/* --- NEW: Custom Toast Notification --- */}
-          {showToast && toastMessage && (
-            <div 
-              className={`fixed top-5 right-5 z-[100] px-6 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 ease-in-out transform ${showToast ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'} 
-                          ${toastMessage.type === 'success' ? 'bg-lime-500 text-stone-100' : 
-                            toastMessage.type === 'error' ? 'bg-red-500 text-stone-100' : 
-                            'bg-neutral-800 text-stone-100 dark:bg-neutral-100 dark:text-black'}`}
-            >
-              {toastMessage.text}
-              <button 
-                onClick={() => setShowToast(false)} 
-                className="absolute top-1 right-1 p-0.5 text-current hover:opacity-75"
+        {/* Main content container */}
+        <div className="max-w-7xl mx-auto">
+          {/* Mobile Navigation Dropdown */}
+          <div className="lg:hidden mb-6" ref={mobileMenuRef}>
+            <div className="bg-neutral-900/50 backdrop-blur-xl rounded-2xl border border-neutral-700/50">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="w-full px-4 py-3 flex items-center justify-between text-white"
               >
-                <X size={14} weight="bold"/>
+                <div className="flex items-center gap-3">
+                  {React.cloneElement(tabs.find(tab => tab.id === activeTab)?.icon, { size: 20, weight: 'fill' })}
+                  <span className="text-sm font-medium">
+                    {tabs.find(tab => tab.id === activeTab)?.label}
+                  </span>
+                </div>
+                <CaretDown 
+                  size={20} 
+                  className={`transition-transform duration-200 ${isMobileMenuOpen ? 'rotate-180' : ''}`}
+                />
               </button>
+              
+              {/* Mobile Dropdown Menu */}
+              {isMobileMenuOpen && (
+                <div className="border-t border-neutral-700/50 p-2">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleTabClick(tab.id)}
+                      className={`
+                        w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all duration-200
+                        ${activeTab === tab.id
+                          ? 'bg-neutral-800/60 text-white font-medium' 
+                          : 'text-neutral-400 hover:bg-neutral-800/30 hover:text-white'}
+                      `}
+                    >
+                      {React.cloneElement(tab.icon, { weight: activeTab === tab.id ? 'fill' : 'regular', size: 18 })} 
+                      <span className="text-sm">{tab.label}</span>
+                      {activeTab === tab.id && (
+                        <span className="ml-auto h-2 w-2 bg-lime-400 rounded-full"></span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-          {/* --- End Custom Toast Notification --- */}
-        </main>
-      </div>
+          </div>
 
-      {/* ---- Generic Delete Confirmation Modal (for Backgrounds & Creators) ---- */}
+          {/* Desktop and Mobile Layout */}
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+            {/* Desktop Sidebar */}
+            <aside className="hidden lg:block w-80 lg:sticky lg:top-24">
+              <div className="bg-neutral-900/50 backdrop-blur-xl p-6 rounded-3xl border border-neutral-700/50">            
+                <nav className="space-y-2">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleTabClick(tab.id)}
+                      className={`
+                        w-full text-left px-4 py-3 rounded-2xl flex items-center gap-3 transition-all duration-200
+                        ${activeTab === tab.id
+                          ? 'bg-neutral-800/60 text-white font-medium border border-neutral-700/50' 
+                          : 'text-neutral-400 hover:bg-neutral-800/30 hover:text-white'}
+                      `}
+                      aria-current={activeTab === tab.id ? 'page' : undefined}
+                    >
+                      {React.cloneElement(tab.icon, { weight: activeTab === tab.id ? 'fill' : 'regular', size: 20 })} 
+                      <span className="text-sm font-medium tracking-wide">{tab.label}</span>
+                      
+                      {activeTab === tab.id && (
+                        <span className="ml-auto h-2 w-2 bg-lime-400 rounded-full"></span> 
+                      )}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1">
+              <div className="bg-neutral-900/50 backdrop-blur-xl p-4 lg:p-8 rounded-2xl lg:rounded-3xl border border-neutral-700/50">
+                {renderTabContent()}
+              </div>
+            </main>
+          </div>
+        </div>
+
+        {/* --- NEW: Custom Toast Notification --- */}
+        {showToast && toastMessage && (
+          <div 
+            className={`fixed top-5 right-5 z-[100] px-6 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300 ease-in-out transform ${showToast ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'} 
+                        ${toastMessage.type === 'success' ? 'bg-lime-500 text-stone-100' : 
+                          toastMessage.type === 'error' ? 'bg-red-500 text-stone-100' : 
+                          'bg-neutral-800 text-stone-100 dark:bg-neutral-100 dark:text-black'}`}
+          >
+            {toastMessage.text}
+            <button 
+              onClick={() => setShowToast(false)} 
+              className="absolute top-1 right-1 p-0.5 text-current hover:opacity-75"
+            >
+              <X size={14} weight="bold"/>
+            </button>
+          </div>
+        )}
+        {/* --- End Custom Toast Notification --- */}
+
+        {/* ---- Generic Delete Confirmation Modal (for Backgrounds & Creators) ---- */}
       {showDeleteConfirmModal && itemToDelete && (
         <div 
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity duration-200"

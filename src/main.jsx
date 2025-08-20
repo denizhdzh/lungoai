@@ -19,6 +19,7 @@ const Settings = lazy(() => import('./components/Settings.jsx'));
 const PricingSection = lazy(() => import('./components/PricingSection.jsx'));
 const GenerationPage = lazy(() => import('./pages/GenerationPage.jsx'));
 const WelcomePage = lazy(() => import('./pages/WelcomePage.jsx'));
+const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
 const ModelsPage = lazy(() => import('./pages/ModelsPage.jsx'));
 const TermsPage = lazy(() => import('./pages/TermsPage.jsx'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage.jsx'));
@@ -339,18 +340,9 @@ function AppRouter() {
     }
   };
 
-  // Wait until auth check, user data fetch, AND logo animation are complete before rendering routes
-  if (!authChecked || !userDataFetched || !logoAnimationComplete) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-950 text-white">
-        <DotLottieReact
-          src="/lottie-logo.json"
-          loop={false}
-          autoplay
-          style={{ width: 120, height: 120 }}
-        />
-      </div>
-    );
+  // No loading screen, just render when ready
+  if (!authChecked || !userDataFetched) {
+    return null;
   }
 
   return (
@@ -470,6 +462,17 @@ function AppRouter() {
           <Suspense fallback={<LoadingFallback />}>
             <PrivacyPage />
           </Suspense>
+        }
+      />
+      
+      <Route 
+        path="/admin" 
+        element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <Suspense fallback={<LoadingFallback />}>
+              <AdminPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 

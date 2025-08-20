@@ -8,17 +8,20 @@ import {
 	X,
 	Plus,
 	CaretUp,
-	Lock
+	Lock,
+	Pencil,
+	Wrench
 } from '@phosphor-icons/react';
 import { auth, db } from '../firebase.js';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import DynamicIsland from '../components/DynamicIsland.jsx';
 import Header from '../components/Header.jsx';
 
 const GenerationPage = () => {
-	const [activeType, setActiveType] = useState('image');
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [activeType, setActiveType] = useState(searchParams.get('type') || 'image');
 	const [selectedModel, setSelectedModel] = useState('google/imagen-4');
 	const [prompt, setPrompt] = useState('');
 	const [settings, setSettings] = useState({});
@@ -51,6 +54,29 @@ const GenerationPage = () => {
 		}, 5000);
 	};
 	
+	// Handle URL type parameter changes
+	useEffect(() => {
+		const urlType = searchParams.get('type');
+		if (urlType && ['image', 'video', 'edit', 'tools'].includes(urlType)) {
+			setActiveType(urlType);
+			// Set appropriate default models based on type
+			switch(urlType) {
+				case 'image':
+					setSelectedModel('google/imagen-4');
+					break;
+				case 'video':
+					setSelectedModel('google/veo-3-fast');
+					break;
+				case 'edit':
+					setSelectedModel('google/imagen-4'); // Default for edit
+					break;
+				case 'tools':
+					setSelectedModel('google/imagen-4'); // Default for tools
+					break;
+			}
+		}
+	}, [searchParams]);
+
 	// Check authentication and fetch subscription data
 	useEffect(() => {
 		const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -842,17 +868,29 @@ const GenerationPage = () => {
 		return null;
 	}
 
+	// Handle type change and update URL
+	const handleTypeChange = (newType) => {
+		setActiveType(newType);
+		setSearchParams({ type: newType });
+		// Set appropriate default models
+		switch(newType) {
+			case 'image':
+				setSelectedModel('google/imagen-4');
+				break;
+			case 'video':
+				setSelectedModel('google/veo-3-fast');
+				break;
+			case 'edit':
+				setSelectedModel('google/imagen-4');
+				break;
+			case 'tools':
+				setSelectedModel('google/imagen-4');
+				break;
+		}
+	};
+
 	return (
 		<div className="min-h-screen bg-neutral-950 relative">
-			{/* Image Background */}
-			<div className="fixed inset-0 w-full h-full z-0">
-				<img 
-					src="/Glowing Abstract Flower.png" 
-					alt="Background" 
-					className="w-full h-full object-cover"
-				/>
-				<div className="absolute inset-0 bg-black/30" />
-			</div>
 			
 			{/* Header Component */}
 			<Header />
@@ -926,302 +964,9 @@ const GenerationPage = () => {
 					</div>
 				))}
 			</div>
-			{/* Left Sidebar - Minimal Design - Hidden on mobile */}
-			<div className="hidden lg:block fixed left-2 top-20 z-10 w-64">
-				<div className="bg-transparent space-y-1 shadow-2xl max-h-[80vh]">
-					
-					{/* Type Selection */}
-					<div className="bg-neutral-900 rounded-[10px] p-3 mb-1">
-						<div className="text-xs text-neutral-400 mb-2">Type</div>
-						<div className="flex gap-2">
-							<button
-								onClick={() => {
-									setActiveType('image');
-									setSelectedModel('google/imagen-4');
-								}}
-								className={`flex-1 px-3 py-2 rounded-xl text-xs font-light tracking-wide transition-all flex items-center justify-center gap-2 ${
-									activeType === 'image' 
-										? 'bg-white text-black font-medium' 
-										: 'bg-neutral-800/40 text-neutral-400 hover:text-white hover:bg-neutral-700/40'
-								}`}
-							>
-								<ImageIcon size={14} />
-								Image
-							</button>
-							<button
-								onClick={() => {
-									setActiveType('video');
-									setSelectedModel('google/veo-3-fast');
-								}}
-								className={`flex-1 px-3 py-2 rounded-xl text-xs font-light tracking-wide transition-all flex items-center justify-center gap-2 ${
-									activeType === 'video' 
-										? 'bg-white text-black font-medium' 
-										: 'bg-neutral-800/40 text-neutral-400 hover:text-white hover:bg-neutral-700/40'
-								}`}
-							>
-								<VideoIcon size={14} />
-								Video
-							</button>
-						</div>
-					</div>
-					
-					{/* Model Selection */}
-					<div className="bg-neutral-900 rounded-[10px] p-3 relative dropdown-container">
-						<div className="text-xs text-neutral-400 mb-2">Model</div>
-						<div className="relative">
-							<button
-								onClick={() => toggleDropdown('model')}
-								className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none text-left flex items-center justify-between"
-							>
-								<div className="flex items-center gap-2">
-									<div className="w-5 h-5 bg-white/10 rounded-md flex items-center justify-center p-0.5">
-										<img 
-											src={getModelLogo(selectedModel)}
-											alt={availableModels[selectedModel]?.name}
-											className="w-full h-full object-contain"
-											onError={(e) => {
-												e.target.style.display = 'none';
-											}}
-										/>
-									</div>
-									<div>
-										<div className="text-white text-sm">{availableModels[selectedModel]?.name || selectedModel}</div>
-										<div className="text-xs text-neutral-500">{getModelSupport(selectedModel)}</div>
-									</div>
-								</div>
-								<CaretDown size={14} className={`text-neutral-400 transition-transform ${openDropdowns.model ? 'rotate-180' : ''}`} />
-							</button>
-							
-							{openDropdowns.model && (
-								<div className="absolute top-full left-0 right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-									{Object.entries(availableModels).map(([id, model]) => (
-										<button
-											key={id}
-											onClick={() => {
-												setSelectedModel(id);
-												closeAllDropdowns();
-											}}
-											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
-												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
-											}`}
-										>
-											<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
-												<img 
-													src={getModelLogo(id)}
-													alt={model.name}
-													className="w-full h-full object-contain"
-													onError={(e) => {
-														e.target.style.display = 'none';
-													}}
-												/>
-											</div>
-											<div className="flex-1">
-												<div className="text-sm">{model.name}</div>
-												<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
-											</div>
-										</button>
-									))}
-								</div>
-							)}
-						</div>
-					</div>
-
-					{/* All Dropdown Parameters */}
-					{getDropdownParameters().map(([key, param]) => {
-						const options = modelConfig?.options?.[key];
-						const value = getSettingValue(key);
-						
-						
-						// Handle boolean with 2 options as buttons
-						if (param.type === 'boolean') {
-							return (
-								<div key={key} className="bg-neutral-900 rounded-[10px] p-3">
-									<div className="text-xs text-neutral-400 mb-2 capitalize">
-										{key.replace(/_/g, ' ')}
-									</div>
-									<div className="grid grid-cols-2 gap-2">
-										<button
-											onClick={() => handleSettingChange(key, true)}
-											className={`px-3 py-2 text-xs rounded-[10px] transition-colors ${
-												value === true
-													? 'bg-white text-black'
-													: 'bg-neutral-900 text-white hover:bg-neutral-800'
-											}`}
-										>
-											Yes
-										</button>
-										<button
-											onClick={() => handleSettingChange(key, false)}
-											className={`px-3 py-2 text-xs rounded-[10px] transition-colors ${
-												value === false
-													? 'bg-white text-black'
-													: 'bg-neutral-700 text-white hover:bg-neutral-600'
-											}`}
-										>
-											No
-										</button>
-									</div>
-								</div>
-							);
-						}
-						
-						// Handle options with exactly 2 choices as buttons
-						if (options && options.length === 2) {
-							return (
-								<div key={key} className="bg-neutral-900 rounded-[10px] p-3">
-									<div className="text-xs text-neutral-400 mb-2 capitalize">
-										{key.replace(/_/g, ' ')}
-									</div>
-									<div className="grid grid-cols-2 gap-2">
-										{options.map(option => {
-											const disabled = isOptionDisabled(key, option);
-											const tooltip = getDisabledTooltip(key, option);
-											
-											return (
-												<button
-													key={option}
-													onClick={() => !disabled && handleSettingChange(key, option)}
-													disabled={disabled}
-													title={disabled ? tooltip : ''}
-													className={`px-3 py-2 text-xs rounded-[10px] transition-colors ${
-														value === option
-															? 'bg-white text-black'
-															: disabled
-															? 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-50'
-															: 'bg-neutral-700 text-white hover:bg-neutral-600'
-													}`}
-												>
-													{option}
-												</button>
-											);
-										})}
-									</div>
-								</div>
-							);
-						}
-						
-						// Handle all other options as custom dropdown
-						if (options && options.length > 2) {
-							return (
-								<div key={key} className="bg-neutral-900 rounded-[10px] p-3 relative dropdown-container">
-									<div className="text-xs text-neutral-400 mb-2 capitalize">
-										{key.replace(/_/g, ' ')}
-									</div>
-									<div className="relative">
-										<button
-											onClick={() => toggleDropdown(key)}
-											className="w-full bg-transparent text-white text-sm border-none focus:outline-none appearance-none text-left flex items-center justify-between pr-2"
-										>
-											<span>{value || options[0] || 'Select...'}</span>
-											<CaretDown size={14} className={`text-neutral-400 transition-transform ${openDropdowns[key] ? 'rotate-180' : ''}`} />
-										</button>
-										
-										{openDropdowns[key] && (
-											<div className="absolute top-full left-0 right-0 mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-												{options.map(option => {
-													const disabled = isOptionDisabled(key, option);
-													const tooltip = getDisabledTooltip(key, option);
-													
-													return (
-														<button
-															key={option}
-															onClick={() => {
-																if (!disabled) {
-																	handleSettingChange(key, option);
-																	closeAllDropdowns();
-																}
-															}}
-															disabled={disabled}
-															title={disabled ? tooltip : ''}
-															className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-																value === option 
-																	? 'bg-neutral-700 text-white' 
-																	: disabled
-																	? 'text-neutral-500 cursor-not-allowed opacity-50'
-																	: 'text-neutral-300 hover:bg-neutral-700'
-															}`}
-														>
-															{option}
-														</button>
-													);
-												})}
-											</div>
-										)}
-									</div>
-								</div>
-							);
-						}
-						
-						return null;
-					})}
-
-					{/* Fixed Aspect Ratio Info for models without aspect_ratio options */}
-					{selectedModel === 'minimax/hailuo-02' && !modelConfig?.options?.aspect_ratio && (
-						<div className="bg-neutral-900 rounded-[10px] p-3">
-							<div className="text-xs text-neutral-400 mb-2">Aspect ratio</div>
-							<div className="px-3 py-2 text-xs rounded-[10px] bg-neutral-700 text-neutral-300 text-center">
-								16:9 (Fixed)
-							</div>
-						</div>
-					)}
-
-					{/* Slider Parameters */}
-					{getSliderParameters().map(([key, param]) => {
-						const value = getSettingValue(key);
-						const min = key === 'seed' ? 1 : 1;
-						const max = key === 'seed' ? 999999 : (key.includes('number') ? 10 : (key === 'safety_tolerance' ? 6 : 100));
-						const currentValue = value || param.default || min;
-						
-						return (
-							<div key={key} className="bg-neutral-900 rounded-[10px] p-3">
-								<div className="text-xs text-neutral-400 mb-2 capitalize">
-									{key.replace(/_/g, ' ')}
-								</div>
-								<div className="space-y-2">
-									<div className="flex items-center justify-between">
-										<span className="text-sm text-white">{currentValue}</span>
-										<span className="text-xs text-neutral-500">{max}</span>
-									</div>
-									<div className="relative h-6 bg-neutral-700 rounded-[3px] overflow-hidden">
-										<div 
-											className="absolute left-0 top-0 h-full bg-neutral-500 transition-all duration-200"
-											style={{ width: `${((currentValue - min) / (max - min)) * 100}%` }}
-										></div>
-										<input
-											type="range"
-											min={min}
-											max={max}
-											value={currentValue}
-											onChange={(e) => handleSettingChange(key, param.type === 'integer' ? parseInt(e.target.value) : parseFloat(e.target.value))}
-											className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-										/>
-										<div 
-											className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white rounded-[2px] pointer-events-none transition-all duration-200"
-											style={{ left: `calc(${((currentValue - min) / (max - min)) * 100}% - 6px)` }}
-										></div>
-									</div>
-								</div>
-							</div>
-						);
-					})}
-
-					{/* Negative Prompt */}
-					{modelConfig?.params?.negative_prompt && (
-						<div className="bg-neutral-900 rounded-[10px] p-3">
-							<div className="text-xs text-neutral-400 mb-2">Negative prompt</div>
-							<textarea
-								value={getSettingValue('negative_prompt') || ''}
-								onChange={(e) => handleSettingChange('negative_prompt', e.target.value)}
-								placeholder="What you don't want..."
-								className="w-full bg-neutral-700 text-white rounded-[10px] px-3 py-2 text-sm border-none focus:outline-none resize-none h-16"
-							/>
-						</div>
-					)}
-				</div>
-			</div>
 
 			{/* Main content area */}
-			<div className="flex items-center justify-center p-4 h-full w-full lg:ml-64 lg:mr-20">
+			<div className="flex items-center justify-center p-4 h-full w-full lg:mr-20">
 				{generatedImage ? (
 					/* Generated Image Display */
 					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
@@ -1457,13 +1202,10 @@ const GenerationPage = () => {
 					{/* Top row - Type and Model Selection + Aspect Ratio */}
 					<div className="flex items-stretch gap-3 h-12">
 						{/* Type Selection - Mobile */}
-						<div className="flex gap-2 bg-neutral-900 rounded-xl p-2">
+						<div className="grid grid-cols-4 gap-2 bg-neutral-900 rounded-xl p-2">
 							<button
-								onClick={() => {
-									setActiveType('image');
-									setSelectedModel('google/imagen-4');
-								}}
-								className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+								onClick={() => handleTypeChange('image')}
+								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
 									activeType === 'image' 
 										? 'bg-white text-black' 
 										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -1473,11 +1215,8 @@ const GenerationPage = () => {
 								Image
 							</button>
 							<button
-								onClick={() => {
-									setActiveType('video');
-									setSelectedModel('google/veo-3-fast');
-								}}
-								className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 ${
+								onClick={() => handleTypeChange('video')}
+								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
 									activeType === 'video' 
 										? 'bg-white text-black' 
 										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -1485,6 +1224,28 @@ const GenerationPage = () => {
 							>
 								<VideoIcon size={14} />
 								Video
+							</button>
+							<button
+								onClick={() => handleTypeChange('edit')}
+								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
+									activeType === 'edit' 
+										? 'bg-white text-black' 
+										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+								}`}
+							>
+								<Pencil size={14} />
+								Edit
+							</button>
+							<button
+								onClick={() => handleTypeChange('tools')}
+								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
+									activeType === 'tools' 
+										? 'bg-white text-black' 
+										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+								}`}
+							>
+								<Wrench size={14} />
+								Tools
 							</button>
 						</div>
 						
@@ -1609,6 +1370,100 @@ const GenerationPage = () => {
 
 				{/* Desktop Layout - Single Row */}
 				<div className="hidden lg:flex items-stretch gap-3 h-16">
+					{/* Model and Ratio Controls */}
+					<div className="flex flex-col gap-2 w-48 dropdown-container">
+						{/* Model Selection */}
+						<div className="relative">
+							<button
+								onClick={() => toggleDropdown('model_bottom')}
+								className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
+							>
+								<div className="flex items-center gap-2">
+									<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
+										<img 
+											src={getModelLogo(selectedModel)}
+											alt={availableModels[selectedModel]?.name}
+											className="w-full h-full object-contain"
+											onError={(e) => {
+												e.target.style.display = 'none';
+											}}
+										/>
+									</div>
+									<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
+								</div>
+								<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model_bottom ? 'rotate-180' : ''}`} />
+							</button>
+							
+							{openDropdowns.model_bottom && (
+								<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+									{Object.entries(availableModels).map(([id, model]) => (
+										<button
+											key={id}
+											onClick={() => {
+												setSelectedModel(id);
+												closeAllDropdowns();
+											}}
+											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+											}`}
+										>
+											<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+												<img 
+													src={getModelLogo(id)}
+													alt={model.name}
+													className="w-full h-full object-contain"
+													onError={(e) => {
+														e.target.style.display = 'none';
+													}}
+												/>
+											</div>
+											<div className="flex-1 min-w-0">
+												<div className="text-sm truncate">{model.name}</div>
+												<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
+											</div>
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+						
+						{/* Aspect Ratio - Desktop (if available) */}
+						{modelConfig?.options?.aspect_ratio && (
+							<div className="relative">
+								<button
+									onClick={() => toggleDropdown('aspect_ratio_desktop')}
+									className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
+								>
+									<div className="font-medium">
+										{selectedModel === 'black-forest-labs/flux-kontext-pro' && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
+									</div>
+									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
+								</button>
+								
+								{openDropdowns.aspect_ratio_desktop && (
+									<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+										{modelConfig.options.aspect_ratio.map(option => (
+											<button
+												key={option}
+												onClick={() => {
+													handleSettingChange('aspect_ratio', option);
+													closeAllDropdowns();
+												}}
+												className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+													getSettingValue('aspect_ratio') === option 
+														? 'bg-neutral-700 text-white' 
+														: 'text-neutral-300 hover:bg-neutral-700'
+												}`}
+											>
+												{selectedModel === 'black-forest-labs/flux-kontext-pro' && option === 'match_input_image' ? 'auto' : option}
+											</button>
+										))}
+								</div>
+							)}
+						</div>
+					)}
+				</div>
+					
 					{/* Prompt input */}
 					<div className="flex-1 relative h-full">
 						<textarea

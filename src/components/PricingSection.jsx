@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Lock, HandTap, CircleNotch, Info } from '@phosphor-icons/react';
+import React, { useState } from 'react';
+import { Lock, CircleNotch } from '@phosphor-icons/react';
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Get Firebase Functions instance
@@ -18,62 +18,12 @@ const planPriceMap = {
 };
 // --- End Plan Price Map ---
 
-// --- Credit Packages for One-Time Purchases ---
 const creditPackages = [
-  {
-    id: 200,
-    name: 'Small',
-    credits: 200,
-    price: 20.00,
-    subscriberPrice: 16.00,
-    originalPrice: 25.00,
-    unitPrice: 0.10,
-    subscriberUnitPrice: 0.08,
-    imageCount: Math.floor(200 / 1), // 200 images
-    videoCount: Math.floor(200 / 5), // 40 videos
-    popular: false
-  },
-  {
-    id: 500,
-    name: 'Medium',
-    credits: 500,
-    price: 45.00,
-    subscriberPrice: 35.00,
-    originalPrice: 56.25,
-    unitPrice: 0.09,
-    subscriberUnitPrice: 0.07,
-    imageCount: Math.floor(500 / 1), // 500 images
-    videoCount: Math.floor(500 / 5), // 100 videos
-    popular: false
-  },
-  {
-    id: 1000,
-    name: 'Large',
-    credits: 1000,
-    price: 80.00,
-    subscriberPrice: 60.00,
-    originalPrice: 100.00,
-    unitPrice: 0.08,
-    subscriberUnitPrice: 0.06,
-    imageCount: Math.floor(1000 / 1), // 1000 images
-    videoCount: Math.floor(1000 / 5), // 200 videos
-    popular: false
-  },
-  {
-    id: 2000,
-    name: 'Ultimate',
-    credits: 2000,
-    price: 140.00,
-    subscriberPrice: 100.00,
-    originalPrice: 175.00,
-    unitPrice: 0.07,
-    subscriberUnitPrice: 0.05,
-    imageCount: Math.floor(2000 / 1), // 2000 images
-    videoCount: Math.floor(2000 / 5), // 400 videos
-    popular: true
-  }
+  { id: 200, name: 'Small', credits: 200, price: 20.00, subscriberPrice: 16.00, originalPrice: 25.00 },
+  { id: 500, name: 'Medium', credits: 500, price: 45.00, subscriberPrice: 35.00, originalPrice: 56.25 },
+  { id: 1000, name: 'Large', credits: 1000, price: 80.00, subscriberPrice: 60.00, originalPrice: 100.00 },
+  { id: 2000, name: 'Ultimate', credits: 2000, price: 140.00, subscriberPrice: 100.00, originalPrice: 175.00, popular: true }
 ];
-// --- End Credit Packages ---
 
 // --- Plan Data with Stripe Price IDs ---
 const plans = [

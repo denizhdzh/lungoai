@@ -54,13 +54,13 @@ const WelcomePage = () => {
 
 
   return (
-    <div className="min-h-screen bg-neutral-950 relative">
+    <div className="bg-neutral-950 relative">
       <Header />
       
       {/* Hero Section */}
-      <div className="py-10 px-4 md:px-10 mt-16">
+      <div className="py-6 px-4 md:px-10 mt-16">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-6xl font-light text-white mb-4 font-['Oswald']">
+          <h1 className="text-4xl md:text-6xl font-light text-white mb-4 mt-24 font-['Oswald']">
             Easiest way to generate with AI
           </h1>
           <div className="flex items-center justify-center gap-2">

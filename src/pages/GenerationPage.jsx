@@ -966,7 +966,7 @@ const GenerationPage = () => {
 			</div>
 
 			{/* Main content area */}
-			<div className="flex items-center justify-center p-4 h-full w-full lg:mr-20">
+			<div className="flex items-center justify-center p-4 h-full w-full mb-32">
 				{generatedImage ? (
 					/* Generated Image Display */
 					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
@@ -1023,7 +1023,7 @@ const GenerationPage = () => {
 					</div>
 				) : !uploadedImage ? (
 					/* Empty state - Use getAspectRatioClass */
-					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 ${getAspectRatioClass()}`}>
+					<div className={`relative bg-transparent p-4 w-full transition-all duration-300 flex items-center justify-center ${getAspectRatioClass()}`}>
 					
 						{/* Inner frame - Drop Area or Info */}
 						<div 
@@ -1059,14 +1059,16 @@ const GenerationPage = () => {
 									</div>
 								</div>
 							) : (
-								<div className="text-center">
-									<div className="mb-4 text-neutral-500">
-										<ImageIcon size={48} className="mx-auto mb-2" />
-										<div className="text-lg font-medium mb-2">
-											Ready to Generate
-										</div>
-										<div className="text-sm text-neutral-600">
-											{availableModels[selectedModel]?.name} • Text-to-Image
+								<div className="flex items-center justify-center h-full">
+									<div className="text-center">
+										<div className="mb-4 text-neutral-500">
+											<ImageIcon size={48} className="mx-auto mb-2" />
+											<div className="text-lg font-medium mb-2">
+												Ready to Generate
+											</div>
+											<div className="text-sm text-neutral-600">
+												{availableModels[selectedModel]?.name} • Text-to-Image
+											</div>
 										</div>
 									</div>
 								</div>

@@ -12,7 +12,7 @@
 .embla__container {
   display: flex;
   touch-action: pan-y pinch-zoom;
-  margin-left: calc(var(--slide-spacing) * -1);
+  margin-left: 0;
 }
 .embla__slide {
   transform: translate3d(0, 0, 0);
@@ -45,7 +45,8 @@
   grid-template-columns: auto 1fr;
   justify-content: space-between;
   gap: 1.2rem;
-  margin-top: 1.8rem;
+  margin-top: 1rem;
+  margin-left: 1rem;
 }
 .embla__buttons {
   display: grid;

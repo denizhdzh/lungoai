@@ -9,14 +9,12 @@
     -webkit-overflow-scrolling: touch;
   }
   body {
-    @apply bg-white dark:bg-zinc-950 h-full;
+    @apply bg-white dark:bg-zinc-950;
     /* This ensures the overscroll background matches your main app background */
     /* Add any other global body styles here if needed */
     overscroll-behavior: contain;
   }
-  #root {
-    @apply h-full;
-  }
+
 }
 
 @layer utilities {

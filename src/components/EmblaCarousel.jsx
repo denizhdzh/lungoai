@@ -38,7 +38,7 @@ const EmblaCarousel = (props) => {
         <div className="embla__container">
           {slides.map((slide, index) => (
             <div className="embla__slide" key={index}>
-              <div className="w-full h-80 md:h-[480px] relative cursor-pointer overflow-hidden shadow-2xl">
+              <a href={slide.link} className="block w-full aspect-video relative cursor-pointer overflow-hidden shadow-2xl max-w-4xl mx-auto">
                 {/* Render based on type */}
                 {slide.type === 'edit_demo' && slide.beforeImage && slide.afterImage ? (
                   <EditTransition 
@@ -46,7 +46,6 @@ const EmblaCarousel = (props) => {
                     afterImage={slide.afterImage}
                     featureName={slide.featureName}
                     aiModel={slide.aiModel}
-                    cta={slide.cta}
                     link={slide.link}
                     duration={4000}
                   />
@@ -79,24 +78,7 @@ const EmblaCarousel = (props) => {
                   </>
                 )}
                 
-                <div className="absolute inset-0 bg-black/10 transition-colors" />
-                <div className="relative z-10 h-full flex flex-col items-center justify-center text-center p-8">
-                  <h3 className="text-5xl md:text-8xl font-bold text-yellow-400 mb-2 uppercase tracking-wide font-serif">
-                    {slide.featureName}
-                  </h3>
-                  <p className="text-lg text-white/80 mb-6">
-                    {slide.aiModel}
-                  </p>
-                  {slide.cta && slide.link && (
-                    <a 
-                      href={slide.link}
-                      className="bg-lime-400 text-black px-6 py-3 rounded-lg font-medium hover:bg-lime-300 transition-colors"
-                    >
-                      {slide.cta}
-                    </a>
-                  )}
-                </div>
-              </div>
+              </a>
             </div>
           ))}
         </div>

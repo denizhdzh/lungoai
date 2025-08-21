@@ -16,6 +16,9 @@ const Header = () => {
   
   // Get current type from URL
   const currentType = new URLSearchParams(location.search).get('type') || 'image';
+  
+  // Check if current page is GenerationPage
+  const isGenerationPage = location.pathname === '/studio';
 
   // Fetch Firestore user data
   useEffect(() => {
@@ -78,9 +81,9 @@ const Header = () => {
             {/* Navigation - Mobile Icons */}
             <div className="flex items-center gap-1">
               <button 
-                onClick={() => navigate('/studio?type=image')}
+                onClick={() => user ? navigate('/studio?type=image') : navigate('/signup')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  currentType === 'image' 
+                  isGenerationPage && currentType === 'image' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -91,9 +94,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=video')}
+                onClick={() => user ? navigate('/studio?type=video') : navigate('/signup')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  currentType === 'video' 
+                  isGenerationPage && currentType === 'video' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -104,9 +107,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=edit')}
+                onClick={() => user ? navigate('/studio?type=edit') : navigate('/signup')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  currentType === 'edit' 
+                  isGenerationPage && currentType === 'edit' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -117,9 +120,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=tools')}
+                onClick={() => user ? navigate('/studio?type=tools') : navigate('/signup')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  currentType === 'tools' 
+                  isGenerationPage && currentType === 'tools' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -148,9 +151,9 @@ const Header = () => {
             {/* Navigation - Desktop Text */}
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => navigate('/studio?type=image')}
+                onClick={() => user ? navigate('/studio?type=image') : navigate('/signup')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentType === 'image' 
+                  isGenerationPage && currentType === 'image' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -159,9 +162,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=video')}
+                onClick={() => user ? navigate('/studio?type=video') : navigate('/signup')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentType === 'video' 
+                  isGenerationPage && currentType === 'video' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -170,9 +173,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=edit')}
+                onClick={() => user ? navigate('/studio?type=edit') : navigate('/signup')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentType === 'edit' 
+                  isGenerationPage && currentType === 'edit' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}
@@ -181,9 +184,9 @@ const Header = () => {
               </button>
               
               <button 
-                onClick={() => navigate('/studio?type=tools')}
+                onClick={() => user ? navigate('/studio?type=tools') : navigate('/signup')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentType === 'tools' 
+                  isGenerationPage && currentType === 'tools' 
                     ? 'bg-white text-black' 
                     : 'text-white hover:bg-neutral-700'
                 }`}

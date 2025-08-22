@@ -68,7 +68,7 @@ const GenerationPage = () => {
 					setSelectedModel('google/veo-3-fast');
 					break;
 				case 'edit':
-					setSelectedModel('google/imagen-4'); // Default for edit
+					setSelectedModel('black-forest-labs/flux-kontext-pro'); // Default for edit
 					break;
 				case 'tools':
 					setSelectedModel('google/imagen-4'); // Default for tools
@@ -359,6 +359,15 @@ const GenerationPage = () => {
 	const calculateCredits = () => {
 		if (!modelConfig) return 0;
 		
+		// Special handling for edit mode models
+		if (activeType === 'edit') {
+			if (selectedModel === 'black-forest-labs/flux-kontext-pro') {
+				return 1;
+			} else if (selectedModel === 'black-forest-labs/flux-kontext-max') {
+				return 2;
+			}
+		}
+		
 		// For image models
 		if (modelConfig.credits !== undefined) {
 			const baseCredits = modelConfig.credits;
@@ -493,19 +502,38 @@ const GenerationPage = () => {
 		try {
 			const filename = `generation-${generation.id}.jpg`;
 			
-			// For history images, we'll use a default aspect ratio and set directly
-			// Since they're from Firebase Storage, we know they exist
-			const newImage = {
-				id: Date.now() + Math.random(),
-				file: null, // Don't need file for history images
-				url: generation.url,
-				name: filename,
-				aspectRatio: 1, // Default to square, will be updated when image loads in preview
-				isFromHistory: true
+			// Load the image to get its actual aspect ratio
+			const img = new window.Image();
+			img.onload = () => {
+				const actualAspectRatio = img.width / img.height;
+				const newImage = {
+					id: Date.now() + Math.random(),
+					file: null, // Don't need file for history images
+					url: generation.url,
+					name: filename,
+					aspectRatio: actualAspectRatio,
+					isFromHistory: true
+				};
+				
+				setUploadedImage(newImage);
+				console.log('✅ Set history image as uploaded image with correct aspect ratio:', filename, `${img.width}x${img.height}`, `ratio: ${actualAspectRatio.toFixed(2)}`);
 			};
 			
-			setUploadedImage(newImage);
-			console.log('✅ Set history image as uploaded image:', filename);
+			img.onerror = () => {
+				// Fallback to default if image fails to load
+				const newImage = {
+					id: Date.now() + Math.random(),
+					file: null,
+					url: generation.url,
+					name: filename,
+					aspectRatio: 1, // Default to square if image fails to load
+					isFromHistory: true
+				};
+				setUploadedImage(newImage);
+				console.log('⚠️ Failed to load history image, using default aspect ratio:', filename);
+			};
+			
+			img.src = generation.url;
 			
 		} catch (error) {
 			console.error('Error adding history image:', error);
@@ -517,22 +545,76 @@ const GenerationPage = () => {
 		if (!generatedImage || generatedImage.isVideo) return;
 		
 		try {
-			const newImage = {
-				id: Date.now() + Math.random(),
-				file: null, // Don't need file for generated images
-				url: generatedImage.url,
-				name: `generated-${Date.now()}.jpg`,
-				aspectRatio: 1, // Default to square, will be updated when image loads
-				isFromHistory: true // Treat like history image for backend processing
+			// Load the image to get its actual aspect ratio
+			const img = new window.Image();
+			img.onload = () => {
+				const actualAspectRatio = img.width / img.height;
+				const newImage = {
+					id: Date.now() + Math.random(),
+					file: null, // Don't need file for generated images
+					url: generatedImage.url,
+					name: `generated-${Date.now()}.jpg`,
+					aspectRatio: actualAspectRatio,
+					isFromHistory: true // Treat like history image for backend processing
+				};
+				
+				setUploadedImage(newImage);
+				setGeneratedImage(null); // Clear the generated image display
+				console.log('✅ Using generated image as input with correct aspect ratio:', newImage.name, `ratio: ${actualAspectRatio.toFixed(2)}`);
 			};
 			
-			setUploadedImage(newImage);
-			setGeneratedImage(null); // Clear the generated image display
-			console.log('✅ Using generated image as input:', newImage.name);
+			img.onerror = () => {
+				// Fallback to default if image fails to load
+				const newImage = {
+					id: Date.now() + Math.random(),
+					file: null,
+					url: generatedImage.url,
+					name: `generated-${Date.now()}.jpg`,
+					aspectRatio: 1,
+					isFromHistory: true
+				};
+				setUploadedImage(newImage);
+				setGeneratedImage(null);
+				console.log('⚠️ Failed to load generated image, using default aspect ratio');
+			};
+			
+			img.src = generatedImage.url;
 			
 		} catch (error) {
 			console.error('Error using generated image as input:', error);
 		}
+	};
+
+	// Helper function to create image with correct aspect ratio
+	const createImageWithAspectRatio = async (url, name) => {
+		return new Promise((resolve) => {
+			const img = new window.Image();
+			img.onload = () => {
+				const actualAspectRatio = img.width / img.height;
+				resolve({
+					id: Date.now() + Math.random(),
+					file: null,
+					url: url,
+					name: name,
+					aspectRatio: actualAspectRatio,
+					isFromHistory: true
+				});
+			};
+			
+			img.onerror = () => {
+				// Fallback to default if image fails to load
+				resolve({
+					id: Date.now() + Math.random(),
+					file: null,
+					url: url,
+					name: name,
+					aspectRatio: 1, // Default to square if image fails to load
+					isFromHistory: true
+				});
+			};
+			
+			img.src = url;
+		});
 	};
 
 	// Poll prediction status
@@ -566,15 +648,25 @@ const GenerationPage = () => {
 						// Handle the completed generation
 						const contentUrl = Array.isArray(output) ? output[0] : output;
 						
-						if (currentActiveType === 'image') {
+						if (currentActiveType === 'image' || currentActiveType === 'edit' || currentActiveType === 'tools') {
 							const newGeneratedImage = {
 								url: contentUrl,
 								prompt: currentPrompt.trim(),
 								model: currentSelectedModel,
 								timestamp: new Date()
 							};
-							setGeneratedImage(newGeneratedImage);
-							setUploadedImage(null);
+							
+							// In edit mode, automatically use the generated image as input for the next generation
+							if (currentActiveType === 'edit') {
+								const newInputImage = await createImageWithAspectRatio(contentUrl, `edited-${Date.now()}.jpg`);
+								setUploadedImage(newInputImage);
+								setGeneratedImage(null); // Don't show in center, it's now the input
+								console.log('🖼️ Edit mode: Auto-using generated image as input with correct aspect ratio:', newInputImage.name, `ratio: ${newInputImage.aspectRatio.toFixed(2)}`);
+							} else {
+								setGeneratedImage(newGeneratedImage);
+								setUploadedImage(null);
+								console.log('🖼️ Set generated image from async poll:', newGeneratedImage);
+							}
 						} else if (currentActiveType === 'video') {
 							const newGeneratedVideo = {
 								url: contentUrl,
@@ -593,7 +685,7 @@ const GenerationPage = () => {
 							status: 'completed'
 						} : null);
 						
-						addNotification(`${currentActiveType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+						addNotification(`${currentActiveType === 'video' ? 'Video' : 'Image'} generated successfully!`, 'success');
 						
 						// Clear generating item after 3 seconds
 						setTimeout(() => setGeneratingItem(null), 3000);
@@ -732,11 +824,22 @@ const GenerationPage = () => {
 				const { functions } = await import('../firebase.js');
 				const generateVideo = httpsCallable(functions, 'generateVideo');
 				result = await generateVideo(generationData);
+			} else if (activeType === 'edit') {
+				const { httpsCallable } = await import('firebase/functions');
+				const { functions } = await import('../firebase.js');
+				const generateImage = httpsCallable(functions, 'generateImage'); // Edit uses image generation
+				result = await generateImage(generationData);
+			} else {
+				// Handle other types (tools, etc.) - fallback to image generation
+				const { httpsCallable } = await import('firebase/functions');
+				const { functions } = await import('../firebase.js');
+				const generateImage = httpsCallable(functions, 'generateImage');
+				result = await generateImage(generationData);
 			}
 
-			console.log('Generation result:', result.data);
+			console.log('Generation result:', result?.data);
 			
-			if (result.data.success) {
+			if (result?.data?.success) {
 				if (result.data.isAsync && result.data.predictionId) {
 					console.log(`Generation started! Prediction ID: ${result.data.predictionId}`);
 					setGeneratingItem({
@@ -746,24 +849,33 @@ const GenerationPage = () => {
 						model: selectedModel,
 						predictionId: result.data.predictionId
 					});
-					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generation started. This may take a few minutes...`, 'info');
+					addNotification(`${activeType === 'video' ? 'Video' : 'Image'} generation started. This may take a few minutes...`, 'info');
 					
 					// Start polling for async prediction
 					pollPrediction(result.data.predictionId, activeType, prompt, selectedModel);
 				} else if (result.data.imageUrl) {
 					console.log(`Image generated successfully! URL: ${result.data.imageUrl}`);
-					// Set the generated image to display in the center
-					const newGeneratedImage = {
-						url: result.data.imageUrl,
-						prompt: prompt.trim(),
-						model: selectedModel,
-						timestamp: new Date()
-					};
-					console.log('🖼️ Setting generated image:', newGeneratedImage);
-					setGeneratedImage(newGeneratedImage);
-					// Clear uploaded image and show the result
-					setUploadedImage(null);
-					console.log('🖼️ Cleared uploaded image, should show generated image now');
+					
+					// In edit mode, automatically use the generated image as input for the next generation
+					if (activeType === 'edit') {
+						const newInputImage = await createImageWithAspectRatio(result.data.imageUrl, `edited-${Date.now()}.jpg`);
+						setUploadedImage(newInputImage);
+						setGeneratedImage(null); // Don't show in center, it's now the input
+						console.log('🖼️ Edit mode: Auto-using generated image as input with correct aspect ratio:', newInputImage.name, `ratio: ${newInputImage.aspectRatio.toFixed(2)}`);
+					} else {
+						// Set the generated image to display in the center
+						const newGeneratedImage = {
+							url: result.data.imageUrl,
+							prompt: prompt.trim(),
+							model: selectedModel,
+							timestamp: new Date()
+						};
+						console.log('🖼️ Setting generated image:', newGeneratedImage);
+						setGeneratedImage(newGeneratedImage);
+						// Clear uploaded image and show the result
+						setUploadedImage(null);
+						console.log('🖼️ Cleared uploaded image, should show generated image now');
+					}
 					
 					// Update DynamicIsland to completed
 					setGeneratingItem({
@@ -772,7 +884,7 @@ const GenerationPage = () => {
 						status: 'completed',
 						model: selectedModel
 					});
-					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+					addNotification(`${activeType === 'video' ? 'Video' : 'Image'} generated successfully!`, 'success');
 					
 					// Clear generating item after 3 seconds
 					setTimeout(() => setGeneratingItem(null), 3000);
@@ -795,20 +907,20 @@ const GenerationPage = () => {
 						status: 'completed',
 						model: selectedModel
 					});
-					addNotification(`${activeType === 'image' ? 'Image' : 'Video'} generated successfully!`, 'success');
+					addNotification(`${activeType === 'video' ? 'Video' : 'Image'} generated successfully!`, 'success');
 					
 					// Clear generating item after 3 seconds
 					setTimeout(() => setGeneratingItem(null), 3000);
 				}
 			} else {
-				console.error('Generation failed:', result.data);
+				console.error('Generation failed:', result?.data);
 				setGeneratingItem({
 					type: activeType,
 					name: prompt.trim().substring(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
 					status: 'failed',
 					model: selectedModel
 				});
-				addNotification(`Generation failed: ${result.data.error || 'Unknown error'}`, 'error');
+				addNotification(`Generation failed: ${result?.data?.error || 'Unknown error'}`, 'error');
 				
 				// Clear generating item after 5 seconds
 				setTimeout(() => setGeneratingItem(null), 5000);
@@ -881,7 +993,7 @@ const GenerationPage = () => {
 				setSelectedModel('google/veo-3-fast');
 				break;
 			case 'edit':
-				setSelectedModel('google/imagen-4');
+				setSelectedModel('black-forest-labs/flux-kontext-pro');
 				break;
 			case 'tools':
 				setSelectedModel('google/imagen-4');
@@ -922,48 +1034,6 @@ const GenerationPage = () => {
 				position="bottom-right"
 			/>
 			
-			{/* Custom Notifications */}
-			<div className="fixed top-4 right-4 z-50 space-y-2">
-				{notifications.map((notification) => (
-					<div
-						key={notification.id}
-						className={`px-4 py-3 rounded-lg shadow-lg backdrop-blur-xl border transition-all duration-300 transform translate-x-0 opacity-100 animate-slide-in-right ${
-							notification.type === 'error' 
-								? 'bg-red-900/80 border-red-700/50 text-red-100' 
-								: notification.type === 'success'
-								? 'bg-green-900/80 border-green-700/50 text-green-100'
-								: 'bg-neutral-900/80 border-neutral-700/50 text-neutral-100'
-						}`}
-						style={{ minWidth: '300px', maxWidth: '400px' }}
-					>
-						<div className="flex items-start gap-3">
-							{notification.type === 'error' ? (
-								<X size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-							) : notification.type === 'success' ? (
-								<div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-									<div className="w-2 h-2 bg-white rounded-full"></div>
-								</div>
-							) : (
-								<div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-									<div className="w-2 h-2 bg-white rounded-full"></div>
-								</div>
-							)}
-							<div className="flex-1">
-								<div className="text-sm font-medium">{notification.message}</div>
-								<div className="text-xs opacity-70 mt-1">
-									{notification.timestamp.toLocaleTimeString()}
-								</div>
-							</div>
-							<button
-								onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
-								className="text-neutral-400 hover:text-white transition-colors flex-shrink-0"
-							>
-								<X size={16} />
-							</button>
-						</div>
-					</div>
-				))}
-			</div>
 
 			{/* Main content area */}
 			<div className="flex items-center justify-center p-4 h-full w-full mb-32">
@@ -996,8 +1066,8 @@ const GenerationPage = () => {
 							
 							{/* Action Buttons */}
 							<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10">
-								{/* Use as Input Button - only show for images that support image input */}
-								{!generatedImage.isVideo && modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') && (
+								{/* Use as Input Button - only show for images that support image input and NOT in edit mode */}
+								{!generatedImage.isVideo && activeType !== 'edit' && modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') && (
 									<button
 										onClick={useGeneratedImageAsInput}
 										title="Use this image as input for next generation"
@@ -1064,10 +1134,13 @@ const GenerationPage = () => {
 										<div className="mb-4 text-neutral-500">
 											<ImageIcon size={48} className="mx-auto mb-2" />
 											<div className="text-lg font-medium mb-2">
-												Ready to Generate
+												Your generation will be visible here.
 											</div>
 											<div className="text-sm text-neutral-600">
 												{availableModels[selectedModel]?.name} • Text-to-Image
+											</div>
+											<div className="mt-4 text-sm text-lime-500">
+												This model doesn't support image inputs.
 											</div>
 										</div>
 									</div>
@@ -1197,62 +1270,83 @@ const GenerationPage = () => {
 			</div>
 			
 
+			{/* Quick Edit Prompts - Above bottom bar */}
+			{activeType === 'edit' && (
+				<div className="fixed bottom-24 md:bottom-28 left-1/2 transform -translate-x-1/2 w-[95%] md:w-full max-w-3xl">
+					<div className="flex gap-2 bg-neutral-950/40 backdrop-blur-xl rounded-2xl p-3">
+						<button
+							onClick={() => setPrompt('Add vibrant, realistic colors to this black and white image, maintaining natural skin tones and lighting, 4K ultra high resolution')}
+							className="px-3 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-xs text-white transition-colors flex-1"
+						>
+							Colorize
+						</button>
+						<button
+							onClick={() => setPrompt('Remove all text, logos, and typography from this image while preserving the background and maintaining photorealistic quality, 4K resolution')}
+							className="px-3 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-xs text-white transition-colors flex-1"
+						>
+							Remove Text
+						</button>
+						<button
+							onClick={() => setPrompt('Transform this product image into a professional advertising photo with dynamic lighting, appealing background, and commercial photography style, 4K ultra sharp')}
+							className="px-3 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-xs text-white transition-colors flex-1"
+						>
+							To Ad Image
+						</button>
+						<button
+							onClick={() => setPrompt('Enhance lighting with professional studio-quality illumination, balanced shadows and highlights, cinematic lighting style, photorealistic 4K quality')}
+							className="px-3 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-xs text-white transition-colors flex-1"
+						>
+							Relight
+						</button>
+						<button
+							onClick={() => setPrompt('Zoom out to show more of the scene, expanding the frame while maintaining image quality and natural perspective, 4K resolution')}
+							className="px-3 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg text-xs text-white transition-colors flex-1"
+						>
+							Zoom Out
+						</button>
+					</div>
+				</div>
+			)}
+
 			{/* Bottom menu - Responsive */}
 			<div className="fixed bottom-3 md:bottom-5 left-1/2 transform -translate-x-1/2 rounded-2xl md:rounded-3xl p-2 md:p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-[95%] md:w-full max-w-3xl">
 				{/* Mobile Layout - Stacked */}
 				<div className="flex lg:hidden flex-col gap-3">
-					{/* Top row - Type and Model Selection + Aspect Ratio */}
+					{/* Top row - Model Selection + Aspect Ratio */}
 					<div className="flex items-stretch gap-3 h-12">
-						{/* Type Selection - Mobile */}
-						<div className="grid grid-cols-4 gap-2 bg-neutral-900 rounded-xl p-2">
-							<button
-								onClick={() => handleTypeChange('image')}
-								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
-									activeType === 'image' 
-										? 'bg-white text-black' 
-										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-								}`}
-							>
-								<ImageIcon size={14} />
-								Image
-							</button>
-							<button
-								onClick={() => handleTypeChange('video')}
-								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
-									activeType === 'video' 
-										? 'bg-white text-black' 
-										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-								}`}
-							>
-								<VideoIcon size={14} />
-								Video
-							</button>
-							<button
-								onClick={() => handleTypeChange('edit')}
-								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
-									activeType === 'edit' 
-										? 'bg-white text-black' 
-										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-								}`}
-							>
-								<Pencil size={14} />
-								Edit
-							</button>
-							<button
-								onClick={() => handleTypeChange('tools')}
-								className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center gap-1 ${
-									activeType === 'tools' 
-										? 'bg-white text-black' 
-										: 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-								}`}
-							>
-								<Wrench size={14} />
-								Tools
-							</button>
-						</div>
-						
 						{/* Model Selection - Mobile */}
 						<div className="flex-1 relative dropdown-container">
+							{activeType === 'edit' ? (
+								<div className="flex gap-2 h-full">
+									<button
+										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
+										className={`px-3 py-2 rounded-xl text-xs font-medium transition-all flex-1 ${
+											selectedModel === 'black-forest-labs/flux-kontext-pro'
+												? 'bg-white text-black'
+												: 'bg-neutral-900 text-neutral-300 hover:text-white'
+										}`}
+									>
+										<div className="text-center">
+											<div className="font-semibold">PRO</div>
+											<div className="text-xs opacity-75">1 Credit</div>
+										</div>
+									</button>
+									<button
+										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
+										className={`px-3 py-2 rounded-xl text-xs font-medium transition-all flex-1 ${
+											selectedModel === 'black-forest-labs/flux-kontext-max'
+												? 'bg-white text-black'
+												: 'bg-neutral-900 text-neutral-300 hover:text-white'
+										}`}
+									>
+										<div className="text-center">
+											<div className="font-semibold">MAX</div>
+											<div className="text-xs opacity-75">2 Credits</div>
+										</div>
+									</button>
+								</div>
+							) : (
+								<>
 							<button
 								onClick={() => toggleDropdown('model')}
 								className="w-full bg-neutral-900 rounded-xl px-3 py-2 text-white text-xs flex items-center justify-between h-full"
@@ -1304,17 +1398,20 @@ const GenerationPage = () => {
 									))}
 								</div>
 							)}
+								</>
+							)}
 						</div>
 
 					</div>
 					
-					{/* Prompt input - Mobile */}
+					
+					{/* Regular prompt input - Mobile */}
 					<div className="relative">
 						<textarea
 							value={prompt}
 							onChange={(e) => setPrompt(e.target.value)}
-							placeholder="Describe what you want to create..."
-							className="w-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-3 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide h-20"
+							placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe what you want to create..."}
+							className="w-full bg-transparent border-none rounded-xl px-3 py-3 text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide h-20"
 						/>
 					</div>
 					
@@ -1328,7 +1425,7 @@ const GenerationPage = () => {
 									className="flex items-center justify-between text-white text-xs w-full"
 								>
 									<div className="font-medium">
-										{selectedModel === 'black-forest-labs/flux-kontext-pro' && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
+										{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
 									</div>
 									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_bottom ? 'rotate-180' : ''}`} />
 								</button>
@@ -1348,7 +1445,7 @@ const GenerationPage = () => {
 														: 'text-neutral-300 hover:bg-neutral-700'
 												}`}
 											>
-												{selectedModel === 'black-forest-labs/flux-kontext-pro' && option === 'match_input_image' ? 'auto' : option}
+												{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
 											</button>
 										))}
 									</div>
@@ -1376,56 +1473,87 @@ const GenerationPage = () => {
 					<div className="flex flex-col gap-2 w-48 dropdown-container">
 						{/* Model Selection */}
 						<div className="relative">
-							<button
-								onClick={() => toggleDropdown('model_bottom')}
-								className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
-							>
-								<div className="flex items-center gap-2">
-									<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
-										<img 
-											src={getModelLogo(selectedModel)}
-											alt={availableModels[selectedModel]?.name}
-											className="w-full h-full object-contain"
-											onError={(e) => {
-												e.target.style.display = 'none';
-											}}
-										/>
-									</div>
-									<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
+							{activeType === 'edit' ? (
+								<div className="flex gap-2">
+									<button
+										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
+										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 h-7 ${
+											selectedModel === 'black-forest-labs/flux-kontext-pro'
+												? 'bg-white text-black'
+												: 'bg-neutral-900 text-neutral-300 hover:text-white'
+										}`}
+									>
+										<div className="text-center">
+											<div className="font-semibold text-xs">PRO</div>
+										</div>
+									</button>
+									<button
+										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
+										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 h-7 ${
+											selectedModel === 'black-forest-labs/flux-kontext-max'
+												? 'bg-white text-black'
+												: 'bg-neutral-900 text-neutral-300 hover:text-white'
+										}`}
+									>
+										<div className="text-center">
+											<div className="font-semibold text-xs">MAX</div>
+										</div>
+									</button>
 								</div>
-								<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model_bottom ? 'rotate-180' : ''}`} />
-							</button>
-							
-							{openDropdowns.model_bottom && (
-								<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-									{Object.entries(availableModels).map(([id, model]) => (
-										<button
-											key={id}
-											onClick={() => {
-												setSelectedModel(id);
-												closeAllDropdowns();
-											}}
-											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
-												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
-											}`}
-										>
-											<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+							) : (
+								<>
+									<button
+										onClick={() => toggleDropdown('model_bottom')}
+										className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
+									>
+										<div className="flex items-center gap-2">
+											<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
 												<img 
-													src={getModelLogo(id)}
-													alt={model.name}
+													src={getModelLogo(selectedModel)}
+													alt={availableModels[selectedModel]?.name}
 													className="w-full h-full object-contain"
 													onError={(e) => {
 														e.target.style.display = 'none';
 													}}
 												/>
 											</div>
-											<div className="flex-1 min-w-0">
-												<div className="text-sm truncate">{model.name}</div>
-												<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
-											</div>
-										</button>
-									))}
-								</div>
+											<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
+										</div>
+										<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model_bottom ? 'rotate-180' : ''}`} />
+									</button>
+									
+									{openDropdowns.model_bottom && (
+										<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+											{Object.entries(availableModels).map(([id, model]) => (
+												<button
+													key={id}
+													onClick={() => {
+														setSelectedModel(id);
+														closeAllDropdowns();
+													}}
+													className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+														selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+													}`}
+												>
+													<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+														<img 
+															src={getModelLogo(id)}
+															alt={model.name}
+															className="w-full h-full object-contain"
+															onError={(e) => {
+																e.target.style.display = 'none';
+															}}
+														/>
+													</div>
+													<div className="flex-1 min-w-0">
+														<div className="text-sm truncate">{model.name}</div>
+														<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
+													</div>
+												</button>
+											))}
+										</div>
+									)}
+								</>
 							)}
 						</div>
 						
@@ -1437,7 +1565,7 @@ const GenerationPage = () => {
 									className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
 								>
 									<div className="font-medium">
-										{selectedModel === 'black-forest-labs/flux-kontext-pro' && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
+										{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
 									</div>
 									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
 								</button>
@@ -1457,7 +1585,7 @@ const GenerationPage = () => {
 														: 'text-neutral-300 hover:bg-neutral-700'
 												}`}
 											>
-												{selectedModel === 'black-forest-labs/flux-kontext-pro' && option === 'match_input_image' ? 'auto' : option}
+												{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
 											</button>
 										))}
 								</div>
@@ -1466,13 +1594,14 @@ const GenerationPage = () => {
 					)}
 				</div>
 					
-					{/* Prompt input */}
+					
+					{/* Regular prompt input - Desktop */}
 					<div className="flex-1 relative h-full">
 						<textarea
 							value={prompt}
 							onChange={(e) => setPrompt(e.target.value)}
-							placeholder="Describe a scene and click generate"
-							className="w-full h-full bg-neutral-800/0 backdrop-blur-sm border border-neutral-700/0 rounded-xl px-3 py-2 pb-8 text-white placeholder-neutral-500 resize-none focus:border-lime-400/0 focus:outline-none text-sm font-light tracking-wide"
+							placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe a scene and click generate"}
+							className="w-full h-full bg-transparent border-none text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide"
 						/>
 					</div>
 					

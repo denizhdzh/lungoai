@@ -83,7 +83,7 @@ export const models = {
   params: {
     prompt: { required: true, type: "string" },
     input_image: { required: false, type: "string", description: "Image to use as reference. Must be jpeg, png, gif, or webp." },
-    aspect_ratio: { required: false, type: "string", default: "1:1" },
+    aspect_ratio: { required: false, type: "string", default: "match_input_image" },
     prompt_upsampling: { required: false, type: "boolean", default: false },
     seed: { required: false, type: "integer" },
     output_format: { required: false, type: "string", default: "png" },
@@ -91,7 +91,7 @@ export const models = {
   },
   options: {
     aspect_ratio: [
-      "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
+      "match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2",
       "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2"
     ],
     output_format: ["jpg", "png"]

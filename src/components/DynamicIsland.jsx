@@ -31,13 +31,34 @@ const DynamicIsland = ({ generatingItem, commandQueue = [], isDarkMode, position
 
   useEffect(() => {
     if (generatingItem) {
-      setCurrentDisplayItem({ ...generatingItem, isMain: true });
+      setCurrentDisplayItem(prev => {
+        // Only update if the item has actually changed
+        if (!prev || 
+            prev.type !== generatingItem.type || 
+            prev.name !== generatingItem.name || 
+            prev.status !== generatingItem.status ||
+            prev.model !== generatingItem.model) {
+          return { ...generatingItem, isMain: true };
+        }
+        return prev;
+      });
     } else if (commandQueue.length > 0) {
-      setCurrentDisplayItem({
+      const queueItem = {
         type: commandQueue[0].commandCode === 101 ? 'video' : commandQueue[0].commandCode >= 200 && commandQueue[0].commandCode < 300 ? 'image' : commandQueue[0].commandCode === 301 ? 'slideshow' : 'task',
         name: commandQueue[0].parameters?.subject_description || commandQueue[0].parameters?.image_subject || commandQueue[0].parameters?.topic || 'Processing...',
         status: 'queued',
         isMain: false
+      };
+      
+      setCurrentDisplayItem(prev => {
+        // Only update if the queue item has actually changed
+        if (!prev || 
+            prev.type !== queueItem.type || 
+            prev.name !== queueItem.name || 
+            prev.status !== queueItem.status) {
+          return queueItem;
+        }
+        return prev;
       });
     } else {
       setCurrentDisplayItem(null);

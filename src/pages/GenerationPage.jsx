@@ -10,7 +10,8 @@ import {
 	CaretUp,
 	Lock,
 	Pencil,
-	Wrench
+	Wrench,
+	GridFour
 } from '@phosphor-icons/react';
 import { auth, db } from '../firebase.js';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp, doc, getDoc } from 'firebase/firestore';
@@ -27,6 +28,8 @@ const GenerationPage = () => {
 	const [settings, setSettings] = useState({});
 	const [uploadedImage, setUploadedImage] = useState(null);
 	const [isDragOver, setIsDragOver] = useState(false);
+	const [isUploadHovered, setIsUploadHovered] = useState(false);
+	const [showHistoryModal, setShowHistoryModal] = useState(false);
 	const [historyScrollIndex, setHistoryScrollIndex] = useState(0);
 	const [previousGenerations, setPreviousGenerations] = useState([]);
 	const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
@@ -469,6 +472,19 @@ const GenerationPage = () => {
 
 	const handleClickUpload = () => {
 		fileInputRef.current?.click();
+	};
+
+	// Handle selecting image from history
+	const handleHistorySelect = (generation) => {
+		const newImage = {
+			id: Date.now() + Math.random(),
+			url: generation.url,
+			name: `Previous Generation - ${generation.prompt}`,
+			aspectRatio: 1, // Default aspect ratio for previous generations
+			isFromHistory: true
+		};
+		setUploadedImage(newImage);
+		setShowHistoryModal(false);
 	};
 
 	// History scroll functions - now supports smooth multi-item scrolling
@@ -1111,12 +1127,24 @@ const GenerationPage = () => {
 							onDragOver={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDragOver : undefined}
 							onDragLeave={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDragLeave : undefined}
 							onDrop={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleDrop : undefined}
-							onClick={modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? handleClickUpload : undefined}
-							className={`w-full h-full rounded-[60px] flex items-center justify-center transition-all duration-300 relative overflow-hidden bg-neutral-900 ${
+							onMouseEnter={() => setIsUploadHovered(true)}
+							onMouseLeave={() => setIsUploadHovered(false)}
+							className={`w-full h-full flex items-center justify-center transition-all duration-500 relative overflow-hidden ${
 								modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') 
-									? `cursor-pointer hover:bg-neutral-800 ${isDragOver ? 'bg-neutral-800 border-2 border-dashed border-lime-400' : 'border-2 border-dashed border-neutral-700'}`
-									: 'border-2 border-dashed border-neutral-700/50'
+									? `cursor-pointer ${isDragOver ? 'shadow-2xl shadow-white/20' : 'shadow-lg shadow-black/20'}`
+									: 'shadow-lg shadow-black/10'
 							}`}
+							style={{
+								background: modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference')
+									? (isDragOver 
+										? 'linear-gradient(145deg, #262626 0%, #171717 100%)' 
+										: 'linear-gradient(145deg, #1f1f1f 0%, #0a0a0a 100%)')
+									: 'linear-gradient(145deg, #1a1a1a 0%, #0f0f0f 100%)',
+								borderRadius: '3.75rem',
+								border: modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference')
+									? (isDragOver ? '1px solid #404040' : '1px solid #262626')
+									: '1px solid #1a1a1a'
+							}}
 						>
 							{isGenerating ? (
 								<div className="text-center">
@@ -1127,30 +1155,87 @@ const GenerationPage = () => {
 									</div>
 								</div>
 							) : modelConfig && Object.keys(modelConfig?.params || {}).some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference') ? (
-								<div className="text-center">
-									<div className={`mb-4 transition-colors ${isDragOver ? 'text-lime-400' : 'text-neutral-400'}`}>
-										<Upload size={48} className="mx-auto mb-2" />
-										<div className="text-lg font-medium mb-2">
-											{isDragOver ? 'Drop image here' : 'Drop image or click to upload'}
-										</div>
-										<div className="text-sm text-neutral-500">
-											Single image input • PNG, JPG, WEBP
+								<>
+									{/* Normal State - Modern Minimal Interface (Desktop only) */}
+									<div className={`absolute inset-0 transition-all duration-500 ${
+										isUploadHovered ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+									} flex-col items-center justify-center text-center hidden md:flex`}>
+										<div className={`transition-all duration-300 ${isDragOver ? 'text-white scale-110' : 'text-neutral-400 scale-100'}`}>
+											{/* Modern Geometric Upload Icon */}
+											<div className="relative mb-6">
+												<div className="w-16 h-16 mx-auto rounded-2xl border-2 border-dashed border-current flex items-center justify-center transition-all duration-300">
+													<div className="w-8 h-8 rounded-lg border-2 border-current flex items-center justify-center">
+														<div className="w-2 h-2 rounded-full bg-current"></div>
+													</div>
+												</div>
+												<div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-800 border-2 border-neutral-950 flex items-center justify-center">
+													<div className="text-xs">+</div>
+												</div>
+											</div>
+											
+											<div className="space-y-2">
+												<div className="text-base font-normal">
+													{isDragOver ? 'Drop to upload' : 'Upload Image'}
+												</div>
+												<div className="text-xs text-neutral-600 font-light">
+													{isDragOver ? 'Release to add image' : 'PNG, JPG, WEBP • Click or drag'}
+												</div>
+											</div>
 										</div>
 									</div>
-								</div>
+
+									{/* Split Zone Interface - Always visible on mobile, hover on desktop */}
+									<div className={`absolute inset-0 transition-all duration-500 flex ${
+										'md:' + (isUploadHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
+									} opacity-100 scale-100`}>
+										
+										{/* Left Half - Upload File */}
+										<div 
+											className="flex-1 flex flex-col items-center justify-center bg-gradient-to-r from-blue-600/10 to-transparent border-r border-neutral-600/30 transition-all duration-300 hover:from-blue-600/20 group cursor-pointer"
+											onClick={handleClickUpload}
+										>
+											<Upload size={32} className="text-blue-400 mb-2 transition-transform group-hover:scale-110" />
+											<div className="text-sm font-medium text-blue-300">Upload File</div>
+											<div className="text-xs text-neutral-500 mt-1">From device</div>
+										</div>
+
+										{/* Right Half - From History */}
+										<div 
+											className="flex-1 flex flex-col items-center justify-center bg-gradient-to-l from-purple-600/10 to-transparent transition-all duration-300 hover:from-purple-600/20 group cursor-pointer"
+											onClick={() => setShowHistoryModal(true)}
+										>
+											<GridFour size={32} className="text-purple-400 mb-2 transition-transform group-hover:scale-110" />
+											<div className="text-sm font-medium text-purple-300">From History</div>
+											<div className="text-xs text-neutral-500 mt-1">{previousGenerations.length} images</div>
+										</div>
+									</div>
+								</>
 							) : (
 								<div className="flex items-center justify-center h-full">
 									<div className="text-center">
-										<div className="mb-4 text-neutral-500">
-											<ImageIcon size={48} className="mx-auto mb-2" />
-											<div className="text-lg font-medium mb-2">
-												Your generation will be visible here.
+										<div className="text-neutral-400">
+											{/* Modern Preview Icon */}
+											<div className="relative mb-6">
+												<div className="w-16 h-16 mx-auto rounded-2xl border-2 border-current flex items-center justify-center transition-all duration-300">
+													<div className="w-8 h-8 rounded-lg border-2 border-current flex items-center justify-center">
+														<div className="w-2 h-2 rounded-full bg-current"></div>
+													</div>
+												</div>
+												<div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-800 border-2 border-neutral-950 flex items-center justify-center">
+													<div className="text-xs">✨</div>
+												</div>
 											</div>
-											<div className="text-sm text-neutral-600">
-												{availableModels[selectedModel]?.name} • Text-to-Image
-											</div>
-											<div className="mt-4 text-sm text-lime-500">
-												This model doesn't support image inputs.
+											
+											<div className="space-y-3">
+												<div className="text-base font-normal text-white/90">
+													Generation Preview
+												</div>
+												<div className="text-sm text-neutral-500 font-light">
+													{availableModels[selectedModel]?.name}
+												</div>
+												<div className="text-xs text-neutral-600 font-light px-4 py-2 rounded-full bg-white/5 inline-block">
+													Text-to-{availableModels[selectedModel]?.type === 'video' ? 'Video' : 'Image'}
+												</div>
 											</div>
 										</div>
 									</div>
@@ -1167,13 +1252,16 @@ const GenerationPage = () => {
 						onDrop={handleDrop}
 					>
 						<div 
-							className="relative group bg-neutral-800 rounded-[60px] overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+							className="relative group overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer"
 							style={{
 								aspectRatio: uploadedImage.aspectRatio || '3/4',
 								maxWidth: '800px',
 								maxHeight: '600px',
 								width: 'fit-content',
-								height: 'fit-content'
+								height: 'fit-content',
+								borderRadius: '3.75rem',
+								background: 'linear-gradient(145deg, #262626 0%, #171717 100%)',
+								border: '1px solid #404040'
 							}}
 							onClick={handleClickUpload}
 						>
@@ -1182,20 +1270,25 @@ const GenerationPage = () => {
 								alt={uploadedImage.name}
 								className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
 							/>
-							{/* Image info overlay */}
-							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-								<div className="text-white text-sm font-medium truncate">{uploadedImage.name}</div>
-								<div className="text-white/70 text-xs">Click to replace</div>
+							{/* Modern Image info overlay */}
+							<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+								<div className="text-white text-sm font-medium truncate mb-1">{uploadedImage.name}</div>
+								<div className="flex items-center gap-2">
+									<div className="text-white/70 text-xs">Click to replace</div>
+									<div className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/80">
+										{Math.round(uploadedImage.aspectRatio > 1 ? 'Landscape' : uploadedImage.aspectRatio < 1 ? 'Portrait' : 'Square')}
+									</div>
+								</div>
 							</div>
-							{/* Remove button */}
+							{/* Modern Remove button */}
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
 									removeImage();
 								}}
-								className="absolute top-6 right-6 w-8 h-8 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10"
+								className="absolute top-4 right-4 w-10 h-10 bg-black/60 hover:bg-red-500/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 z-10 border border-white/20"
 							>
-								<X size={16} className="text-white" />
+								<div className="text-white text-lg">×</div>
 							</button>
 						</div>
 					</div>
@@ -1662,6 +1755,65 @@ const GenerationPage = () => {
 				</div>
 			</div>
 		</div> {/* End Main Layout */}
+
+		{/* History Modal */}
+		{showHistoryModal && (
+			<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+				<div className="bg-neutral-900 rounded-3xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+					{/* Modal Header */}
+					<div className="flex items-center justify-between p-6 border-b border-neutral-800">
+						<div>
+							<h2 className="text-white text-xl font-medium">Select Image from History</h2>
+							<p className="text-neutral-400 text-sm mt-1">Choose from your previous generations</p>
+						</div>
+						<button
+							onClick={() => setShowHistoryModal(false)}
+							className="w-10 h-10 bg-neutral-800 hover:bg-neutral-700 rounded-full flex items-center justify-center transition-all duration-300"
+						>
+							<div className="text-white text-lg">×</div>
+						</button>
+					</div>
+					
+					{/* Modal Content */}
+					<div className="p-6 overflow-y-auto max-h-[60vh]">
+						{previousGenerations.length > 0 ? (
+							<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+								{previousGenerations.map((generation) => (
+									<div
+										key={generation.id}
+										className="relative aspect-square rounded-2xl overflow-hidden bg-neutral-800 cursor-pointer group hover:scale-105 transition-all duration-300"
+										onClick={() => handleHistorySelect(generation)}
+									>
+										<img 
+											src={generation.url} 
+											alt={generation.prompt}
+											className="w-full h-full object-cover"
+										/>
+										<div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+											<div className="text-white text-center">
+												<div className="text-sm font-medium mb-1">Select</div>
+												<div className="text-xs text-neutral-300 truncate max-w-20">{generation.prompt}</div>
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						) : (
+							<div className="text-center py-12">
+								<div className="w-16 h-16 mx-auto mb-4 rounded-2xl border-2 border-neutral-600 flex items-center justify-center">
+									<div className="w-8 h-8 rounded-lg border-2 border-neutral-600 flex items-center justify-center">
+										<div className="w-2 h-2 rounded-full bg-neutral-600"></div>
+									</div>
+								</div>
+								<div className="text-neutral-400 text-lg mb-2">No previous generations</div>
+								<div className="text-neutral-600 text-sm">Generate some content first to use it here</div>
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
+		)}
+
 		</div>
 	);
 };

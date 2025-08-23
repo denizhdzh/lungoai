@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Plus } from '@phosphor-icons/react';
+import { Upload, X, Plus, Images, FolderOpen, GridFour } from '@phosphor-icons/react';
 import { auth, db } from '../firebase.js';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,11 @@ const PortraitPage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragOverCharacter, setIsDragOverCharacter] = useState(false);
   const [isDragOverTarget, setIsDragOverTarget] = useState(false);
+  const [isCharacterHovered, setIsCharacterHovered] = useState(false);
+  const [isTargetHovered, setIsTargetHovered] = useState(false);
+  const [showCharacterHistory, setShowCharacterHistory] = useState(false);
+  const [showTargetHistory, setShowTargetHistory] = useState(false);
+  const [previousGenerations, setPreviousGenerations] = useState([]);
   const [generatedImage, setGeneratedImage] = useState(null);
   
   // Debug: Track generatedImage state changes
@@ -136,11 +141,48 @@ const PortraitPage = () => {
     setTimeout(poll, 5000); // First poll after 5 seconds
   };
 
-  // Check authentication
+  // Load previous generations from Firestore
+  const loadPreviousGenerations = async (userId) => {
+    try {
+      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const generationsColRef = collection(db, 'users', userId, 'generations');
+      const q = query(
+        generationsColRef, 
+        orderBy('timestamp', 'desc'), 
+        limit(20)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      const generations = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.imageUrl || data.videoUrl) {
+          generations.push({
+            id: doc.id,
+            url: data.imageUrl || data.videoUrl,
+            prompt: data.prompt || 'Generated Content',
+            timestamp: data.timestamp,
+            model: data.model,
+            type: data.type || 'image'
+          });
+        }
+      });
+      
+      setPreviousGenerations(generations);
+    } catch (error) {
+      console.error('Error loading previous generations:', error);
+    }
+  };
+
+  // Check authentication and load data
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthChecked(true);
+      
+      if (currentUser) {
+        loadPreviousGenerations(currentUser.uid);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -193,6 +235,32 @@ const PortraitPage = () => {
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  };
+
+  // Handle selecting image from history for character
+  const handleCharacterHistorySelect = (generation) => {
+    const newImage = {
+      id: Date.now() + Math.random(),
+      url: generation.url,
+      name: `Previous Generation - ${generation.prompt}`,
+      aspectRatio: 1, // Default aspect ratio for previous generations
+      isFromHistory: true
+    };
+    setCharacterImage(newImage);
+    setShowCharacterHistory(false);
+  };
+
+  // Handle selecting image from history for target
+  const handleTargetHistorySelect = (generation) => {
+    const newImage = {
+      id: Date.now() + Math.random(),
+      url: generation.url,
+      name: `Previous Generation - ${generation.prompt}`,
+      aspectRatio: 1, // Default aspect ratio for previous generations
+      isFromHistory: true
+    };
+    setTargetImage(newImage);
+    setShowTargetHistory(false);
   };
 
   // Handle drag events for character image
@@ -449,17 +517,27 @@ const PortraitPage = () => {
           <div className="flex flex-col">
             <label className="text-white text-sm font-medium mb-3">Character Face (Reference)</label>
             <div 
-              className={`relative aspect-[4/3] rounded-3xl border-2 border-dashed transition-all duration-300 cursor-pointer overflow-hidden ${
+              className={`relative aspect-[4/3] transition-all duration-500 cursor-pointer overflow-hidden ${
                 isDragOverCharacter 
-                  ? 'border-lime-400 bg-neutral-800' 
+                  ? 'shadow-2xl shadow-white/20' 
                   : characterImage 
-                    ? 'border-neutral-600 bg-neutral-900' 
-                    : 'border-neutral-700 bg-neutral-900 hover:border-neutral-600 hover:bg-neutral-800'
+                    ? 'shadow-xl shadow-black/40' 
+                    : 'shadow-lg shadow-black/20'
               }`}
+              style={{
+                background: characterImage 
+                  ? 'transparent' 
+                  : isDragOverCharacter 
+                    ? 'linear-gradient(145deg, #262626 0%, #171717 100%)' 
+                    : 'linear-gradient(145deg, #1f1f1f 0%, #0a0a0a 100%)',
+                borderRadius: characterImage ? '2rem' : '1.5rem',
+                border: characterImage ? 'none' : isDragOverCharacter ? '1px solid #404040' : '1px solid #262626'
+              }}
               onDragOver={handleCharacterDragOver}
               onDragLeave={handleCharacterDragLeave}
               onDrop={handleCharacterDrop}
-              onClick={() => characterInputRef.current?.click()}
+              onMouseEnter={() => setIsCharacterHovered(true)}
+              onMouseLeave={() => setIsCharacterHovered(false)}
             >
               {characterImage ? (
                 <>
@@ -479,17 +557,72 @@ const PortraitPage = () => {
                   </button>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className={`mb-4 transition-colors ${isDragOverCharacter ? 'text-lime-400' : 'text-neutral-400'}`}>
-                    <Upload size={48} className="mx-auto mb-2" />
-                    <div className="text-lg font-medium mb-2">
-                      {isDragOverCharacter ? 'Drop character image here' : 'Upload Character Face'}
-                    </div>
-                    <div className="text-sm text-neutral-500">
-                      The face that will be used as reference
+                <>
+                  {/* Normal State - Modern Minimal Interface (Desktop only) */}
+                  <div className={`absolute inset-0 transition-all duration-500 ${
+                    isCharacterHovered ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                  } flex-col items-center justify-center text-center hidden md:flex`}>
+                    <div className={`transition-all duration-300 ${isDragOverCharacter ? 'text-white scale-110' : 'text-neutral-400 scale-100'}`}>
+                      {/* Geometric Upload Icon */}
+                      <div className="relative mb-6">
+                        <div className="w-16 h-16 mx-auto rounded-2xl border-2 border-dashed border-current flex items-center justify-center transition-all duration-300">
+                          <div className="w-8 h-8 rounded-lg border-2 border-current flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-current"></div>
+                          </div>
+                        </div>
+                        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-800 border-2 border-neutral-950 flex items-center justify-center">
+                          <div className="text-xs">+</div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="text-base font-normal">
+                          {isDragOverCharacter ? 'Drop to upload' : 'Character Image'}
+                        </div>
+                        <div className="text-xs text-neutral-600 font-light">
+                          {isDragOverCharacter ? 'Release to add image' : 'Click or drag to add'}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Split Zone Interface - Always visible on mobile, hover on desktop */}
+                  <div className={`absolute inset-0 transition-all duration-500 flex ${
+                    'md:' + (isCharacterHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
+                  } opacity-100 scale-100`}>
+                    
+                    {/* Left Half - Upload File */}
+                    <div 
+                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer relative"
+                      onClick={() => characterInputRef.current?.click()}
+                      style={{
+                        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 80%)',
+                        borderRight: '1px solid rgba(255,255,255,0.1)'
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
+                        <div className="text-lg">⬆</div>
+                      </div>
+                      <div className="text-sm font-medium text-white/90">Upload</div>
+                      <div className="text-xs text-white/60 mt-1">From device</div>
+                    </div>
+
+                    {/* Right Half - From History */}
+                    <div 
+                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer"
+                      onClick={() => setShowCharacterHistory(true)}
+                      style={{
+                        background: 'linear-gradient(270deg, rgba(255,255,255,0.05) 0%, transparent 80%)'
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
+                        <div className="text-lg">⊞</div>
+                      </div>
+                      <div className="text-sm font-medium text-white/90">History</div>
+                      <div className="text-xs text-white/60 mt-1">{previousGenerations.length} images</div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
             <input
@@ -505,17 +638,27 @@ const PortraitPage = () => {
           <div className="flex flex-col">
             <label className="text-white text-sm font-medium mb-3">Target Image (Environment)</label>
             <div 
-              className={`relative aspect-[4/3] rounded-3xl border-2 border-dashed transition-all duration-300 cursor-pointer overflow-hidden ${
+              className={`relative aspect-[4/3] transition-all duration-500 cursor-pointer overflow-hidden ${
                 isDragOverTarget 
-                  ? 'border-lime-400 bg-neutral-800' 
+                  ? 'shadow-2xl shadow-white/20' 
                   : targetImage 
-                    ? 'border-neutral-600 bg-neutral-900' 
-                    : 'border-neutral-700 bg-neutral-900 hover:border-neutral-600 hover:bg-neutral-800'
+                    ? 'shadow-xl shadow-black/40' 
+                    : 'shadow-lg shadow-black/20'
               }`}
+              style={{
+                background: targetImage 
+                  ? 'transparent' 
+                  : isDragOverTarget 
+                    ? 'linear-gradient(145deg, #262626 0%, #171717 100%)' 
+                    : 'linear-gradient(145deg, #1f1f1f 0%, #0a0a0a 100%)',
+                borderRadius: targetImage ? '2rem' : '1.5rem',
+                border: targetImage ? 'none' : isDragOverTarget ? '1px solid #404040' : '1px solid #262626'
+              }}
               onDragOver={handleTargetDragOver}
               onDragLeave={handleTargetDragLeave}
               onDrop={handleTargetDrop}
-              onClick={() => targetInputRef.current?.click()}
+              onMouseEnter={() => setIsTargetHovered(true)}
+              onMouseLeave={() => setIsTargetHovered(false)}
             >
               {targetImage ? (
                 <>
@@ -535,17 +678,72 @@ const PortraitPage = () => {
                   </button>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className={`mb-4 transition-colors ${isDragOverTarget ? 'text-lime-400' : 'text-neutral-400'}`}>
-                    <Upload size={48} className="mx-auto mb-2" />
-                    <div className="text-lg font-medium mb-2">
-                      {isDragOverTarget ? 'Drop target image here' : 'Upload Target Image'}
-                    </div>
-                    <div className="text-sm text-neutral-500">
-                      The image where the face will be placed
+                <>
+                  {/* Normal State - Modern Minimal Interface (Desktop only) */}
+                  <div className={`absolute inset-0 transition-all duration-500 ${
+                    isTargetHovered ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                  } flex-col items-center justify-center text-center hidden md:flex`}>
+                    <div className={`transition-all duration-300 ${isDragOverTarget ? 'text-white scale-110' : 'text-neutral-400 scale-100'}`}>
+                      {/* Geometric Target Icon */}
+                      <div className="relative mb-6">
+                        <div className="w-16 h-16 mx-auto rounded-2xl border-2 border-dashed border-current flex items-center justify-center transition-all duration-300">
+                          <div className="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-current"></div>
+                          </div>
+                        </div>
+                        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-800 border-2 border-neutral-950 flex items-center justify-center">
+                          <div className="text-xs">⚬</div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="text-base font-normal">
+                          {isDragOverTarget ? 'Drop to upload' : 'Target Image'}
+                        </div>
+                        <div className="text-xs text-neutral-600 font-light">
+                          {isDragOverTarget ? 'Release to add image' : 'Click or drag to add'}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Split Zone Interface - Always visible on mobile, hover on desktop */}
+                  <div className={`absolute inset-0 transition-all duration-500 flex ${
+                    'md:' + (isTargetHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
+                  } opacity-100 scale-100`}>
+                    
+                    {/* Left Half - Upload File */}
+                    <div 
+                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer relative"
+                      onClick={() => targetInputRef.current?.click()}
+                      style={{
+                        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 80%)',
+                        borderRight: '1px solid rgba(255,255,255,0.1)'
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
+                        <div className="text-lg">⬆</div>
+                      </div>
+                      <div className="text-sm font-medium text-white/90">Upload</div>
+                      <div className="text-xs text-white/60 mt-1">From device</div>
+                    </div>
+
+                    {/* Right Half - From History */}
+                    <div 
+                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer"
+                      onClick={() => setShowTargetHistory(true)}
+                      style={{
+                        background: 'linear-gradient(270deg, rgba(255,255,255,0.05) 0%, transparent 80%)'
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
+                        <div className="text-lg">⊞</div>
+                      </div>
+                      <div className="text-sm font-medium text-white/90">History</div>
+                      <div className="text-xs text-white/60 mt-1">{previousGenerations.length} images</div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
             <input
@@ -560,6 +758,114 @@ const PortraitPage = () => {
           </div>
         )}
       </div>
+
+      {/* Character History Modal */}
+      {showCharacterHistory && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 rounded-3xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+              <div>
+                <h2 className="text-white text-xl font-medium">Select Character Image</h2>
+                <p className="text-neutral-400 text-sm mt-1">Choose from your previous generations</p>
+              </div>
+              <button
+                onClick={() => setShowCharacterHistory(false)}
+                className="w-10 h-10 bg-neutral-800 hover:bg-neutral-700 rounded-full flex items-center justify-center transition-all duration-300"
+              >
+                <X size={20} className="text-white" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {previousGenerations.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {previousGenerations.map((generation) => (
+                    <div
+                      key={generation.id}
+                      className="relative aspect-square rounded-2xl overflow-hidden bg-neutral-800 cursor-pointer group hover:scale-105 transition-all duration-300"
+                      onClick={() => handleCharacterHistorySelect(generation)}
+                    >
+                      <img 
+                        src={generation.url} 
+                        alt={generation.prompt}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <div className="text-sm font-medium mb-1">Select</div>
+                          <div className="text-xs text-neutral-300 truncate max-w-20">{generation.prompt}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <GridFour size={48} className="text-neutral-600 mx-auto mb-4" />
+                  <div className="text-neutral-400 text-lg mb-2">No previous generations</div>
+                  <div className="text-neutral-600 text-sm">Generate some images first to use them here</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target History Modal */}
+      {showTargetHistory && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 rounded-3xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+              <div>
+                <h2 className="text-white text-xl font-medium">Select Target Image</h2>
+                <p className="text-neutral-400 text-sm mt-1">Choose from your previous generations</p>
+              </div>
+              <button
+                onClick={() => setShowTargetHistory(false)}
+                className="w-10 h-10 bg-neutral-800 hover:bg-neutral-700 rounded-full flex items-center justify-center transition-all duration-300"
+              >
+                <X size={20} className="text-white" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {previousGenerations.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {previousGenerations.map((generation) => (
+                    <div
+                      key={generation.id}
+                      className="relative aspect-square rounded-2xl overflow-hidden bg-neutral-800 cursor-pointer group hover:scale-105 transition-all duration-300"
+                      onClick={() => handleTargetHistorySelect(generation)}
+                    >
+                      <img 
+                        src={generation.url} 
+                        alt={generation.prompt}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <div className="text-sm font-medium mb-1">Select</div>
+                          <div className="text-xs text-neutral-300 truncate max-w-20">{generation.prompt}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <GridFour size={48} className="text-neutral-600 mx-auto mb-4" />
+                  <div className="text-neutral-400 text-lg mb-2">No previous generations</div>
+                  <div className="text-neutral-600 text-sm">Generate some images first to use them here</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Bar */}
       <div className="fixed bottom-3 md:bottom-5 left-1/2 transform -translate-x-1/2 rounded-2xl md:rounded-3xl p-2 md:p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-[95%] md:w-full max-w-4xl">

@@ -17,6 +17,11 @@ const PortraitPage = () => {
   const [isDragOverCharacter, setIsDragOverCharacter] = useState(false);
   const [isDragOverTarget, setIsDragOverTarget] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
+  
+  // Debug: Track generatedImage state changes
+  useEffect(() => {
+    console.log('🖼️ generatedImage state changed:', generatedImage);
+  }, [generatedImage]);
   const [generatingItem, setGeneratingItem] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [currentPredictionId, setCurrentPredictionId] = useState(null);
@@ -74,7 +79,12 @@ const PortraitPage = () => {
               timestamp: new Date()
             };
             
+            console.log('🖼️ Setting generated face swap image:', newGeneratedImage);
             setGeneratedImage(newGeneratedImage);
+            
+            // Clear uploaded images and show result
+            setCharacterImage(null);
+            setTargetImage(null);
             
             // Update to completed status
             setGeneratingItem(prev => prev ? {
@@ -239,6 +249,7 @@ const PortraitPage = () => {
 
     try {
       setIsGenerating(true);
+      console.log('🖼️ Clearing previous generated image');
       setGeneratedImage(null); // Clear previous result
       
       // Set generating item for DynamicIsland
@@ -305,7 +316,12 @@ const PortraitPage = () => {
             timestamp: new Date()
           };
           
+          console.log('🖼️ Setting generated face swap image (sync):', newGeneratedImage);
           setGeneratedImage(newGeneratedImage);
+          
+          // Clear uploaded images and show result
+          setCharacterImage(null);
+          setTargetImage(null);
           
           // Update DynamicIsland to completed
           setGeneratingItem({
@@ -388,10 +404,13 @@ const PortraitPage = () => {
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-4">
         
 
-        {generatedImage ? (
+        {(() => {
+          console.log('🖼️ Render condition check - generatedImage:', generatedImage);
+          return generatedImage;
+        })() ? (
           /* Generated Result Display */
-          <div className="relative bg-transparent p-4 w-full max-w-4xl">
-            <div className="w-full h-full rounded-[60px] overflow-hidden bg-neutral-900 shadow-2xl relative group">
+          <div className="relative bg-transparent p-4 w-full max-w-3xl flex items-center justify-center">
+            <div className="w-full max-w-lg max-h-[500px] rounded-[60px] overflow-hidden bg-neutral-900 shadow-2xl relative group" style={{ aspectRatio: '3/4' }}>
               <img 
                 src={generatedImage.url} 
                 alt={generatedImage.prompt}
@@ -400,7 +419,7 @@ const PortraitPage = () => {
               
               {/* Generated image overlay */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="text-white text-sm font-medium mb-1">{generatedImage.model}</div>
+                <div className="text-white text-sm font-medium mb-1">Lungo Mask</div>
                 <div className="text-white/80 text-xs truncate">Face Swap Complete</div>
               </div>
               
@@ -563,7 +582,7 @@ const PortraitPage = () => {
           >
             <span>{isGenerating ? 'GENERATING...' : 'GENERATE'}</span>
             <span className="text-black font-bold text-xs tracking-wider uppercase">
-              2 CREDITS
+              3 CREDITS
             </span>
           </button>
         </div>

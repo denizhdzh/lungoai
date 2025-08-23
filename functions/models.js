@@ -271,7 +271,7 @@ const models = {
     "fofr/face-swap-with-ideogram": {
       name: "Face Swap with Ideogram",
       type: "faceswap",
-      credits: 2,
+      credits: 3,
       tier: 2,
       params: {
         character_image: { required: true, type: "string", description: "Reference image of the character whose face to swap" },

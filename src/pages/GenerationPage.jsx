@@ -956,6 +956,12 @@ const GenerationPage = () => {
 			
 			// Include only important parameters that have options
 			const importantParams = ['duration', 'resolution', 'mode', 'safety_filter_level', 'output_format'];
+			
+			// Hide output_format in edit mode
+			if (activeType === 'edit' && key === 'output_format') {
+				return false;
+			}
+			
 			return importantParams.includes(key) && modelConfig.options?.[key];
 		});
 	};
@@ -1334,7 +1340,7 @@ const GenerationPage = () => {
 								<div className="flex gap-1 h-full">
 									<button
 										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
-										className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+										className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex-1 ${
 											selectedModel === 'black-forest-labs/flux-kontext-pro'
 												? 'bg-white text-black'
 												: 'bg-neutral-900 text-neutral-300 hover:text-white'
@@ -1344,7 +1350,7 @@ const GenerationPage = () => {
 									</button>
 									<button
 										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
-										className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+										className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex-1 ${
 											selectedModel === 'black-forest-labs/flux-kontext-max'
 												? 'bg-white text-black'
 												: 'bg-neutral-900 text-neutral-300 hover:text-white'
@@ -1480,7 +1486,7 @@ const GenerationPage = () => {
 									<div className="flex gap-2 h-full">
 										<button
 											onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
-											className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+											className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 ${
 												selectedModel === 'black-forest-labs/flux-kontext-pro'
 													? 'bg-white text-black'
 													: 'bg-neutral-900 text-neutral-300 hover:text-white'
@@ -1490,7 +1496,7 @@ const GenerationPage = () => {
 										</button>
 										<button
 											onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
-											className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+											className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 ${
 												selectedModel === 'black-forest-labs/flux-kontext-max'
 													? 'bg-white text-black'
 													: 'bg-neutral-900 text-neutral-300 hover:text-white'
@@ -1555,42 +1561,6 @@ const GenerationPage = () => {
 									</>
 								)}
 							</div>
-							
-							{/* Aspect Ratio (if available) */}
-							{modelConfig?.options?.aspect_ratio && (
-								<div className="relative dropdown-container w-20">
-									<button
-										onClick={() => toggleDropdown('aspect_ratio_desktop')}
-										className="w-full bg-neutral-900 rounded-lg px-2 py-2 text-white text-xs flex items-center justify-between h-full"
-									>
-										<div className="font-medium text-xs">
-											{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
-										</div>
-										<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
-									</button>
-									
-									{openDropdowns.aspect_ratio_desktop && (
-										<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-											{modelConfig.options.aspect_ratio.map(option => (
-												<button
-													key={option}
-													onClick={() => {
-														handleSettingChange('aspect_ratio', option);
-														closeAllDropdowns();
-													}}
-													className={`w-full text-left px-3 py-3 text-sm transition-colors ${
-														getSettingValue('aspect_ratio') === option 
-															? 'bg-neutral-700 text-white' 
-															: 'text-neutral-300 hover:bg-neutral-700'
-													}`}
-												>
-													{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
-												</button>
-											))}
-										</div>
-									)}
-								</div>
-							)}
 
 							{/* Additional Model Options (duration, resolution, mode etc.) */}
 							{getDropdownParameters().map(([key, param]) => (
@@ -1638,21 +1608,56 @@ const GenerationPage = () => {
 						</div>
 					</div>
 
-					{/* Right Side - Generate Button and Credits */}
-					<div className="flex flex-col gap-2 items-end">
-						{/* Generate Button */}
+					{/* Right Side - Generate Button and Aspect Ratio */}
+					<div className="flex flex-col gap-2 items-end" style={{ minHeight: '80px' }}>
+						{/* Generate Button with Credits */}
 						<button
 							onClick={handleGenerate}
 							disabled={!prompt.trim() || isGenerating}
-							className="px-8 py-3 bg-white/90 hover:bg-white text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm"
+							className="px-8 py-4 bg-lime-400 hover:bg-lime-300 text-black font-normal tracking-wide rounded-2xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all hover:scale-105 shadow-lg text-sm flex flex-col items-center justify-center gap-1"
+							style={{ minHeight: '60px' }}
 						>
-							{isGenerating ? 'GENERATING...' : 'GENERATE'}
+							<span>{isGenerating ? 'GENERATING...' : 'GENERATE'}</span>
+							<span className="text-black font-bold text-xs tracking-wider uppercase">
+								{calculateCredits()} CREDITS
+							</span>
 						</button>
 						
-						{/* Credits Display */}
-						<div className="text-xs text-lime-500 text-center font-bold tracking-wider uppercase">
-							{calculateCredits()} CREDITS
-						</div>
+						{/* Aspect Ratio - Desktop (moved from left side) */}
+						{modelConfig?.options?.aspect_ratio && (
+							<div className="relative dropdown-container w-full">
+								<button
+									onClick={() => toggleDropdown('aspect_ratio_desktop')}
+									className="w-full bg-neutral-900 rounded-lg px-2 py-2 text-white text-xs flex items-center justify-between h-full"
+								>
+									<div className="font-medium text-xs">
+										{getSettingValue('aspect_ratio') === 'match_input_image' ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
+									</div>
+									<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
+								</button>
+								
+								{openDropdowns.aspect_ratio_desktop && (
+									<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+										{modelConfig.options.aspect_ratio.map(option => (
+											<button
+												key={option}
+												onClick={() => {
+													handleSettingChange('aspect_ratio', option);
+													closeAllDropdowns();
+												}}
+												className={`w-full text-left px-3 py-3 text-sm transition-colors ${
+													getSettingValue('aspect_ratio') === option 
+														? 'bg-neutral-700 text-white' 
+														: 'text-neutral-300 hover:bg-neutral-700'
+												}`}
+											>
+												{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
+											</button>
+										))}
+									</div>
+								)}
+							</div>
+						)}
 					</div>
 				</div>
 			</div>

@@ -192,7 +192,7 @@ const Header = () => {
                     : 'text-white hover:bg-neutral-700'
                 }`}
               >
-                Reface
+                FaceSwap
               </button>
               
             </div>

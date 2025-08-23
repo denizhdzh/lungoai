@@ -7,6 +7,7 @@ const Replicate = require("replicate");
 const admin = require("firebase-admin");
 const { getStorage } = require('firebase-admin/storage');
 const axios = require('axios');
+const crypto = require('crypto');
 
 // Import model configuration for parameter validation
 const { models, getModelById } = require('./models.js');
@@ -188,7 +189,9 @@ exports.generateImage = onCall(
             logger.info(`Creating async prediction for reliable processing...`);
             const prediction = await replicate.predictions.create({
                 model: model,
-                input: input
+                input: input,
+                webhook: `${process.env.FIREBASE_FUNCTIONS_URL}/replicateWebhook`,
+                webhook_events_filter: ["completed"]
             });
             
             predictionId = prediction.id;
@@ -800,7 +803,9 @@ exports.generateVideo = onCall(
             logger.info(`Creating async video prediction for reliable processing...`);
             const prediction = await replicate.predictions.create({
                 model: model,
-                input: input
+                input: input,
+                webhook: `${process.env.FIREBASE_FUNCTIONS_URL}/replicateWebhook`,
+                webhook_events_filter: ["completed"]
             });
             
             predictionId = prediction.id;
@@ -1518,3 +1523,180 @@ exports.getAdminStats = onCall(async (request) => {
     };
   }
 });
+
+// --- Replicate Webhook Handler ---
+exports.replicateWebhook = onRequest(
+    { 
+        region: 'us-central1', 
+        timeoutSeconds: 540, 
+        memory: '512MiB' 
+    },
+    async (request, response) => {
+        // Only allow POST requests
+        if (request.method !== 'POST') {
+            response.status(405).send('Method Not Allowed');
+            return;
+        }
+
+        try {
+            // Get the webhook secret from environment
+            const webhookSecret = process.env.REPLICATE_WEBHOOK_SECRET;
+            if (!webhookSecret) {
+                logger.error('REPLICATE_WEBHOOK_SECRET not configured');
+                response.status(500).send('Webhook secret not configured');
+                return;
+            }
+
+            // Verify webhook signature
+            const signature = request.headers['replicate-signature'];
+            if (!signature) {
+                logger.error('Missing Replicate signature header');
+                response.status(401).send('Missing signature');
+                return;
+            }
+
+            // Create expected signature
+            const body = JSON.stringify(request.body);
+            const expectedSignature = crypto
+                .createHmac('sha256', webhookSecret)
+                .update(body)
+                .digest('hex');
+            
+            const receivedSignature = signature.replace('sha256=', '');
+
+            // Verify signature
+            if (!crypto.timingSafeEqual(
+                Buffer.from(expectedSignature, 'hex'),
+                Buffer.from(receivedSignature, 'hex')
+            )) {
+                logger.error('Invalid webhook signature');
+                response.status(401).send('Invalid signature');
+                return;
+            }
+
+            const webhookData = request.body;
+            const predictionId = webhookData.id;
+            const status = webhookData.status;
+
+            logger.info(`Webhook received for prediction ${predictionId}: ${status}`);
+
+            // Get prediction from Firestore
+            const predictionRef = db.collection('predictions').doc(predictionId);
+            const predictionDoc = await predictionRef.get();
+
+            if (!predictionDoc.exists) {
+                logger.warn(`Prediction ${predictionId} not found in database`);
+                response.status(404).send('Prediction not found');
+                return;
+            }
+
+            const predictionData = predictionDoc.data();
+            const userId = predictionData.userId;
+
+            // Update prediction status
+            const updateData = {
+                status: status,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Handle successful completion
+            if (status === 'succeeded' && webhookData.output) {
+                updateData.output = webhookData.output;
+                updateData.completedAt = admin.firestore.FieldValue.serverTimestamp();
+
+                // Process result in background
+                setTimeout(async () => {
+                    try {
+                        // Handle different output formats
+                        let contentUrl;
+                        if (typeof webhookData.output === 'string') {
+                            contentUrl = webhookData.output;
+                        } else if (Array.isArray(webhookData.output) && webhookData.output.length > 0) {
+                            contentUrl = webhookData.output[0];
+                        } else {
+                            throw new Error('Invalid output format');
+                        }
+
+                        // Save to Firebase Storage for permanent storage
+                        const savedContentUrl = await saveToFirebaseStorage(
+                            contentUrl, 
+                            userId, 
+                            predictionData.model, 
+                            predictionData.type
+                        );
+
+                        // Store generation result in user's generations subcollection
+                        const generationId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                        const generationData = {
+                            type: predictionData.type,
+                            model: predictionData.model,
+                            prompt: predictionData.input.prompt || 'Face Swap Result',
+                            settings: predictionData.input,
+                            creditsUsed: predictionData.creditsUsed,
+                            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                            predictionId: predictionId
+                        };
+
+                        if (predictionData.type === 'image') {
+                            generationData.imageUrl = savedContentUrl;
+                        } else if (predictionData.type === 'video') {
+                            generationData.videoUrl = savedContentUrl;
+                            if (predictionData.duration) {
+                                generationData.duration = predictionData.duration;
+                            }
+                        }
+
+                        await db.collection('users').doc(userId).collection('generations').doc(generationId).set(generationData);
+
+                        // Update prediction with saved URL
+                        await predictionRef.update({
+                            savedUrl: savedContentUrl
+                        });
+
+                        logger.info(`Webhook: ${predictionData.type} generation completed and saved for user ${userId}: ${savedContentUrl}`);
+
+                    } catch (saveError) {
+                        logger.error(`Webhook: Failed to save generation for prediction ${predictionId}:`, saveError);
+                    }
+                }, 50); // Fast background processing
+            }
+
+            // Handle failure
+            if (status === 'failed') {
+                updateData.error = webhookData.error || 'Generation failed';
+                updateData.failedAt = admin.firestore.FieldValue.serverTimestamp();
+
+                // Refund credits in background
+                setTimeout(async () => {
+                    try {
+                        const userRef = db.collection('users').doc(userId);
+                        const subsToRefund = predictionData.subsDeduction || 0;
+                        const oneTimeToRefund = predictionData.oneTimeDeduction || 0;
+
+                        await refundCredits(userRef, subsToRefund, oneTimeToRefund);
+
+                        await predictionRef.update({
+                            creditsRefunded: subsToRefund + oneTimeToRefund
+                        });
+
+                        logger.info(`Webhook: Refunded ${subsToRefund + oneTimeToRefund} credits to user ${userId} for failed prediction ${predictionId}`);
+
+                    } catch (refundError) {
+                        logger.error(`Webhook: Failed to refund credits for prediction ${predictionId}:`, refundError);
+                    }
+                }, 50);
+            }
+
+            // Update prediction status
+            await predictionRef.update(updateData);
+
+            logger.info(`Webhook: Updated prediction ${predictionId} status to ${status}`);
+            
+            response.status(200).send('OK');
+
+        } catch (error) {
+            logger.error('Webhook error:', error);
+            response.status(500).send('Internal server error');
+        }
+    }
+);

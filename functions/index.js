@@ -187,11 +187,10 @@ exports.generateImage = onCall(
         
         try {
             logger.info(`Creating async prediction for reliable processing...`);
+            // Temporarily disable webhooks until environment variables are configured
             const prediction = await replicate.predictions.create({
                 model: model,
-                input: input,
-                webhook: `${process.env.FIREBASE_FUNCTIONS_URL}/replicateWebhook`,
-                webhook_events_filter: ["completed"]
+                input: input
             });
             
             predictionId = prediction.id;
@@ -801,11 +800,10 @@ exports.generateVideo = onCall(
         
         try {
             logger.info(`Creating async video prediction for reliable processing...`);
+            // Temporarily disable webhooks until environment variables are configured
             const prediction = await replicate.predictions.create({
                 model: model,
-                input: input,
-                webhook: `${process.env.FIREBASE_FUNCTIONS_URL}/replicateWebhook`,
-                webhook_events_filter: ["completed"]
+                input: input
             });
             
             predictionId = prediction.id;

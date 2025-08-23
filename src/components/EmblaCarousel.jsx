@@ -49,15 +49,23 @@ const EmblaCarousel = (props) => {
                     link={slide.link}
                     duration={4000}
                   />
-                ) : slide.type === 'video' && slide.imageUrl ? (
-                  <video
-                    src={slide.imageUrl}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  />
+                ) : slide.type === 'video' && slide.videoUrl ? (
+                  <>
+                    {/* Loading placeholder for video */}
+                    {!loadedImages.has(slide.videoUrl) && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
+                    )}
+                    <video
+                      src={slide.videoUrl}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      onLoadedData={() => setLoadedImages(prev => new Set([...prev, slide.videoUrl]))}
+                      style={{ display: loadedImages.has(slide.videoUrl) ? 'block' : 'none' }}
+                    />
+                  </>
                 ) : (
                   <>
                     {/* Loading placeholder */}

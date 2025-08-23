@@ -1,7 +1,8 @@
-// AI Models Configuration
+// AI Models Configuration for Firebase Functions
 // This file contains all model definitions with their parameters and requirements
+// Synchronized from src/config/models.js
 
-export const models = {
+const models = {
   image: {
     "google/imagen-4": {
       name: "Google Imagen 4",
@@ -282,79 +283,14 @@ export const models = {
   }
 };
 
-// Helper functions
-export const getModelById = (modelId) => {
+// Helper function to get model by ID
+function getModelById(modelId) {
   for (const category in models) {
     if (models[category][modelId]) {
       return { ...models[category][modelId], id: modelId, category };
     }
   }
   return null;
-};
+}
 
-export const getModelsByCategory = (category) => {
-  return models[category] || {};
-};
-
-export const requiresImage = (modelId) => {
-  const model = getModelById(modelId);
-  if (!model) return false;
-  
-  // Check if any image parameter is required
-  for (const paramName in model.params) {
-    const param = model.params[paramName];
-    if (param.required && (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image')) {
-      return true;
-    }
-  }
-  return false;
-};
-
-export const supportsImageInput = (modelId) => {
-  const model = getModelById(modelId);
-  if (!model) return false;
-  
-  // Check if model has any image input parameters (required or optional)
-  for (const paramName in model.params) {
-    if (paramName.includes('image') || paramName === 'start_image' || paramName === 'first_frame_image') {
-      return true;
-    }
-  }
-  return false;
-};
-
-export const getModelType = (modelId) => {
-  const model = getModelById(modelId);
-  return model?.type || null;
-};
-
-// Tier hierarchy: 1 = Basic, 2 = Creator, 3 = Pro
-export const getUserTier = (subscriptionData) => {
-  if (!subscriptionData || !subscriptionData.subscriptionStatus || subscriptionData.subscriptionStatus !== 'active') {
-    return 0; // No subscription
-  }
-  
-  const planPriceId = subscriptionData.stripePriceId;
-  
-  // Starter plans
-  if (planPriceId === "price_1RMqEZDf8kAOBAT3ltD6n2lX" || planPriceId === "price_1RMqGbDf8kAOBAT3vgwkWLr6") {
-    return 1;
-  }
-  
-  // Creator plans
-  if (planPriceId === "price_1RRJ8tDf8kAOBAT3qBwC6qpM" || planPriceId === "price_1RRJ9SDf8kAOBAT3bA8Xbriq") {
-    return 2;
-  }
-  
-  // Pro plans
-  if (planPriceId === "price_1RMqHgDf8kAOBAT3m6kthIND" || planPriceId === "price_1RMqI1Df8kAOBAT3Xoy3M7Ho") {
-    return 3;
-  }
-  
-  return 0; // Unknown plan
-};
-
-export const canAccessModel = () => {
-  // Everyone can access all models now
-  return true;
-};
+module.exports = { models, getModelById };

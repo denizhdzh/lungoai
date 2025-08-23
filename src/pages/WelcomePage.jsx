@@ -15,7 +15,8 @@ const WelcomePage = () => {
       try {
         // Use get() instead of getDocs() for faster single read
         const featuresRef = collection(db, 'system', 'features', 'items');
-        const querySnapshot = await getDocs(featuresRef);
+        const q = query(featuresRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
         
         // Process data more efficiently
         const featuresData = querySnapshot.docs.map(doc => ({

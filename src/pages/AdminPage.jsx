@@ -24,12 +24,14 @@ const AdminPage = () => {
     aiModel: '',
     type: 'static_image',
     imageUrl: '',
+    videoUrl: '',
     beforeImage: '',
     afterImage: '',
     cta: '',
     link: ''
   });
   const [imageFile, setImageFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
   const [beforeImageFile, setBeforeImageFile] = useState(null);
   const [afterImageFile, setAfterImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -162,17 +164,81 @@ const AdminPage = () => {
     }
   };
 
+  const handleVideoUpload = async (file) => {
+    if (!file) return null;
+    
+    try {
+      setUploading(true);
+      const timestamp = Date.now();
+      const fileName = file.name.replace(/\.[^/.]+$/, "");
+      const storageRef = ref(storage, `features/videos/${timestamp}_${fileName}.mp4`);
+      
+      // Compress video before upload
+      const compressedFile = await compressVideo(file);
+      
+      await uploadBytes(storageRef, compressedFile);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      alert('Failed to upload video');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const compressVideo = (file) => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      video.onloadedmetadata = () => {
+        // Set canvas size (compress to max 1080p)
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        let { videoWidth, videoHeight } = video;
+        
+        if (videoWidth > maxWidth) {
+          videoHeight = (videoHeight * maxWidth) / videoWidth;
+          videoWidth = maxWidth;
+        }
+        if (videoHeight > maxHeight) {
+          videoWidth = (videoWidth * maxHeight) / videoHeight;
+          videoHeight = maxHeight;
+        }
+        
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+        
+        // For now, just return original file
+        // Proper video compression would need FFmpeg.js or similar
+        resolve(file);
+      };
+      
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
       let imageUrl = formData.imageUrl;
+      let videoUrl = formData.videoUrl;
       let beforeImageUrl = formData.beforeImage;
       let afterImageUrl = formData.afterImage;
       
       if (imageFile) {
         imageUrl = await handleImageUpload(imageFile);
         if (!imageUrl) return;
+      }
+      
+      if (videoFile) {
+        videoUrl = await handleVideoUpload(videoFile);
+        if (!videoUrl) return;
       }
       
       if (formData.type === 'edit_demo') {
@@ -189,6 +255,7 @@ const AdminPage = () => {
       const featureData = {
         ...formData,
         imageUrl: formData.type === 'static_image' ? imageUrl : '',
+        videoUrl: formData.type === 'video' ? videoUrl : '',
         beforeImage: formData.type === 'edit_demo' ? beforeImageUrl : '',
         afterImage: formData.type === 'edit_demo' ? afterImageUrl : '',
         createdAt: new Date(),
@@ -211,12 +278,14 @@ const AdminPage = () => {
         aiModel: '',
         type: 'static_image',
         imageUrl: '',
+        videoUrl: '',
         beforeImage: '',
         afterImage: '',
         cta: '',
         link: ''
       });
       setImageFile(null);
+      setVideoFile(null);
       setBeforeImageFile(null);
       setAfterImageFile(null);
       fetchFeatures();
@@ -233,6 +302,7 @@ const AdminPage = () => {
       aiModel: feature.aiModel || '',
       type: feature.type || 'static_image',
       imageUrl: feature.imageUrl || '',
+      videoUrl: feature.videoUrl || '',
       beforeImage: feature.beforeImage || '',
       afterImage: feature.afterImage || '',
       cta: feature.cta || '',
@@ -260,12 +330,14 @@ const AdminPage = () => {
       aiModel: '',
       type: 'static_image',
       imageUrl: '',
+      videoUrl: '',
       beforeImage: '',
       afterImage: '',
       cta: '',
       link: ''
     });
     setImageFile(null);
+    setVideoFile(null);
     setBeforeImageFile(null);
     setAfterImageFile(null);
   };
@@ -512,16 +584,34 @@ const AdminPage = () => {
                 )}
                 
                 {formData.type === 'video' && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Video URL</label>
-                    <input
-                      type="url"
-                      value={formData.imageUrl}
-                      onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-                      className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                      placeholder="https://example.com/video.mp4"
-                      required
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-white/80 mb-2">Upload Video File</label>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={(e) => setVideoFile(e.target.files[0])}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                      />
+                      {formData.videoUrl && !videoFile && (
+                        <p className="text-xs text-white/60 mt-1">Current video will be kept</p>
+                      )}
+                    </div>
+                    
+                    <div className="text-center text-white/40 text-sm">
+                      OR
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-white/80 mb-2">Video URL</label>
+                      <input
+                        type="url"
+                        value={formData.videoUrl}
+                        onChange={(e) => setFormData({...formData, videoUrl: e.target.value})}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                        placeholder="https://example.com/video.mp4"
+                      />
+                    </div>
                   </div>
                 )}
 

@@ -951,8 +951,12 @@ const GenerationPage = () => {
 			if (key === 'prompt' || key.includes('image') || key === 'start_image' || key === 'first_frame_image') {
 				return false;
 			}
-			// Only include parameters that have options or are boolean
-			return modelConfig.options?.[key] || param.type === 'boolean';
+			// Only include key parameters (duration, resolution, mode) and exclude aspect_ratio
+			if (key === 'aspect_ratio') return false;
+			
+			// Include only important parameters that have options
+			const importantParams = ['duration', 'resolution', 'mode', 'safety_filter_level', 'output_format'];
+			return importantParams.includes(key) && modelConfig.options?.[key];
 		});
 	};
 
@@ -1309,63 +1313,67 @@ const GenerationPage = () => {
 			)}
 
 			{/* Bottom menu - Responsive */}
-			<div className="fixed bottom-3 md:bottom-5 left-1/2 transform -translate-x-1/2 rounded-2xl md:rounded-3xl p-2 md:p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-[95%] md:w-full max-w-3xl">
+			<div className="fixed bottom-3 md:bottom-5 left-1/2 transform -translate-x-1/2 rounded-2xl md:rounded-3xl p-2 md:p-4 bg-neutral-950/40 backdrop-blur-xl border border-neutral-700/50 w-[95%] md:w-full max-w-4xl">
 				{/* Mobile Layout - Stacked */}
 				<div className="flex lg:hidden flex-col gap-3">
-					{/* Top row - Model Selection + Aspect Ratio */}
-					<div className="flex items-stretch gap-3 h-12">
+					{/* Prompt input - Mobile */}
+					<div className="relative">
+						<textarea
+							value={prompt}
+							onChange={(e) => setPrompt(e.target.value)}
+							placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe what you want to create..."}
+							className="w-full bg-transparent border-none rounded-xl px-3 py-3 text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide h-20"
+						/>
+					</div>
+					
+					{/* Model Selection + Aspect Ratio - Mobile */}
+					<div className="flex items-stretch gap-2 h-10">
 						{/* Model Selection - Mobile */}
 						<div className="flex-1 relative dropdown-container">
 							{activeType === 'edit' ? (
-								<div className="flex gap-2 h-full">
+								<div className="flex gap-1 h-full">
 									<button
 										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
-										className={`px-3 py-2 rounded-xl text-xs font-medium transition-all flex-1 ${
+										className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
 											selectedModel === 'black-forest-labs/flux-kontext-pro'
 												? 'bg-white text-black'
 												: 'bg-neutral-900 text-neutral-300 hover:text-white'
 										}`}
 									>
-										<div className="text-center">
-											<div className="font-semibold">PRO</div>
-											<div className="text-xs opacity-75">1 Credit</div>
-										</div>
+										PRO
 									</button>
 									<button
 										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
-										className={`px-3 py-2 rounded-xl text-xs font-medium transition-all flex-1 ${
+										className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
 											selectedModel === 'black-forest-labs/flux-kontext-max'
 												? 'bg-white text-black'
 												: 'bg-neutral-900 text-neutral-300 hover:text-white'
 										}`}
 									>
-										<div className="text-center">
-											<div className="font-semibold">MAX</div>
-											<div className="text-xs opacity-75">2 Credits</div>
-										</div>
+										MAX
 									</button>
 								</div>
 							) : (
-								<>
-							<button
-								onClick={() => toggleDropdown('model')}
-								className="w-full bg-neutral-900 rounded-xl px-3 py-2 text-white text-xs flex items-center justify-between h-full"
-							>
-								<div className="flex items-center gap-2">
-									<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
-										<img 
-											src={getModelLogo(selectedModel)}
-											alt={availableModels[selectedModel]?.name}
-											className="w-full h-full object-contain"
-											onError={(e) => {
-												e.target.style.display = 'none';
-											}}
-										/>
+								<button
+									onClick={() => toggleDropdown('model')}
+									className="w-full bg-neutral-900 rounded-lg px-2 py-1 text-white text-xs flex items-center justify-between h-full"
+								>
+									<div className="flex items-center gap-2">
+										<div className="w-3 h-3 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+											<img 
+												src={getModelLogo(selectedModel)}
+												alt={availableModels[selectedModel]?.name}
+												className="w-full h-full object-contain"
+												onError={(e) => {
+													e.target.style.display = 'none';
+												}}
+											/>
+										</div>
+										<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
 									</div>
-									<span className="truncate">{availableModels[selectedModel]?.name || selectedModel}</span>
-								</div>
-								<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model ? 'rotate-180' : ''}`} />
-							</button>
+									<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.model ? 'rotate-180' : ''}`} />
+								</button>
+							)}
 							
 							{openDropdowns.model && (
 								<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
@@ -1376,7 +1384,7 @@ const GenerationPage = () => {
 												setSelectedModel(id);
 												closeAllDropdowns();
 											}}
-											className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+											className={`w-full text-left px-3 py-3 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
 												selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
 											}`}
 										>
@@ -1398,36 +1406,19 @@ const GenerationPage = () => {
 									))}
 								</div>
 							)}
-								</>
-							)}
 						</div>
 
-					</div>
-					
-					
-					{/* Regular prompt input - Mobile */}
-					<div className="relative">
-						<textarea
-							value={prompt}
-							onChange={(e) => setPrompt(e.target.value)}
-							placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe what you want to create..."}
-							className="w-full bg-transparent border-none rounded-xl px-3 py-3 text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide h-20"
-						/>
-					</div>
-					
-					{/* Generate button with Aspect Ratio - Mobile */}
-					<div className="flex items-stretch gap-3 h-12">
 						{/* Aspect Ratio - Mobile (if available) */}
 						{modelConfig?.options?.aspect_ratio && (
-							<div className="flex items-center gap-2 bg-neutral-900 rounded-xl px-3 py-2 min-w-[80px] dropdown-container relative">
+							<div className="flex items-center gap-1 bg-neutral-900 rounded-lg px-2 py-1 min-w-[60px] dropdown-container relative">
 								<button
 									onClick={() => toggleDropdown('aspect_ratio_bottom')}
 									className="flex items-center justify-between text-white text-xs w-full"
 								>
-									<div className="font-medium">
+									<div className="font-medium text-xs">
 										{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
 									</div>
-									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_bottom ? 'rotate-180' : ''}`} />
+									<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_bottom ? 'rotate-180' : ''}`} />
 								</button>
 								
 								{openDropdowns.aspect_ratio_bottom && (
@@ -1439,7 +1430,7 @@ const GenerationPage = () => {
 													handleSettingChange('aspect_ratio', option);
 													closeAllDropdowns();
 												}}
-												className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+												className={`w-full text-left px-3 py-3 text-sm transition-colors ${
 													getSettingValue('aspect_ratio') === option 
 														? 'bg-neutral-700 text-white' 
 														: 'text-neutral-300 hover:bg-neutral-700'
@@ -1452,161 +1443,204 @@ const GenerationPage = () => {
 								)}
 							</div>
 						)}
-
-						{/* Generate button - Mobile */}
-						<button
-							onClick={handleGenerate}
-							disabled={!prompt.trim() || isGenerating}
-							className="flex-1 bg-lime-400 hover:bg-lime-300 text-black font-medium tracking-wide rounded-xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all shadow-lg text-sm py-3 flex flex-col items-center justify-center gap-1"
-						>
-							<span>{isGenerating ? 'GENERATING...' : 'GENERATE'}</span>
-							<span className="text-black font-bold text-xs tracking-wider uppercase">
-								{calculateCredits()} CREDITS
-							</span>
-						</button>
 					</div>
+
+					{/* Generate button - Mobile */}
+					<button
+						onClick={handleGenerate}
+						disabled={!prompt.trim() || isGenerating}
+						className="w-full bg-lime-400 hover:bg-lime-300 text-black font-medium tracking-wide rounded-xl disabled:bg-neutral-700/50 disabled:text-neutral-500 transition-all shadow-lg text-sm py-3 flex flex-col items-center justify-center gap-1 h-12"
+					>
+						<span>{isGenerating ? 'GENERATING...' : 'GENERATE'}</span>
+						<span className="text-black font-bold text-xs tracking-wider uppercase">
+							{calculateCredits()} CREDITS
+						</span>
+					</button>
 				</div>
 
-				{/* Desktop Layout - Single Row */}
-				<div className="hidden lg:flex items-stretch gap-3 h-16">
-					{/* Model and Ratio Controls */}
-					<div className="flex flex-col gap-2 w-48 dropdown-container">
-						{/* Model Selection */}
+				{/* Desktop Layout - Left: Prompt+Controls | Right: Generate+Credits */}
+				<div className="hidden lg:flex items-start gap-4">
+					{/* Left Side - Prompt and Controls */}
+					<div className="flex-1 flex flex-col gap-3">
+						{/* Prompt input */}
 						<div className="relative">
-							{activeType === 'edit' ? (
-								<div className="flex gap-2">
-									<button
-										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
-										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 h-7 ${
-											selectedModel === 'black-forest-labs/flux-kontext-pro'
-												? 'bg-white text-black'
-												: 'bg-neutral-900 text-neutral-300 hover:text-white'
-										}`}
-									>
-										<div className="text-center">
-											<div className="font-semibold text-xs">PRO</div>
-										</div>
-									</button>
-									<button
-										onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
-										className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex-1 h-7 ${
-											selectedModel === 'black-forest-labs/flux-kontext-max'
-												? 'bg-white text-black'
-												: 'bg-neutral-900 text-neutral-300 hover:text-white'
-										}`}
-									>
-										<div className="text-center">
-											<div className="font-semibold text-xs">MAX</div>
-										</div>
-									</button>
-								</div>
-							) : (
-								<>
-									<button
-										onClick={() => toggleDropdown('model_bottom')}
-										className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
-									>
-										<div className="flex items-center gap-2">
-											<div className="w-4 h-4 bg-white/10 rounded-md flex items-center justify-center p-0.5">
-												<img 
-													src={getModelLogo(selectedModel)}
-													alt={availableModels[selectedModel]?.name}
-													className="w-full h-full object-contain"
-													onError={(e) => {
-														e.target.style.display = 'none';
-													}}
-												/>
+							<textarea
+								value={prompt}
+								onChange={(e) => setPrompt(e.target.value)}
+								placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe a scene and click generate"}
+								className="w-full bg-transparent border-none text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide h-16 px-3 py-3"
+							/>
+						</div>
+
+						{/* Controls Row */}
+						<div className="flex items-center gap-3 h-8">
+							{/* Model Selection */}
+							<div className="relative dropdown-container w-48">
+								{activeType === 'edit' ? (
+									<div className="flex gap-2 h-full">
+										<button
+											onClick={() => setSelectedModel('black-forest-labs/flux-kontext-pro')}
+											className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+												selectedModel === 'black-forest-labs/flux-kontext-pro'
+													? 'bg-white text-black'
+													: 'bg-neutral-900 text-neutral-300 hover:text-white'
+											}`}
+										>
+											PRO
+										</button>
+										<button
+											onClick={() => setSelectedModel('black-forest-labs/flux-kontext-max')}
+											className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex-1 ${
+												selectedModel === 'black-forest-labs/flux-kontext-max'
+													? 'bg-white text-black'
+													: 'bg-neutral-900 text-neutral-300 hover:text-white'
+											}`}
+										>
+											MAX
+										</button>
+									</div>
+								) : (
+									<>
+										<button
+											onClick={() => toggleDropdown('model_bottom')}
+											className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-full"
+										>
+											<div className="flex items-center gap-2">
+												<div className="w-3 h-3 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+													<img 
+														src={getModelLogo(selectedModel)}
+														alt={availableModels[selectedModel]?.name}
+														className="w-full h-full object-contain"
+														onError={(e) => {
+															e.target.style.display = 'none';
+														}}
+													/>
+												</div>
+												<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
 											</div>
-											<span className="truncate text-xs">{availableModels[selectedModel]?.name || selectedModel}</span>
+											<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.model_bottom ? 'rotate-180' : ''}`} />
+										</button>
+										
+										{openDropdowns.model_bottom && (
+											<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+												{Object.entries(availableModels).map(([id, model]) => (
+													<button
+														key={id}
+														onClick={() => {
+															setSelectedModel(id);
+															closeAllDropdowns();
+														}}
+														className={`w-full text-left px-3 py-3 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
+															selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+														}`}
+													>
+														<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
+															<img 
+																src={getModelLogo(id)}
+																alt={model.name}
+																className="w-full h-full object-contain"
+																onError={(e) => {
+																	e.target.style.display = 'none';
+																}}
+															/>
+														</div>
+														<div className="flex-1 min-w-0">
+															<div className="text-sm truncate">{model.name}</div>
+															<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
+														</div>
+													</button>
+												))}
+											</div>
+										)}
+									</>
+								)}
+							</div>
+							
+							{/* Aspect Ratio (if available) */}
+							{modelConfig?.options?.aspect_ratio && (
+								<div className="relative dropdown-container w-20">
+									<button
+										onClick={() => toggleDropdown('aspect_ratio_desktop')}
+										className="w-full bg-neutral-900 rounded-lg px-2 py-2 text-white text-xs flex items-center justify-between h-full"
+									>
+										<div className="font-medium text-xs">
+											{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
 										</div>
-										<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.model_bottom ? 'rotate-180' : ''}`} />
+										<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
 									</button>
 									
-									{openDropdowns.model_bottom && (
+									{openDropdowns.aspect_ratio_desktop && (
 										<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-											{Object.entries(availableModels).map(([id, model]) => (
+											{modelConfig.options.aspect_ratio.map(option => (
 												<button
-													key={id}
+													key={option}
 													onClick={() => {
-														setSelectedModel(id);
+														handleSettingChange('aspect_ratio', option);
 														closeAllDropdowns();
 													}}
-													className={`w-full text-left px-3 py-2 hover:bg-neutral-700 transition-colors flex items-center gap-2 ${
-														selectedModel === id ? 'bg-neutral-700 text-white' : 'text-neutral-300'
+													className={`w-full text-left px-3 py-3 text-sm transition-colors ${
+														getSettingValue('aspect_ratio') === option 
+															? 'bg-neutral-700 text-white' 
+															: 'text-neutral-300 hover:bg-neutral-700'
 													}`}
 												>
-													<div className="w-4 h-4 bg-white/10 rounded-sm flex items-center justify-center p-0.5">
-														<img 
-															src={getModelLogo(id)}
-															alt={model.name}
-															className="w-full h-full object-contain"
-															onError={(e) => {
-																e.target.style.display = 'none';
-															}}
-														/>
-													</div>
-													<div className="flex-1 min-w-0">
-														<div className="text-sm truncate">{model.name}</div>
-														<div className="text-xs text-neutral-500">{getModelSupport(id)}</div>
-													</div>
+													{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
 												</button>
 											))}
 										</div>
 									)}
-								</>
-							)}
-						</div>
-						
-						{/* Aspect Ratio - Desktop (if available) */}
-						{modelConfig?.options?.aspect_ratio && (
-							<div className="relative">
-								<button
-									onClick={() => toggleDropdown('aspect_ratio_desktop')}
-									className="w-full bg-neutral-900 rounded-lg px-3 py-2 text-white text-xs flex items-center justify-between h-7"
-								>
-									<div className="font-medium">
-										{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && (getSettingValue('aspect_ratio') === 'match_input_image' || uploadedImage) ? 'auto' : (getSettingValue('aspect_ratio') || '1:1')}
-									</div>
-									<CaretDown size={12} className={`text-neutral-400 transition-transform ${openDropdowns.aspect_ratio_desktop ? 'rotate-180' : ''}`} />
-								</button>
-								
-								{openDropdowns.aspect_ratio_desktop && (
-									<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-										{modelConfig.options.aspect_ratio.map(option => (
-											<button
-												key={option}
-												onClick={() => {
-													handleSettingChange('aspect_ratio', option);
-													closeAllDropdowns();
-												}}
-												className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-													getSettingValue('aspect_ratio') === option 
-														? 'bg-neutral-700 text-white' 
-														: 'text-neutral-300 hover:bg-neutral-700'
-												}`}
-											>
-												{(selectedModel === 'black-forest-labs/flux-kontext-pro' || selectedModel === 'black-forest-labs/flux-kontext-max') && option === 'match_input_image' ? 'auto' : option}
-											</button>
-										))}
 								</div>
 							)}
+
+							{/* Additional Model Options (duration, resolution, mode etc.) */}
+							{getDropdownParameters().map(([key, param]) => (
+								<div key={key} className="relative dropdown-container w-32">
+									<button
+										onClick={() => toggleDropdown(`${key}_desktop`)}
+										className="w-full bg-neutral-900 rounded-lg px-2 py-2 text-white text-xs flex items-center justify-between h-full"
+									>
+										<div className="font-medium text-xs">
+											{getSettingValue(key) || param.default || key}
+										</div>
+										<CaretDown size={10} className={`text-neutral-400 transition-transform ${openDropdowns[`${key}_desktop`] ? 'rotate-180' : ''}`} />
+									</button>
+									
+									{openDropdowns[`${key}_desktop`] && (
+										<div className="absolute bottom-full left-0 right-0 mb-2 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+											{modelConfig.options[key].map(option => {
+												const isDisabled = isOptionDisabled(key, option);
+												return (
+													<button
+														key={option}
+														onClick={() => {
+															if (!isDisabled) {
+																handleSettingChange(key, option);
+																closeAllDropdowns();
+															}
+														}}
+														title={isDisabled ? getDisabledTooltip(key, option) : ''}
+														className={`w-full text-left px-3 py-3 text-sm transition-colors ${
+															isDisabled ? 'text-neutral-600 cursor-not-allowed' : 
+															getSettingValue(key) === option 
+																? 'bg-neutral-700 text-white' 
+																: 'text-neutral-300 hover:bg-neutral-700'
+														}`}
+														disabled={isDisabled}
+													>
+														{option}
+													</button>
+												);
+											})}
+										</div>
+									)}
+								</div>
+							))}
 						</div>
-					)}
-				</div>
-					
-					
-					{/* Regular prompt input - Desktop */}
-					<div className="flex-1 relative h-full">
-						<textarea
-							value={prompt}
-							onChange={(e) => setPrompt(e.target.value)}
-							placeholder={activeType === 'edit' ? "Describe your custom edit..." : "Describe a scene and click generate"}
-							className="w-full h-full bg-transparent border-none text-white placeholder-neutral-500 resize-none focus:outline-none text-sm font-light tracking-wide"
-						/>
 					</div>
-					
-					{/* Generate Section */}
-					<div className="flex flex-col gap-2 h-full justify-center">
+
+					{/* Right Side - Generate Button and Credits */}
+					<div className="flex flex-col gap-2 items-end">
+						{/* Generate Button */}
 						<button
 							onClick={handleGenerate}
 							disabled={!prompt.trim() || isGenerating}
@@ -1614,6 +1648,8 @@ const GenerationPage = () => {
 						>
 							{isGenerating ? 'GENERATING...' : 'GENERATE'}
 						</button>
+						
+						{/* Credits Display */}
 						<div className="text-xs text-lime-500 text-center font-bold tracking-wider uppercase">
 							{calculateCredits()} CREDITS
 						</div>

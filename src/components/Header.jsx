@@ -119,6 +119,19 @@ const Header = () => {
                 </svg>
               </button>
               
+              <button 
+                onClick={() => user ? navigate('/portrait') : navigate('/signup')}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  location.pathname === '/portrait'
+                    ? 'bg-white text-black' 
+                    : 'text-white hover:bg-neutral-700'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              
             </div>
           </div>
           
@@ -171,13 +184,36 @@ const Header = () => {
                 Edit
               </button>
               
+              <button 
+                onClick={() => user ? navigate('/portrait') : navigate('/signup')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/portrait'
+                    ? 'bg-white text-black' 
+                    : 'text-white hover:bg-neutral-700'
+                }`}
+              >
+                Reface
+              </button>
+              
             </div>
           </div>
           
-          {/* Right: User Profile or Auth buttons */}
+          {/* Right: Recent Generations + User Profile or Auth buttons */}
           <div className="flex items-center gap-3 ml-auto">
             {user ? (
-              <div className="relative" ref={dropdownRef}>
+              <div className="flex items-center gap-3 bg-neutral-800/50 backdrop-blur-sm rounded-xl px-4 py-2">
+                {/* Recent Generations Button */}
+                <button
+                  onClick={() => navigate('/history')}
+                  className="flex items-center gap-2 px-3 py-1.5 text-white hover:bg-neutral-700/50 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="hidden md:block">Recent Generations</span>
+                </button>
+
+                <div className="relative" ref={dropdownRef}>
                 {/* User Profile Button */}
                 <button
                   onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
@@ -258,6 +294,7 @@ const Header = () => {
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             ) : (
               <>

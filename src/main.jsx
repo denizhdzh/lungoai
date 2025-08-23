@@ -23,6 +23,7 @@ const AdminPage = lazy(() => import('./pages/AdminPage.jsx'));
 const ModelsPage = lazy(() => import('./pages/ModelsPage.jsx'));
 const TermsPage = lazy(() => import('./pages/TermsPage.jsx'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage.jsx'));
+const PortraitPage = lazy(() => import('./pages/PortraitPage.jsx'));
 
 // --- FORCE DARK MODE ---
 document.documentElement.classList.add('dark');
@@ -471,6 +472,17 @@ function AppRouter() {
           <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <AdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route 
+        path="/portrait" 
+        element={
+          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+            <Suspense fallback={<LoadingFallback />}>
+              <PortraitPage />
             </Suspense>
           </ProtectedRoute>
         }

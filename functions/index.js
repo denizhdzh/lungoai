@@ -8,6 +8,9 @@ const admin = require("firebase-admin");
 const { getStorage } = require('firebase-admin/storage');
 const axios = require('axios');
 
+// Import model configuration for parameter validation
+const { models, getModelById } = require('./models.js');
+
 // Initialize Firebase Admin SDK (once)
 admin.initializeApp();
 const db = admin.firestore(); // Firestore instance
@@ -95,8 +98,18 @@ exports.generateImage = onCall(
         throw new HttpsError('invalid-argument', 'Model is required.');
     }
 
-    if (!parameters.prompt) {
-        throw new HttpsError('invalid-argument', 'Prompt is required.');
+    // Get model configuration to check parameter requirements
+    const modelConfig = getModelById(model);
+    if (!modelConfig) {
+        throw new HttpsError('invalid-argument', `Unknown model: ${model}`);
+    }
+
+    // Validate required parameters based on model configuration
+    for (const paramName in modelConfig.params) {
+        const paramConfig = modelConfig.params[paramName];
+        if (paramConfig.required && (parameters[paramName] === undefined || parameters[paramName] === null || parameters[paramName] === '')) {
+            throw new HttpsError('invalid-argument', `${paramName} is required for model ${model}.`);
+        }
     }
 
     try {
@@ -110,8 +123,8 @@ exports.generateImage = onCall(
         // Check and deduct user credits first
         const userRef = db.collection('users').doc(userId);
         
-        // Calculate credits needed based on model
-        const creditsNeeded = getImageModelCredits(model);
+        // Calculate credits needed based on model configuration
+        const creditsNeeded = modelConfig.credits || getImageModelCredits(model);
         
         // Get current credits before deduction
         const userDoc = await userRef.get();
@@ -122,9 +135,12 @@ exports.generateImage = onCall(
         const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
         // Prepare input for Replicate
-        const input = {
-            prompt: parameters.prompt
-        };
+        const input = {};
+        
+        // Add prompt only if it's not null/undefined
+        if (parameters.prompt !== null && parameters.prompt !== undefined) {
+            input.prompt = parameters.prompt;
+        }
 
         // Add all other parameters dynamically
         Object.keys(parameters).forEach(key => {
@@ -714,8 +730,18 @@ exports.generateVideo = onCall(
         throw new HttpsError('invalid-argument', 'Model is required.');
     }
 
-    if (!parameters.prompt) {
-        throw new HttpsError('invalid-argument', 'Prompt is required.');
+    // Get model configuration to check parameter requirements
+    const modelConfig = getModelById(model);
+    if (!modelConfig) {
+        throw new HttpsError('invalid-argument', `Unknown model: ${model}`);
+    }
+
+    // Validate required parameters based on model configuration
+    for (const paramName in modelConfig.params) {
+        const paramConfig = modelConfig.params[paramName];
+        if (paramConfig.required && (parameters[paramName] === undefined || parameters[paramName] === null || parameters[paramName] === '')) {
+            throw new HttpsError('invalid-argument', `${paramName} is required for model ${model}.`);
+        }
     }
 
     try {
@@ -741,9 +767,12 @@ exports.generateVideo = onCall(
         const { subsDeduction, oneTimeDeduction } = await deductCredits(userRef, creditsNeeded);
 
         // Prepare input for Replicate
-        const input = {
-            prompt: parameters.prompt
-        };
+        const input = {};
+        
+        // Add prompt only if it's not null/undefined
+        if (parameters.prompt !== null && parameters.prompt !== undefined) {
+            input.prompt = parameters.prompt;
+        }
 
         // Add duration if provided
         if (duration !== undefined) {
@@ -1051,7 +1080,7 @@ exports.pollPredictions = onCall(async (request) => {
             const generationData = {
                 type: predictionData.type,
                 model: predictionData.model,
-                prompt: predictionData.input.prompt,
+                prompt: predictionData.input.prompt || 'Face Swap Result',
                 settings: predictionData.input,
                 creditsUsed: predictionData.creditsUsed,
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -1221,7 +1250,7 @@ exports.autoPollPredictions = onSchedule(
                                     const generationData = {
                                         type: predictionData.type,
                                         model: predictionData.model,
-                                        prompt: predictionData.input.prompt,
+                                        prompt: predictionData.input.prompt || 'Face Swap Result',
                                         settings: predictionData.input,
                                         creditsUsed: predictionData.creditsUsed,
                                         timestamp: admin.firestore.FieldValue.serverTimestamp(),

@@ -336,15 +336,27 @@ const PortraitPage = () => {
 
       // Convert local files to base64 data URI for Firebase function
       const characterBase64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(characterImage.file);
+        if (characterImage.file) {
+          // Local file - read as base64
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(characterImage.file);
+        } else {
+          // URL from history - use directly
+          resolve(characterImage.url);
+        }
       });
 
       const targetBase64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.readAsDataURL(targetImage.file);
+        if (targetImage.file) {
+          // Local file - read as base64
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(targetImage.file);
+        } else {
+          // URL from history - use directly
+          resolve(targetImage.url);
+        }
       });
 
       generationData.character_image = characterBase64;
@@ -469,7 +481,7 @@ const PortraitPage = () => {
       />
 
       {/* Main Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-4">
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-4 pt-20 md:pt-0">
         
 
         {(() => {
@@ -587,39 +599,28 @@ const PortraitPage = () => {
                   </div>
 
                   {/* Split Zone Interface - Always visible on mobile, hover on desktop */}
-                  <div className={`absolute inset-0 transition-all duration-500 flex ${
-                    'md:' + (isCharacterHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
-                  } opacity-100 scale-100`}>
+                  <div className={`absolute inset-0 transition-all duration-500 flex opacity-100 scale-100 md:opacity-0 md:scale-105 ${
+                    isCharacterHovered ? 'md:!opacity-100 md:!scale-100' : ''
+                  }`}>
                     
                     {/* Left Half - Upload File */}
                     <div 
-                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer relative"
+                      className="flex-1 flex flex-col items-center justify-center bg-gradient-to-r from-blue-600/10 to-transparent border-r border-neutral-600/30 transition-all duration-300 hover:from-blue-600/20 group cursor-pointer"
                       onClick={() => characterInputRef.current?.click()}
-                      style={{
-                        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 80%)',
-                        borderRight: '1px solid rgba(255,255,255,0.1)'
-                      }}
                     >
-                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
-                        <div className="text-lg">⬆</div>
-                      </div>
-                      <div className="text-sm font-medium text-white/90">Upload</div>
-                      <div className="text-xs text-white/60 mt-1">From device</div>
+                      <Upload size={32} className="text-blue-400 mb-2 transition-transform group-hover:scale-110" />
+                      <div className="text-sm font-medium text-blue-300">Upload File</div>
+                      <div className="text-xs text-neutral-500 mt-1">From device</div>
                     </div>
 
                     {/* Right Half - From History */}
                     <div 
-                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer"
+                      className="flex-1 flex flex-col items-center justify-center bg-gradient-to-l from-purple-600/10 to-transparent transition-all duration-300 hover:from-purple-600/20 group cursor-pointer"
                       onClick={() => setShowCharacterHistory(true)}
-                      style={{
-                        background: 'linear-gradient(270deg, rgba(255,255,255,0.05) 0%, transparent 80%)'
-                      }}
                     >
-                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
-                        <div className="text-lg">⊞</div>
-                      </div>
-                      <div className="text-sm font-medium text-white/90">History</div>
-                      <div className="text-xs text-white/60 mt-1">{previousGenerations.length} images</div>
+                      <GridFour size={32} className="text-purple-400 mb-2 transition-transform group-hover:scale-110" />
+                      <div className="text-sm font-medium text-purple-300">From History</div>
+                      <div className="text-xs text-neutral-500 mt-1">{previousGenerations.length} images</div>
                     </div>
                   </div>
                 </>
@@ -708,39 +709,28 @@ const PortraitPage = () => {
                   </div>
 
                   {/* Split Zone Interface - Always visible on mobile, hover on desktop */}
-                  <div className={`absolute inset-0 transition-all duration-500 flex ${
-                    'md:' + (isTargetHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
-                  } opacity-100 scale-100`}>
+                  <div className={`absolute inset-0 transition-all duration-500 flex opacity-100 scale-100 md:opacity-0 md:scale-105 ${
+                    isTargetHovered ? 'md:!opacity-100 md:!scale-100' : ''
+                  }`}>
                     
                     {/* Left Half - Upload File */}
                     <div 
-                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer relative"
+                      className="flex-1 flex flex-col items-center justify-center bg-gradient-to-r from-blue-600/10 to-transparent border-r border-neutral-600/30 transition-all duration-300 hover:from-blue-600/20 group cursor-pointer"
                       onClick={() => targetInputRef.current?.click()}
-                      style={{
-                        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 80%)',
-                        borderRight: '1px solid rgba(255,255,255,0.1)'
-                      }}
                     >
-                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
-                        <div className="text-lg">⬆</div>
-                      </div>
-                      <div className="text-sm font-medium text-white/90">Upload</div>
-                      <div className="text-xs text-white/60 mt-1">From device</div>
+                      <Upload size={32} className="text-blue-400 mb-2 transition-transform group-hover:scale-110" />
+                      <div className="text-sm font-medium text-blue-300">Upload File</div>
+                      <div className="text-xs text-neutral-500 mt-1">From device</div>
                     </div>
 
                     {/* Right Half - From History */}
                     <div 
-                      className="flex-1 flex flex-col items-center justify-center transition-all duration-300 hover:bg-white/5 group cursor-pointer"
+                      className="flex-1 flex flex-col items-center justify-center bg-gradient-to-l from-purple-600/10 to-transparent transition-all duration-300 hover:from-purple-600/20 group cursor-pointer"
                       onClick={() => setShowTargetHistory(true)}
-                      style={{
-                        background: 'linear-gradient(270deg, rgba(255,255,255,0.05) 0%, transparent 80%)'
-                      }}
                     >
-                      <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 transition-transform group-hover:scale-110">
-                        <div className="text-lg">⊞</div>
-                      </div>
-                      <div className="text-sm font-medium text-white/90">History</div>
-                      <div className="text-xs text-white/60 mt-1">{previousGenerations.length} images</div>
+                      <GridFour size={32} className="text-purple-400 mb-2 transition-transform group-hover:scale-110" />
+                      <div className="text-sm font-medium text-purple-300">History</div>
+                      <div className="text-xs text-neutral-500 mt-1">{previousGenerations.length} images</div>
                     </div>
                   </div>
                 </>

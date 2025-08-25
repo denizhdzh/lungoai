@@ -1185,9 +1185,9 @@ const GenerationPage = () => {
 									</div>
 
 									{/* Split Zone Interface - Always visible on mobile, hover on desktop */}
-									<div className={`absolute inset-0 transition-all duration-500 flex ${
-										'md:' + (isUploadHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105')
-									} opacity-100 scale-100`}>
+									<div className={`absolute inset-0 transition-all duration-500 flex opacity-100 scale-100 md:opacity-0 md:scale-105 ${
+										isUploadHovered ? 'md:!opacity-100 md:!scale-100' : ''
+									}`}>
 										
 										{/* Left Half - Upload File */}
 										<div 
@@ -1303,79 +1303,12 @@ const GenerationPage = () => {
 					onChange={(e) => handleFileUpload(e.target.files)}
 				/>
 				
-				{/* Right sidebar with + button and history - Hidden on mobile */}
-				<div className="hidden lg:flex fixed right-4 top-1/2 transform -translate-y-1/2 z-50 flex-col items-center space-y-4">
-					{/* History section */}
-					{!isLoadingGenerations && previousGenerations.length > 0 && (
-						<div className="flex flex-col items-center space-y-2 history-container">
-							{/* Scroll up button */}
-							{historyScrollIndex > 0 && (
-								<button
-									onClick={scrollHistoryUp}
-									className="w-12 h-4 bg-neutral-900/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-neutral-800/80 transition-colors group"
-								>
-									<CaretUp size={16} className="text-neutral-600 group-hover:text-lime-400" />
-								</button>
-							)}
-							
-							{/* History images */}
-							<div className="flex flex-col space-y-2">
-								{getVisibleHistory().map((generation) => {
-									const currentModelConfig = getModelById(selectedModel);
-									const supportsImages = Object.keys(currentModelConfig?.params || {})
-										.some(key => key.includes('image') || key === 'start_image' || key === 'first_frame_image' || key === 'subject_reference');
-									
-									return (
-										<div
-											key={generation.id}
-											className={`w-12 h-12 bg-neutral-800 rounded-xl overflow-hidden group relative ${
-												supportsImages 
-													? 'hover:ring-2 hover:ring-lime-400/50 cursor-pointer' 
-													: 'opacity-50 cursor-not-allowed'
-											}`}
-											title={supportsImages ? `Click to add: ${generation.prompt}` : "This model doesn't support image input"}
-											draggable={supportsImages}
-											onClick={supportsImages ? () => addHistoryImageToUploaded(generation) : undefined}
-											onDragStart={supportsImages ? (e) => {
-												e.dataTransfer.setData('application/json', JSON.stringify(generation));
-												e.dataTransfer.effectAllowed = 'copy';
-											} : undefined}
-										>
-										<img
-											src={generation.url}
-											alt={generation.prompt}
-											className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
-											onError={(e) => {
-												e.target.style.display = 'none';
-											}}
-										/>
-										{/* Hover overlay */}
-										<div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-											<Plus size={16} className="text-white opacity-80" />
-										</div>
-									</div>
-									);
-								})}
-							</div>
-							
-							{/* Scroll down button */}
-							{historyScrollIndex < previousGenerations.length - 6 && (
-								<button
-									onClick={scrollHistoryDown}
-									className="w-12 h-4 bg-neutral-900/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-neutral-800/80 transition-colors group"
-								>
-									<CaretDown size={16} className="text-neutral-600 group-hover:text-lime-400" />
-								</button>
-							)}
-						</div>
-					)}
-				</div>
 			</div>
 			
 
 			{/* Quick Edit Prompts - Above bottom bar */}
 			{activeType === 'edit' && (
-				<div className="fixed bottom-24 md:bottom-28 left-1/2 transform -translate-x-1/2 w-[95%] md:w-full max-w-3xl">
+				<div className="fixed bottom-36 md:bottom-40 left-1/2 transform -translate-x-1/2 w-[95%] md:w-full max-w-3xl">
 					<div className="flex gap-2 bg-neutral-950/40 backdrop-blur-xl rounded-2xl p-3">
 						<button
 							onClick={() => setPrompt('Add vibrant, realistic colors to this black and white image, maintaining natural skin tones and lighting, 4K ultra high resolution')}

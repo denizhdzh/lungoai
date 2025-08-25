@@ -499,8 +499,8 @@ function AppRouter() {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      <AppRouter />
-    </BrowserRouter>
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
   </StrictMode>,
 )

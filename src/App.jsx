@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import WelcomePage from './pages/WelcomePage';
 import AdminPage from './pages/AdminPage';
 import Generation from './pages/Generation';
-import GenerationPage from './pages/GenerationPage';
+import PortraitPage from './pages/PortraitPage';
 import CampaignCreator from './pages/CampaignCreator';
 import CanvasWorkspace from './pages/CanvasWorkspace';
 import CreativeStudio from './pages/CreativeStudio';
@@ -43,8 +43,8 @@ function RootRedirect() {
     );
   }
   
-  // If user is logged in, redirect to gen page, otherwise to welcome
-  return user ? <Navigate to="/gen" /> : <Navigate to="/welcome" />;
+  // If user is logged in, redirect to studio page, otherwise to welcome
+  return user ? <Navigate to="/studio" /> : <Navigate to="/welcome" />;
 }
 
 function App() {
@@ -84,9 +84,9 @@ function App() {
                 <Generation />
               </ProtectedRoute>
             } />
-            <Route path="/gen" element={
+            <Route path="/portrait" element={
               <ProtectedRoute>
-                <GenerationPage />
+                <PortraitPage />
               </ProtectedRoute>
             } />
             <Route path="/campaigns" element={

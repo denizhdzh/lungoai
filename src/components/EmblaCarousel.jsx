@@ -38,12 +38,12 @@ const EmblaCarousel = (props) => {
         <div className="embla__container">
           {slides.map((slide, index) => (
             <div className="embla__slide" key={index}>
-              <a href={slide.link} className="block w-full aspect-video relative cursor-pointer overflow-hidden shadow-2xl max-w-4xl mx-auto">
+              <a href={slide.link} className="block w-full relative cursor-pointer overflow-hidden shadow-2xl max-w-4xl mx-auto" style={{ aspectRatio: window.innerWidth < 1024 ? '1587/2245' : '16/9' }}>
                 {/* Render based on type */}
                 {slide.type === 'edit_demo' && slide.beforeImage && slide.afterImage ? (
                   <EditTransition 
-                    beforeImage={slide.beforeImage} 
-                    afterImage={slide.afterImage}
+                    beforeImage={window.innerWidth < 1024 && slide.mobileBeforeImage ? slide.mobileBeforeImage : slide.beforeImage} 
+                    afterImage={window.innerWidth < 1024 && slide.mobileAfterImage ? slide.mobileAfterImage : slide.afterImage}
                     featureName={slide.featureName}
                     aiModel={slide.aiModel}
                     link={slide.link}
@@ -51,38 +51,54 @@ const EmblaCarousel = (props) => {
                   />
                 ) : slide.type === 'video' && slide.videoUrl ? (
                   <>
-                    {/* Loading placeholder for video */}
-                    {!loadedImages.has(slide.videoUrl) && (
-                      <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
-                    )}
-                    <video
-                      src={slide.videoUrl}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      onLoadedData={() => setLoadedImages(prev => new Set([...prev, slide.videoUrl]))}
-                      style={{ display: loadedImages.has(slide.videoUrl) ? 'block' : 'none' }}
-                    />
+                    {(() => {
+                      const isMobile = window.innerWidth < 1024;
+                      const videoSrc = isMobile && slide.mobileVideoUrl ? slide.mobileVideoUrl : slide.videoUrl;
+                      return (
+                        <>
+                          {/* Loading placeholder for video */}
+                          {!loadedImages.has(videoSrc) && (
+                            <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
+                          )}
+                          <video
+                            src={videoSrc}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            onLoadedData={() => setLoadedImages(prev => new Set([...prev, videoSrc]))}
+                            style={{ display: loadedImages.has(videoSrc) ? 'block' : 'none' }}
+                          />
+                        </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <>
-                    {/* Loading placeholder */}
-                    {slide.imageUrl && !loadedImages.has(slide.imageUrl) && (
-                      <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
-                    )}
-                    
-                    {/* Static Image */}
-                    {slide.imageUrl && (
-                      <img
-                        src={slide.imageUrl}
-                        alt={slide.featureName}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onLoad={() => setLoadedImages(prev => new Set([...prev, slide.imageUrl]))}
-                        style={{ display: loadedImages.has(slide.imageUrl) ? 'block' : 'none' }}
-                      />
-                    )}
+                    {(() => {
+                      const isMobile = window.innerWidth < 1024;
+                      const imageSrc = isMobile && slide.mobileImageUrl ? slide.mobileImageUrl : slide.imageUrl;
+                      return (
+                        <>
+                          {/* Loading placeholder */}
+                          {imageSrc && !loadedImages.has(imageSrc) && (
+                            <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
+                          )}
+                          
+                          {/* Static Image */}
+                          {imageSrc && (
+                            <img
+                              src={imageSrc}
+                              alt={slide.featureName}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onLoad={() => setLoadedImages(prev => new Set([...prev, imageSrc]))}
+                              style={{ display: loadedImages.has(imageSrc) ? 'block' : 'none' }}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </>
                 )}
                 

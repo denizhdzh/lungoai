@@ -24,16 +24,24 @@ const AdminPage = () => {
     aiModel: '',
     type: 'static_image',
     imageUrl: '',
+    mobileImageUrl: '',
     videoUrl: '',
+    mobileVideoUrl: '',
     beforeImage: '',
+    mobileBeforeImage: '',
     afterImage: '',
+    mobileAfterImage: '',
     cta: '',
     link: ''
   });
   const [imageFile, setImageFile] = useState(null);
+  const [mobileImageFile, setMobileImageFile] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
+  const [mobileVideoFile, setMobileVideoFile] = useState(null);
   const [beforeImageFile, setBeforeImageFile] = useState(null);
+  const [mobileBeforeImageFile, setMobileBeforeImageFile] = useState(null);
   const [afterImageFile, setAfterImageFile] = useState(null);
+  const [mobileAfterImageFile, setMobileAfterImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -227,13 +235,22 @@ const AdminPage = () => {
     
     try {
       let imageUrl = formData.imageUrl;
+      let mobileImageUrl = formData.mobileImageUrl;
       let videoUrl = formData.videoUrl;
+      let mobileVideoUrl = formData.mobileVideoUrl;
       let beforeImageUrl = formData.beforeImage;
+      let mobileBeforeImageUrl = formData.mobileBeforeImage;
       let afterImageUrl = formData.afterImage;
+      let mobileAfterImageUrl = formData.mobileAfterImage;
       
       if (imageFile) {
         imageUrl = await handleImageUpload(imageFile);
         if (!imageUrl) return;
+      }
+      
+      if (mobileImageFile) {
+        mobileImageUrl = await handleImageUpload(mobileImageFile);
+        if (!mobileImageUrl) return;
       }
       
       if (videoFile) {
@@ -241,23 +258,40 @@ const AdminPage = () => {
         if (!videoUrl) return;
       }
       
+      if (mobileVideoFile) {
+        mobileVideoUrl = await handleVideoUpload(mobileVideoFile);
+        if (!mobileVideoUrl) return;
+      }
+      
       if (formData.type === 'edit_demo') {
         if (beforeImageFile) {
           beforeImageUrl = await handleImageUpload(beforeImageFile);
           if (!beforeImageUrl) return;
         }
+        if (mobileBeforeImageFile) {
+          mobileBeforeImageUrl = await handleImageUpload(mobileBeforeImageFile);
+          if (!mobileBeforeImageUrl) return;
+        }
         if (afterImageFile) {
           afterImageUrl = await handleImageUpload(afterImageFile);
           if (!afterImageUrl) return;
+        }
+        if (mobileAfterImageFile) {
+          mobileAfterImageUrl = await handleImageUpload(mobileAfterImageFile);
+          if (!mobileAfterImageUrl) return;
         }
       }
 
       const featureData = {
         ...formData,
         imageUrl: formData.type === 'static_image' ? imageUrl : '',
+        mobileImageUrl: formData.type === 'static_image' ? mobileImageUrl : '',
         videoUrl: formData.type === 'video' ? videoUrl : '',
+        mobileVideoUrl: formData.type === 'video' ? mobileVideoUrl : '',
         beforeImage: formData.type === 'edit_demo' ? beforeImageUrl : '',
+        mobileBeforeImage: formData.type === 'edit_demo' ? mobileBeforeImageUrl : '',
         afterImage: formData.type === 'edit_demo' ? afterImageUrl : '',
+        mobileAfterImage: formData.type === 'edit_demo' ? mobileAfterImageUrl : '',
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -278,16 +312,24 @@ const AdminPage = () => {
         aiModel: '',
         type: 'static_image',
         imageUrl: '',
+        mobileImageUrl: '',
         videoUrl: '',
+        mobileVideoUrl: '',
         beforeImage: '',
+        mobileBeforeImage: '',
         afterImage: '',
+        mobileAfterImage: '',
         cta: '',
         link: ''
       });
       setImageFile(null);
+      setMobileImageFile(null);
       setVideoFile(null);
+      setMobileVideoFile(null);
       setBeforeImageFile(null);
+      setMobileBeforeImageFile(null);
       setAfterImageFile(null);
+      setMobileAfterImageFile(null);
       fetchFeatures();
     } catch (error) {
       console.error('Error saving feature:', error);
@@ -302,9 +344,13 @@ const AdminPage = () => {
       aiModel: feature.aiModel || '',
       type: feature.type || 'static_image',
       imageUrl: feature.imageUrl || '',
+      mobileImageUrl: feature.mobileImageUrl || '',
       videoUrl: feature.videoUrl || '',
+      mobileVideoUrl: feature.mobileVideoUrl || '',
       beforeImage: feature.beforeImage || '',
+      mobileBeforeImage: feature.mobileBeforeImage || '',
       afterImage: feature.afterImage || '',
+      mobileAfterImage: feature.mobileAfterImage || '',
       cta: feature.cta || '',
       link: feature.link || ''
     });
@@ -330,16 +376,24 @@ const AdminPage = () => {
       aiModel: '',
       type: 'static_image',
       imageUrl: '',
+      mobileImageUrl: '',
       videoUrl: '',
+      mobileVideoUrl: '',
       beforeImage: '',
+      mobileBeforeImage: '',
       afterImage: '',
+      mobileAfterImage: '',
       cta: '',
       link: ''
     });
     setImageFile(null);
+    setMobileImageFile(null);
     setVideoFile(null);
+    setMobileVideoFile(null);
     setBeforeImageFile(null);
+    setMobileBeforeImageFile(null);
     setAfterImageFile(null);
+    setMobileAfterImageFile(null);
   };
 
   if (!isAuthenticated) {
@@ -538,79 +592,149 @@ const AdminPage = () => {
                 </div>
 
                 {formData.type === 'static_image' && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Image</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setImageFile(e.target.files[0])}
-                      className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                    />
-                    {formData.imageUrl && !imageFile && (
-                      <p className="text-xs text-white/60 mt-1">Current image will be kept</p>
-                    )}
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-white/80 mb-2">Desktop Image</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setImageFile(e.target.files[0])}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                      />
+                      {formData.imageUrl && !imageFile && (
+                        <p className="text-xs text-white/60 mt-1">Current desktop image will be kept</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-white/80 mb-2">Mobile Image (Vertical/Square)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setMobileImageFile(e.target.files[0])}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                      />
+                      {formData.mobileImageUrl && !mobileImageFile && (
+                        <p className="text-xs text-white/60 mt-1">Current mobile image will be kept</p>
+                      )}
+                      <p className="text-xs text-white/40 mt-1">Recommended: Vertical or square aspect ratio for mobile</p>
+                    </div>
+                  </>
                 )}
                 
                 {formData.type === 'edit_demo' && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Before Image</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setBeforeImageFile(e.target.files[0])}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                        required={!formData.beforeImage}
-                      />
-                      {formData.beforeImage && !beforeImageFile && (
-                        <p className="text-xs text-white/60 mt-1">Current before image will be kept</p>
-                      )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Before Image (Desktop)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setBeforeImageFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                          required={!formData.beforeImage}
+                        />
+                        {formData.beforeImage && !beforeImageFile && (
+                          <p className="text-xs text-white/60 mt-1">Current desktop before image will be kept</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Before Image (Mobile)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setMobileBeforeImageFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                        />
+                        {formData.mobileBeforeImage && !mobileBeforeImageFile && (
+                          <p className="text-xs text-white/60 mt-1">Current mobile before image will be kept</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">After Image</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setAfterImageFile(e.target.files[0])}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                        required={!formData.afterImage}
-                      />
-                      {formData.afterImage && !afterImageFile && (
-                        <p className="text-xs text-white/60 mt-1">Current after image will be kept</p>
-                      )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">After Image (Desktop)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setAfterImageFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                          required={!formData.afterImage}
+                        />
+                        {formData.afterImage && !afterImageFile && (
+                          <p className="text-xs text-white/60 mt-1">Current desktop after image will be kept</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">After Image (Mobile)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setMobileAfterImageFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                        />
+                        {formData.mobileAfterImage && !mobileAfterImageFile && (
+                          <p className="text-xs text-white/60 mt-1">Current mobile after image will be kept</p>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
                 
                 {formData.type === 'video' && (
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Upload Video File</label>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={(e) => setVideoFile(e.target.files[0])}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                      />
-                      {formData.videoUrl && !videoFile && (
-                        <p className="text-xs text-white/60 mt-1">Current video will be kept</p>
-                      )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Desktop Video File</label>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={(e) => setVideoFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                        />
+                        {formData.videoUrl && !videoFile && (
+                          <p className="text-xs text-white/60 mt-1">Current desktop video will be kept</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Mobile Video File</label>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={(e) => setMobileVideoFile(e.target.files[0])}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                        />
+                        {formData.mobileVideoUrl && !mobileVideoFile && (
+                          <p className="text-xs text-white/60 mt-1">Current mobile video will be kept</p>
+                        )}
+                        <p className="text-xs text-white/40 mt-1">Recommended: Vertical aspect ratio for mobile</p>
+                      </div>
                     </div>
                     
                     <div className="text-center text-white/40 text-sm">
-                      OR
+                      OR USE URLs
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-white/80 mb-2">Video URL</label>
-                      <input
-                        type="url"
-                        value={formData.videoUrl}
-                        onChange={(e) => setFormData({...formData, videoUrl: e.target.value})}
-                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
-                        placeholder="https://example.com/video.mp4"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Desktop Video URL</label>
+                        <input
+                          type="url"
+                          value={formData.videoUrl}
+                          onChange={(e) => setFormData({...formData, videoUrl: e.target.value})}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                          placeholder="https://example.com/desktop-video.mp4"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-white/80 mb-2">Mobile Video URL</label>
+                        <input
+                          type="url"
+                          value={formData.mobileVideoUrl}
+                          onChange={(e) => setFormData({...formData, mobileVideoUrl: e.target.value})}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-lime-400"
+                          placeholder="https://example.com/mobile-video.mp4"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

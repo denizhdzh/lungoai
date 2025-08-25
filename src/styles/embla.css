@@ -1,10 +1,10 @@
 .embla {
   max-width: 100%;
   margin: auto;
-  --slide-height: 20rem;
+  --slide-height: 24rem;
   --slide-spacing: 0.5rem;
-  --slide-size: 50%;
-  --slide-size-mobile: 90%;
+  --slide-size: 65%;
+  --slide-size-mobile: 85%;
 }
 .embla__viewport {
   overflow: hidden;
@@ -21,9 +21,10 @@
   padding-left: var(--slide-spacing);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .embla {
-    --slide-height: 16rem;
+    --slide-height: 28rem;
+    --slide-spacing: 0.75rem;
   }
   .embla__slide {
     flex: 0 0 var(--slide-size-mobile);

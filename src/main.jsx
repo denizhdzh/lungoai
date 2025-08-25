@@ -5,7 +5,6 @@ import './index.css'
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 
 // Loading component for lazy routes

@@ -12,22 +12,40 @@ const WelcomePage = () => {
     const fetchFeatures = async () => {
       const startTime = performance.now();
       
+      // Check cache first
+      const cacheKey = 'lungo_features_cache';
+      const cached = localStorage.getItem(cacheKey);
+      
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Use cache if less than 10 minutes old
+        if (Date.now() - timestamp < 10 * 60 * 1000) {
+          setFeatures(data);
+          console.log(`⚡ Features loaded from cache: ${data.length} items`);
+          return;
+        }
+      }
+      
       try {
-        // Use get() instead of getDocs() for faster single read
         const featuresRef = collection(db, 'system', 'features', 'items');
         const q = query(featuresRef, orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
         
-        // Process data more efficiently
         const featuresData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
+        // Cache the data
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data: featuresData,
+          timestamp: Date.now()
+        }));
+        
         setFeatures(featuresData);
         
         const loadTime = performance.now() - startTime;
-        console.log(`🚀 Features loaded in ${Math.round(loadTime)}ms:`, featuresData.length);
+        console.log(`🚀 Features loaded from Firestore in ${Math.round(loadTime)}ms:`, featuresData.length);
       } catch (error) {
         console.error('❌ Features error:', error);
         setFeatures([]);
@@ -37,20 +55,36 @@ const WelcomePage = () => {
     fetchFeatures();
   }, []);
 
-  // Aggressive preload images for instant display
+  // Sequential image preloading to avoid bandwidth bottleneck
   useEffect(() => {
-    if (features.length > 0) {
-      // Preload ALL images simultaneously with high priority
-      features.forEach((feature) => {
-        if (feature.imageUrl && !loadedImages.has(feature.imageUrl)) {
-          const img = new Image();
-          img.onload = () => setLoadedImages(prev => new Set([...prev, feature.imageUrl]));
-          img.onerror = () => console.log(`❌ Failed to preload:`, feature.featureName);
-          // Start loading immediately, no delays
-          img.src = feature.imageUrl;
-        }
-      });
-    }
+    if (features.length === 0) return;
+    
+    let currentIndex = 0;
+    
+    const loadNextImage = () => {
+      if (currentIndex >= features.length) return;
+      
+      const feature = features[currentIndex];
+      if (feature.imageUrl && !loadedImages.has(feature.imageUrl)) {
+        const img = new Image();
+        img.onload = () => {
+          setLoadedImages(prev => new Set([...prev, feature.imageUrl]));
+          currentIndex++;
+          setTimeout(loadNextImage, 200); // Small delay between loads
+        };
+        img.onerror = () => {
+          console.log(`❌ Failed to preload:`, feature.featureName);
+          currentIndex++;
+          setTimeout(loadNextImage, 100);
+        };
+        img.src = feature.imageUrl;
+      } else {
+        currentIndex++;
+        loadNextImage();
+      }
+    };
+    
+    loadNextImage();
   }, [features]);
 
 

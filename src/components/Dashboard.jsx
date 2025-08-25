@@ -1,2406 +1,321 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { auth, db } from '../firebase'; // Import db
-import { useOutletContext } from 'react-router-dom';
-import { getFunctions, httpsCallable } from "firebase/functions"; // Import functions SDK
-// Keep only necessary icons + add Sun/Moon
-import { ArrowRight, Sparkle, FileText, Lightning, Question, ChartLine, BookmarkSimple, Plugs, Gear, ImageSquare, FilmSlate, Lightbulb, BookOpen, Fire, ChatText, Translate, Calendar, Info, Sun, Moon, DownloadSimple, Compass, User, ArrowSquareOut, CircleNotch, CalendarBlank, X as CloseIcon, ArrowLeft, Trash, UserPlus, PlusSquare, Play, Pause, Pencil, Check, Heart } from '@phosphor-icons/react'; 
-// Keep only necessary Firestore functions
-import { collection, query, orderBy, getDocs, Timestamp, doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc } from "@firebase/firestore"; // Added doc, getDoc, limit, startAfter, deleteDoc, where, updateDoc
+import { useState, useEffect, useRef } from 'react';
+import { db, auth } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, orderBy, getDocs, limit, startAfter } from "@firebase/firestore";
 import { motion, AnimatePresence } from 'framer-motion';
-import SimpleImageModal from './SimpleImageModal';
+import { Play, Heart, Download, X, Trash } from '@phosphor-icons/react';
 import Header from './Header';
 
-// --- NEW: Plan Credit Limits ---
-const planCreditLimits = {
-  // Starter Plan ($14 - 200 credits)
-  "price_1RMqEZDf8kAOBAT3ltD6n2lX": { images: 40, videos: 20 }, // Monthly
-  "price_1RMqGbDf8kAOBAT3vgwkWLr6": { images: 40, videos: 20 }, // Yearly
-  // Creator Plan ($30 - 500 credits)
-  "price_1RRJ8tDf8kAOBAT3qBwC6qpM": { images: 100, videos: 50 }, // Monthly
-  "price_1RRJ9SDf8kAOBAT3bA8Xbriq": { images: 100, videos: 50 }, // Yearly
-  // Pro Plan ($150 - 3000 credits)
-  "price_1RMqHgDf8kAOBAT3m6kthIND": { images: 600, videos: 300 }, // Monthly
-  "price_1RMqI1Df8kAOBAT3Xoy3M7Ho": { images: 600, videos: 300 } // Yearly
+const Dashboard = () => {
+  const [generations, setGenerations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [user, setUser] = useState(null);
+  const [columns, setColumns] = useState([[], [], [], []]);
+  const [selectedGeneration, setSelectedGeneration] = useState(null);
+  const gridRef = useRef(null);
 
-};
-// --- End Plan Credit Limits ---
-
-// --- NEW: Default values for users with no active plan ---
-const defaultCreditValues = { images: 0, videos: 0 };
-// --- End Default Values ---
-
-// --- Helper for Friendly Generation Type ---
-const getFriendlyGenerationType = (commandCode) => {
-  switch (commandCode) {
-    case 101: return 'TikTok Video';
-    case 201: return 'Background Image';
-    case 202: return 'Custom Image';
-    case 401: return 'Edited Image';
-    // Add more cases if other commands generate visual output shown here
-    default: return 'Generated Content'; // Fallback
-  }
-};
-
-// --- NEW Helper to Determine if a Generation is Actively Processing for UI ---
-const isGenerationActive = (item) => {
-  if (!item || !item.status) return false;
-
-  // Client-side statuses indicating active generation before polling or for direct calls
-  const activeClientManagedStatuses = [
-    'generating_direct',        // For direct image generation (e.g., commands 202, 203)
-    'generating',               // Generic status for image from commandHandler
-    'image_generation_initiated', // For video, initial client status before first poll
-  ];
-
-  // Statuses from Firestore (polled) for the video pipeline that mean "still working"
-  const activePolledVideoStatuses = [
-    'image_generation_pending',   // Video's image task enqueued
-    'image_generating',           // Video's image task running
-    'image_generated',            // Image part of video is done, video pipeline continues
-    'processing',                 // Runway video generation for the video pipeline
-    'pending_concatenation',    // Video ready for concatenation step
-    'processing_concatenation', // Concatenation in progress
-  ];
-
-  if (activeClientManagedStatuses.includes(item.status)) {
-    return true;
-  }
-
-  // For videos, several polled statuses mean it's still actively working on the backend
-  if (item.type === 'video' && activePolledVideoStatuses.includes(item.status)) {
-    return true;
-  }
-
-  return false;
-};
-// --- END isGenerationActive Helper ---
-
-// --- NEW Helper to Extract Keywords ---
-const getKeywords = (gen) => {
-  const params = gen.originalParameters || gen.parameters || {};
-  let keywords = [];
-
-  // Prioritize subject/topic descriptions
-  const subject = params.subject_description || params.image_subject || params.topic;
-  if (subject && typeof subject === 'string') {
-    // Take first few words or comma-separated terms
-    keywords = subject.split(/[\s,]+/).slice(0, 4); // Split by comma or space, take max 4
-  }
-
-  // Add style if available and keywords are few
-  if (keywords.length < 3 && params.image_style && typeof params.image_style === 'string') {
-    keywords.push(...params.image_style.split(/[\s,]+/).slice(0, 2));
-  }
-  
-  // Add setting if still few keywords
-  if (keywords.length < 3 && params.setting_description && typeof params.setting_description === 'string') {
-      keywords.push(...params.setting_description.split(/[\s,]+/).slice(0, 2));
-  }
-
-  // Format and return, or fallback
-  if (keywords.length > 0) {
-    // Capitalize first letter of each keyword
-    const formattedKeywords = keywords
-                                .filter(kw => kw.length > 1) // Remove very short words/artifacts
-                                .map(kw => kw.charAt(0).toUpperCase() + kw.slice(1).toLowerCase());
-    return formattedKeywords.join(', ');
-  } else {
-    // Fallback to command name if no keywords found
-    return getFriendlyGenerationType(gen.commandCode);
-  }
-};
-
-// --- Animation Hook (Revised) ---
-function usePercentageAnimation(targetValue, duration = 800) {
-  const [animatedValue, setAnimatedValue] = useState(0);
-  // Ref to track if this is the initial mount vs a target value update
-  const isInitialMount = useRef(true);
-  // Ref to store the animation frame ID
-  const animationFrameIdRef = useRef(null);
-  // Ref to store the start value for the current animation cycle
-  const startValueRef = useRef(0);
-  // Ref to store the start time for the current animation cycle
-  const startTimeRef = useRef(0);
+  const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
-    // Cancel any ongoing animation when targetValue or duration changes
-    if (animationFrameIdRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-    }
-
-    // Determine the starting value for this animation
-    // If it's the initial mount, start from 0. Otherwise, start from the current animated value.
-    const effectiveStartValue = isInitialMount.current ? 0 : animatedValue;
-    startValueRef.current = effectiveStartValue; // Store for use in animation frame
-    startTimeRef.current = performance.now(); // Store start time
-
-    // Mark initial mount as false after the first run
-    isInitialMount.current = false;
-
-    const updateValue = (currentTime) => {
-      const elapsedTime = currentTime - startTimeRef.current;
-      const progress = Math.min(elapsedTime / duration, 1);
-      const easeOutQuad = 1 - Math.pow(1 - progress, 2);
-      const nextValue = startValueRef.current + (targetValue - startValueRef.current) * easeOutQuad;
-
-      setAnimatedValue(nextValue);
-
-      if (progress < 1) {
-        animationFrameIdRef.current = requestAnimationFrame(updateValue);
-      } else {
-        setAnimatedValue(targetValue); // Ensure exact end value
-        animationFrameIdRef.current = null;
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log('Auth state changed:', currentUser?.uid);
+      setUser(currentUser);
+      if (currentUser) {
+        fetchGenerationsForUser(currentUser);
       }
-    };
+    });
 
-    // Start the animation only if the target isn't already the start value
-    if (targetValue !== effectiveStartValue) {
-      animationFrameIdRef.current = requestAnimationFrame(updateValue);
-    } else {
-      // If target is already the start value, just set it directly
-      // This handles the case where the initial targetValue is 0
-      setAnimatedValue(targetValue);
-    }
+    return () => unsubscribe();
+  }, []);
 
-    // Cleanup function
-    return () => {
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
-    };
-    // Dependencies: Re-run effect only if targetValue or duration changes
-  }, [targetValue, duration, animatedValue]); // Added animatedValue
-
-  return animatedValue;
-}
-
-// --- Updated Standalone Download Helper ---
-const handleGenerationDownload = async (generation) => {
-  if (!generation) return;
-
-  if (generation.type === 'image' || generation.type === 'video') {
-    // --- Single Image/Video Download Logic (Existing) ---
-    const urlToDownload = generation.type === 'video' ? generation.videoUrl : generation.imageUrl;
-    if (!urlToDownload) {
-      console.error("Download failed: No URL found.");
-      window.alert("Download failed: No URL found.");
-      return; 
-    }
-    console.log(`Attempting to download single file: ${urlToDownload}`);
-    try {
-      const response = await fetch(urlToDownload);
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl; 
-      let filename = `generation-${generation.id}.${blob.type.split('/')[1] || (generation.type === 'video' ? 'mp4' : 'png')}`;
-      try {
-         const urlParts = new URL(urlToDownload).pathname.split('/');
-         const potentialFilename = decodeURIComponent(urlParts[urlParts.length - 1].split('?')[0]);
-         if (potentialFilename.includes('.')) filename = potentialFilename;
-      } catch (urlError) { console.warn("Could not parse filename, using default.", urlError); }
-      link.download = filename; 
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 100); 
-    } catch (error) { 
-        console.error("Error during single file download process:", error); 
-        window.alert("Error during download. Please try again.");
-    }
-  } else {
-     console.warn(`Download not supported for generation type: ${generation.type}`);
-     window.alert(`Download not supported for this content type.`);
-  }
-};
-// --- End Updated Standalone Download Helper ---
-
-
-// --- NEW: Comprehensive Edit Popup Component ---
-function GenerationEditPopup({ generation, onClose, isDarkMode, onScheduleSubmit, onShowSuccessNotification, creators, backgrounds, onAssetSaved, onGenerationUpdated, onGenerationDeleted }) {
-  console.log('[GenerationEditPopup] Opened with generation:', JSON.parse(JSON.stringify(generation)));
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedHookText, setEditedHookText] = useState(generation.hookText || '');
-  const [editedSlideTexts, setEditedSlideTexts] = useState([...(generation.slideTexts || [])]);
-  const [selectedBackgroundId, setSelectedBackgroundId] = useState(generation.selectedBackgroundId || '');
-  const [selectedTextColor, setSelectedTextColor] = useState(generation.textColor || 'white');
-  const [textPosition, setTextPosition] = useState(generation.textPosition || 'center');
-  const [textSize, setTextSize] = useState(generation.textSize || 'medium');
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [textOpacity, setTextOpacity] = useState(1);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSavingAsset, setIsSavingAsset] = useState(false);
-  const [showSaveCreatorInput, setShowSaveCreatorInput] = useState(false);
-  const [showSaveBackgroundInput, setShowSaveBackgroundInput] = useState(false);
-  const [creatorAssetName, setCreatorAssetName] = useState('');
-  const [backgroundAssetName, setBackgroundAssetName] = useState('');
-  const [activeEditTab, setActiveEditTab] = useState('text'); // Changed default to text tab
-
-  const videoRef = useRef(null);
-
-  // Initial state for comparison
-  const [initialGenerationStateForEdit, setInitialGenerationStateForEdit] = useState(null);
-
+  // Organize generations into columns for masonry effect
   useEffect(() => {
-    if (generation) {
-      const initialState = {
-        selectedBackgroundId: generation.selectedBackgroundId || '',
-        textColor: generation.textColor || 'white',
-        textPosition: generation.textPosition || 'center',
-        textSize: generation.textSize || 'medium',
-        slideTexts: [...(generation.slideTexts || [])],
-        hookText: generation.hookText || '',
-      };
-      setInitialGenerationStateForEdit(initialState);
-      
-      // Reset editing states
-      setEditedHookText(generation.hookText || '');
-      setEditedSlideTexts([...(generation.slideTexts || [])]);
-      setSelectedBackgroundId(generation.selectedBackgroundId || '');
-      setSelectedTextColor(generation.textColor || 'white');
-      setTextPosition(generation.textPosition || 'center');
-      setTextSize(generation.textSize || 'medium');
-      
-      // Reset slide index to start from first slide
-      setCurrentSlideIndex(0);
-    }
-  }, [generation.id]);
-
-  const isAlreadySavedAsCreator = useMemo(() => {
-    if (generation.commandCode === 202 && generation.imageUrl && creators) {
-      return creators.some(creator => creator.imageUrl === generation.imageUrl);
-    }
-    return false;
-  }, [generation, creators]);
-
-  const existingCreator = useMemo(() => {
-    if (isAlreadySavedAsCreator) {
-      return creators.find(creator => creator.imageUrl === generation.imageUrl);
-    }
-    return null;
-  }, [isAlreadySavedAsCreator, creators, generation]);
-
-  const isAlreadySavedAsBackground = useMemo(() => {
-    if (generation.commandCode === 201 && generation.imageUrl && backgrounds) {
-      return backgrounds.some(bg => bg.imageUrl === generation.imageUrl);
-    }
-    return false;
-  }, [generation, backgrounds]);
-
-  const existingBackground = useMemo(() => {
-    if (isAlreadySavedAsBackground) {
-      return backgrounds.find(bg => bg.imageUrl === generation.imageUrl);
-    }
-    return null;
-  }, [isAlreadySavedAsBackground, backgrounds, generation]);
-
-  const handleSaveAsAsset = async (assetType) => {
-    const assetName = assetType === 'creator' ? creatorAssetName : backgroundAssetName;
-    if (!assetName.trim() || !generation.imageUrl) {
-      window.alert("Please provide a name and ensure there's an image for the asset.");
-      return;
-    }
-    
-    setIsSavingAsset(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-
-      const functions = getFunctions();
-      const functionName = assetType === 'creator' ? 'saveCreatorFromGeneration' : 'saveBackgroundFromGeneration';
-      const payload = {
-        imageUrl: generation.imageUrl,
-        original_generation_data: generation.originalParameters || generation.parameters || {},
-        sourceGenerationId: generation.id, 
-      };
-
-      if (assetType === 'creator') {
-        payload.creator_name = assetName.trim();
-      } else {
-        payload.background_name = assetName.trim();
-      }
-
-      const saveAssetCallable = httpsCallable(functions, functionName);
-      await saveAssetCallable(payload);
-      
-      onShowSuccessNotification(`${assetType.charAt(0).toUpperCase() + assetType.slice(1)} saved successfully!`);
-      if (onAssetSaved) onAssetSaved(); 
-      
-      if (assetType === 'creator') {
-        setCreatorAssetName('');
-        setShowSaveCreatorInput(false);
-      } else {
-        setBackgroundAssetName('');
-        setShowSaveBackgroundInput(false);
-      }
-    } catch (error) {
-      console.error(`Error saving ${assetType} from generation:`, error);
-      const errorMessage = error.message || 'Please try again.';
-      window.alert(`Error saving ${assetType}: ${errorMessage}`);
-    } finally {
-      setIsSavingAsset(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this generation?')) return;
-    
-    setIsDeleting(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-      
-      const collectionPath = generation.type === 'video' ? 'tiktok-posts' : 'generations';
-      await deleteDoc(doc(db, 'users', user.uid, collectionPath, generation.id));
-      
-      onShowSuccessNotification('Generation deleted successfully!');
-      onGenerationDeleted(generation.id);
-      onClose();
-    } catch (error) {
-      console.error('Error deleting generation:', error);
-      window.alert("Error deleting. Try again.");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-
-      if (generation.type === 'video') {
-        const functions = getFunctions();
-        const performVideoConcatenation = httpsCallable(functions, 'performVideoConcatenation', {
-          timeout: 540000, // 9 minutes timeout
-        });
-        
-        await performVideoConcatenation({
-          userId: user.uid,
-          firestoreDocId: generation.id,
-          runwayVideoUrl: generation.runwayVideoUrl || generation.videoUrl,
-          productMediaUrl: generation.productToAppendUrl,
-          productMediaType: generation.productToAppendType
-        });
-        
-        onShowSuccessNotification('Video rendering started! It will be ready for download shortly.');
-        
-      } else if (generation.type === 'slideshow') {
-        // THIS BLOCK IS MODIFIED TO CALL THE NEW FUNCTION
-        console.log('[RenderSlideshowAsSingleImage] Starting single image render for slideshow display...');
-        
-        const functions = getFunctions();
-        const callRenderAndReplace = httpsCallable(functions, 'renderAndReplaceGenerationImage', {
-          timeout: 540000, // 9 minutes timeout
-        });
-
-        let bgUrlToUse = generation.selectedBackgroundUrl; // Default to existing URL on the generation
-        if (selectedBackgroundId && backgrounds && backgrounds.length > 0) {
-            const foundBg = backgrounds.find(bg => bg.id === selectedBackgroundId);
-            if (foundBg && foundBg.imageUrl) {
-                bgUrlToUse = foundBg.imageUrl;
-            }
-        }
-
-        if (!bgUrlToUse) {
-            console.error('[RenderSlideshowAsSingleImage] No background URL could be determined.');
-            throw new Error('No background selected or available for rendering.');
-        }
-
-        const textForSingleRender = editedSlideTexts[currentSlideIndex] || 
-                                   (generation.slideTexts && generation.slideTexts.length > currentSlideIndex 
-                                     ? generation.slideTexts[currentSlideIndex] 
-                                     : '');
-        
-        if (!textForSingleRender && (editedSlideTexts.length === 0 || !editedSlideTexts[currentSlideIndex])) {
-            // If there are no texts at all, or current slide index points to an empty/undefined text.
-             logger.warn(`[RenderSlideshowAsSingleImage] No text provided for current slide ${currentSlideIndex + 1}. Rendering with placeholder or empty if backend supports.`);
-             // The backend function _renderSingleSlide handles empty textToRender by creating an empty processedSlideText.
-             // So, we can proceed. If specific behavior for "no text" is needed, add it here.
-        }
-
-        const payload = {
-          targetGenerationId: generation.id,
-          backgroundUrl: bgUrlToUse,
-          textToRender: textForSingleRender,
-          textColor: selectedTextColor,
-          textPosition: textPosition,
-          textSize: textSize,
-        };
-
-        console.log('[RenderSlideshowAsSingleImage] Sending payload to renderAndReplaceGenerationImage:', payload);
-        
-        try {
-          const result = await callRenderAndReplace(payload);
-          console.log('[RenderSlideshowAsSingleImage] Success result:', result);
-          // Update notification to be more specific to the action
-          onShowSuccessNotification('Current slide rendered and slideshow updated! It will be ready for download shortly.');
-          // Optionally, trigger a refresh or update local state if needed,
-          // though the backend updates Firestore which should trigger data refresh via listeners.
-          // onGenerationUpdated might need to be called here if the parent needs immediate state update
-          // For now, relying on existing data flow.
-        } catch (renderError) {
-          console.error('[RenderSlideshowAsSingleImage] Error details:', renderError);
-          console.error('[RenderSlideshowAsSingleImage] Error code:', renderError.code);
-          console.error('[RenderSlideshowAsSingleImage] Error message:', renderError.message);
-          throw new Error(`Rendering failed: ${renderError.message || renderError.code || 'Unknown error'}`);
-        }
-        
-      } else {
-        await handleGenerationDownload(generation);
-      }
-    } catch (error) {
-      console.error('Download/render error:', error);
-      window.alert(`Error: ${error.message}`);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  const handleVideoToggle = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-    }
-  };
-
-  const handleSlideChange = (direction) => {
-    setTextOpacity(0);
-    setTimeout(() => {
-      setCurrentSlideIndex(prev => {
-        const newIndex = prev + direction;
-        const maxIndex = numSlides - 1; 
-        // IMPORTANT: Log inside setCurrentSlideIndex callback
-        console.log(`[handleSlideChange] Direction: ${direction}, Prev Index: ${prev}, New Index Attempt: ${newIndex}, Max Index: ${maxIndex}, numSlides: ${numSlides}`);
-        const finalNewIndex = Math.max(0, Math.min(newIndex, maxIndex));
-        console.log(`[handleSlideChange] Final New Index: ${finalNewIndex}`);
-        return finalNewIndex;
+    if (generations.length > 0) {
+      const newColumns = [[], [], [], []];
+      generations.forEach((gen, index) => {
+        const columnIndex = index % 4;
+        newColumns[columnIndex].push(gen);
       });
-      setTextOpacity(1);
-    }, 150); // text fade timeout
+      setColumns(newColumns);
+    }
+  }, [generations]);
+
+  const fetchGenerations = async (reset = true) => {
+    return fetchGenerationsForUser(user, reset);
   };
 
-  const handleSaveEdits = async () => {
-    console.log('[handleSaveEdits] Called. generation.type:', generation.type, 'generation.id:', generation.id);
-    
-    setIsSaving(true);
+  const fetchGenerationsForUser = async (currentUser, reset = true) => {
     try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
-
-      const collectionPath = generation.type === 'video' ? 'tiktok-posts' : 'generations';
-      const docRef = doc(db, 'users', user.uid, collectionPath, generation.id);
-
-      const updateData = {};
+      console.log('Fetching generations, user:', currentUser?.uid, 'reset:', reset);
       
-      if (!initialGenerationStateForEdit) {
-        console.error("[handleSaveEdits] initialGenerationStateForEdit is not set. Aborting save.");
-        setIsSaving(false);
-        return;
+      if (reset) {
+        setLoading(true);
+        setGenerations([]);
+        setLastDoc(null);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
 
-      // Check for changes and build update data
-      if (generation.type === 'video' && editedHookText !== initialGenerationStateForEdit.hookText) {
-        updateData.hookText = editedHookText;
+      const generationsColRef = collection(db, 'users', currentUser.uid, 'generations');
+      console.log('Collection ref created');
+      
+      let q;
+      if (reset || !lastDoc) {
+        q = query(generationsColRef, orderBy('timestamp', 'desc'), limit(ITEMS_PER_PAGE));
+      } else {
+        q = query(generationsColRef, orderBy('timestamp', 'desc'), startAfter(lastDoc), limit(ITEMS_PER_PAGE));
       }
       
-      if (generation.type === 'slideshow') {
-        if (selectedBackgroundId !== initialGenerationStateForEdit.selectedBackgroundId) {
-          updateData.selectedBackgroundId = selectedBackgroundId;
-          if (selectedBackgroundId) {
-            const foundBackground = backgrounds.find(bg => bg.id === selectedBackgroundId);
-            if (foundBackground) {
-              updateData.selectedBackgroundUrl = foundBackground.imageUrl;
-            }
-          } else {
-            updateData.selectedBackgroundUrl = '';
-          }
-        }
-
-        if (selectedTextColor !== initialGenerationStateForEdit.textColor) {
-          updateData.textColor = selectedTextColor;
-        }
-
-        if (textPosition !== initialGenerationStateForEdit.textPosition) {
-          updateData.textPosition = textPosition;
-        }
-
-        if (textSize !== initialGenerationStateForEdit.textSize) {
-          updateData.textSize = textSize;
-        }
-        
-        if (JSON.stringify(editedSlideTexts) !== JSON.stringify(initialGenerationStateForEdit.slideTexts)) {
-          updateData.slideTexts = editedSlideTexts;
-        }
-      }
+      console.log('Query created, fetching documents...');
+      const snapshot = await getDocs(q);
+      console.log('Documents fetched:', snapshot.docs.length);
       
-      console.log('[handleSaveEdits] Constructed updateData:', JSON.parse(JSON.stringify(updateData)));
-
-      if (Object.keys(updateData).length === 0) {
-        onShowSuccessNotification('No changes to save.');
-        setIsSaving(false);
-        return;
+      const processedGenerations = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('Document data:', doc.id, data);
+        return { 
+          id: doc.id, 
+          ...data, 
+          timestamp: data.timestamp?.toDate() || new Date()
+        };
+      });
+      
+      if (reset) {
+        setGenerations(processedGenerations);
+      } else {
+        setGenerations(prev => [...prev, ...processedGenerations]);
       }
 
-      await updateDoc(docRef, updateData);
-      
-      // Update the initial state to reflect the saved changes
-      setInitialGenerationStateForEdit(prev => ({
-        ...prev,
-        selectedBackgroundId: selectedBackgroundId,
-        textColor: selectedTextColor,
-        textPosition: textPosition,
-        textSize: textSize,
-        slideTexts: [...editedSlideTexts],
-        hookText: editedHookText,
-      }));
-      
-      const updatedGenerationData = { 
-        id: generation.id, 
-        // Spread existing generation data first to retain other fields
-        ...generation,
-        // Then overwrite with new/changed data
-        ...updateData 
-      };
-
-      // If slideshow content was changed, invalidate processedImageUrls for card preview
-      if (generation.type === 'slideshow' && 
-          (updateData.hasOwnProperty('slideTexts') || 
-           updateData.hasOwnProperty('selectedBackgroundId') || 
-           updateData.hasOwnProperty('textColor') ||
-           updateData.hasOwnProperty('textPosition') ||
-           updateData.hasOwnProperty('textSize'))) {
-        updatedGenerationData.processedImageUrls = []; // or null, to trigger re-render logic in card
-        console.log('[handleSaveEdits] Invalidated processedImageUrls because slideshow content changed.');
+      // Set last document for pagination
+      if (snapshot.docs.length > 0) {
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
       }
 
-      // If slideTexts was updated, ensure it's part of updatedGenerationData (already handled by ...updateData if key exists)
-      // if (updateData.slideTexts) {
-      //   updatedGenerationData.slideTexts = updateData.slideTexts;
-      // }
-      // If selectedBackgroundUrl was updated, ensure it's part of updatedGenerationData (already handled by ...updateData if key exists)
-      // if (updateData.hasOwnProperty('selectedBackgroundUrl')) { 
-      //     updatedGenerationData.selectedBackgroundUrl = updateData.selectedBackgroundUrl;
-      // }
-
-      // Add a more detailed log for the data being passed to onGenerationUpdated
-      console.log('[handleSaveEdits] Updated generation data:', updatedGenerationData);
-
-      onGenerationUpdated(updatedGenerationData); 
+      // Check if there are more documents
+      setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
       
-      onShowSuccessNotification('Changes saved successfully!');
-      setIsEditing(false);
+      console.log('Final generations count:', processedGenerations.length);
+      
     } catch (error) {
-      console.error('Error saving edits:', error);
-      window.alert("Error saving changes. Try again.");
+      console.error('Error fetching generations:', error);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const canGoPrevious = generation.type === 'slideshow' && currentSlideIndex > 0;
-  
-  // Fix navigation logic to work for both processed images and text-based slides
-  // UPDATED LOGIC for canGoNext and numSlides - use processedImageUrls when not editing, texts when editing
-  const getCurrentSlideCount = () => {
-    if (generation.type !== 'slideshow') return 1;
-    
-    if (isEditing) {
-      // When editing, use slide texts
-      return editedSlideTexts.length > 0 ? editedSlideTexts.length : 1;
-    } else {
-      // When not editing, use processedImageUrls if available, otherwise slide texts
-      if (generation.processedImageUrls && generation.processedImageUrls.length > 0) {
-        return generation.processedImageUrls.length;
-      }
-      return generation.slideTexts && generation.slideTexts.length > 0 ? generation.slideTexts.length : 1;
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchGenerations(false);
     }
   };
 
-  const numSlides = getCurrentSlideCount();
-  const canGoNext = generation.type === 'slideshow' && currentSlideIndex < (numSlides - 1);
+  const GenerationCard = ({ generation }) => {
+    const isVideo = generation.type === 'video' || generation.commandCode === 101;
+    const mediaUrl = generation.finalUrl || generation.imageUrl || generation.videoUrl;
 
-  // Computed property to check if there are changes
-  const hasChanges = useMemo(() => {
-    if (!initialGenerationStateForEdit) return false;
-    
-    const currentState = {
-      selectedBackgroundId,
-      textColor: selectedTextColor,
-      textPosition: textPosition,
-      textSize: textSize,
-      slideTexts: editedSlideTexts,
-      hookText: editedHookText,
-    };
-    
-    return JSON.stringify(currentState) !== JSON.stringify(initialGenerationStateForEdit);
-  }, [initialGenerationStateForEdit, selectedBackgroundId, selectedTextColor, textPosition, textSize, editedSlideTexts, editedHookText]);
-
-  return (
-    <AnimatePresence>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-50" onClick={onClose}>
-        {/* Main Image/Video Display */}
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="relative max-w-2xl max-h-[70vh] bg-black rounded-2xl overflow-hidden shadow-2xl mb-6" 
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="relative w-full h-full">
-            {generation.type === 'image' && generation.imageUrl && (
-              <img 
-                src={generation.imageUrl} 
-                alt={generation.prompt || 'Generated image'} 
-                className="w-full h-full object-contain"
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="group relative overflow-hidden rounded-lg hover:scale-105 transition-transform duration-200 cursor-pointer"
+        onClick={() => setSelectedGeneration(generation)}
+      >
+        {mediaUrl ? (
+          <>
+            {isVideo ? (
+              <video
+                className="w-full h-auto object-cover"
+                poster={generation.thumbnailUrl}
+                preload="metadata"
+              >
+                <source src={mediaUrl} type="video/mp4" />
+              </video>
+            ) : (
+              <img
+                src={mediaUrl}
+                alt="Generated content"
+                className="w-full h-auto object-cover"
               />
             )}
             
-            {generation.type === 'video' && generation.videoUrl && (
-              <div className="relative w-full h-full">
-                <video 
-                  ref={videoRef}
-                  src={`${generation.finalVideoUrl || generation.runwayVideoUrl || generation.videoUrl}`} 
-                  className="w-full h-full object-contain" 
-                  controls
-                  preload="metadata"
-                  playsInline
-                  poster={generation.thumbnailUrl || undefined}
-                  onLoadedMetadata={() => {
-                    if (videoRef.current && !generation.thumbnailUrl) {
-                      videoRef.current.currentTime = 0.1;
-                    }
-                  }}
-                />
-                
-                
+            {/* Play button overlay for videos */}
+            {isVideo && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="bg-white/90 rounded-full p-3">
+                  <Play size={24} className="text-black ml-1" />
+                </div>
               </div>
             )}
             
-            {generation.type === 'slideshow' && (
-              <motion.div
-                initial={{ scale: 0.98, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="w-full h-full"
-              >
-                {/* Show rendered images when not editing and processedImageUrls exist */}
-                {!isEditing && generation.processedImageUrls && generation.processedImageUrls.length > 0 ? (
-                  <div className="relative w-full h-full">
-                    <motion.img
-                      key={currentSlideIndex}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3 }}
-                      src={generation.processedImageUrls[currentSlideIndex]}
-                      alt={`Rendered slide ${currentSlideIndex + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  /* Live preview when editing or no rendered images */
-                  generation.selectedBackgroundUrl && generation.slideTexts ? (
-                    <div className="relative w-full h-full">
-                      <img
-                        src={(() => {
-                          const url = selectedBackgroundId 
-                            ? backgrounds.find(bg => bg.id === selectedBackgroundId)?.imageUrl 
-                            : generation.selectedBackgroundUrl;
-                          return url;
-                        })()}
-                        alt="Slideshow background"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className={`absolute inset-0 flex p-4 z-10 ${
-                        textPosition === 'top' ? 'items-start justify-center' :
-                        textPosition === 'bottom' ? 'items-end justify-center' :
-                        textPosition === 'left' ? 'items-center justify-start' :
-                        textPosition === 'right' ? 'items-center justify-end' :
-                        'items-center justify-center'
-                      }`}>
-                        <motion.div 
-                          key={`${currentSlideIndex}-${textPosition}-${textSize}`}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: textOpacity, y: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className={`max-w-[85%] ${
-                            textPosition === 'left' || textPosition === 'right' ? 'text-left' : 'text-center'
-                          }`}
-                        >
-                          <p 
-                            className={`font-medium ${
-                              textSize === 'small' ? 'text-sm' :
-                              textSize === 'large' ? 'text-xl' :
-                              'text-base'
-                            } ${
-                              selectedTextColor === 'white' ? 'text-white' :
-                              selectedTextColor === 'black' ? 'text-black' :
-                              selectedTextColor === 'red' ? 'text-red-500' :
-                              selectedTextColor === 'blue' ? 'text-blue-500' :
-                              selectedTextColor === 'lime' ? 'text-lime-500' :
-                              selectedTextColor === 'yellow' ? 'text-yellow-400' :
-                              selectedTextColor === 'purple' ? 'text-purple-500' :
-                              selectedTextColor === 'pink' ? 'text-pink-500' :
-                              'text-white'
-                            }`}
-                            style={{ 
-                              textShadow: selectedTextColor === 'white' || selectedTextColor === 'yellow'
-                                ? '0 1px 2px rgba(0,0,0,0.8)' 
-                                : '0 1px 2px rgba(255,255,255,0.8)'
-                            }}
-                          >
-                            {(() => {
-                              const textsToUse = isEditing ? editedSlideTexts : generation.slideTexts;
-                              const currentText = textsToUse?.[currentSlideIndex];
-                              return currentText || `Slide ${currentSlideIndex + 1}`;
-                            })()}
-                          </p>
-                        </motion.div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-neutral-200 dark:bg-neutral-700">
-                      <Slideshow size={40} className="text-stone-400 dark:text-stone-500" />
-                    </div>
-                  )
-                )}
-
-                {/* Slideshow navigation - Smaller */}
-                {numSlides > 1 && (
-                  <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between p-2 z-20"> {/* ADDED z-20 HERE */}
-                    <motion.button 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleSlideChange(-1)}
-                      disabled={!canGoPrevious}
-                      className={`p-1.5 bg-black/40 text-white rounded-full backdrop-blur-sm transition-all ${canGoPrevious ? 'hover:bg-black/60' : 'opacity-30 cursor-not-allowed'}`}
-                    >
-                      <ArrowLeft size={16} weight="bold" />
-                    </motion.button>
-                    <motion.button 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => {
-                        console.log('[DEBUG] Next button clicked!'); // DIRECT CLICK LOG
-                        handleSlideChange(1);
-                      }}  // Next
-                      disabled={!canGoNext}
-                      className={`p-1.5 bg-black/40 text-white rounded-full backdrop-blur-sm transition-all ${canGoNext ? 'hover:bg-black/60' : 'opacity-30 cursor-not-allowed'}`}
-                    >
-                      <ArrowRight size={16} weight="bold" />
-                    </motion.button>
-                  </div>
-                )}
-              </motion.div>
-            )}
+            {/* Action buttons - show on hover */}
+            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button className="bg-black/70 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/90 transition-colors">
+                <Heart size={16} />
+              </button>
+              <button className="bg-black/70 backdrop-blur-sm rounded-full p-2 text-white hover:bg-black/90 transition-colors">
+                <Download size={16} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="w-full aspect-square bg-neutral-800 flex items-center justify-center">
+            <span className="text-neutral-400">No preview</span>
           </div>
-          
-          {/* Right side - Controls and info - Larger panel */}
-          <motion.div 
-            initial={{ x: 16, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.25 }}
-            className="w-full lg:w-96 flex flex-col bg-neutral-800 min-w-0"
-          >
-            {/* Header - Very compact */}
-            <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between flex-shrink-0">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
-                  {getFriendlyGenerationType(generation.commandCode)}
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  {generation.timestamp && generation.timestamp instanceof Date 
-                    ? generation.timestamp.toLocaleDateString() 
-                    : 'Unknown date'}
-                </p>
-              </div>
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onClose}
-                className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-500 dark:text-stone-400 transition-colors flex-shrink-0"
-              >
-                <CloseIcon size={16} />
-              </motion.button>
-            </div>
-            
-            {/* Content - Compact scrollable */}
-            <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-0">
-              {/* Editing Section */}
-              {generation.type !== 'image' && (
-                <motion.div 
-                  initial={{ y: 8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.15 }}
-                  className="space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-stone-700 dark:text-stone-300">Edit Content</h4>
-                    <motion.button 
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => {
-                        if (isEditing) {
-                          setIsEditing(false);
-                          setEditedHookText(generation.hookText || '');
-                          setEditedSlideTexts([...(generation.slideTexts || [])]);
-                          setSelectedBackgroundId(generation.selectedBackgroundId || '');
-                          setSelectedTextColor(generation.textColor || 'white');
-                        } else {
-                          setIsEditing(true);
-                        }
-                      }}
-                      className={`p-1 rounded-md transition-all ${isEditing 
-                        ? 'bg-neutral-900 dark:bg-neutral-100 text-stone-100 dark:text-stone-900' 
-                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-stone-500 dark:text-stone-400'
-                      }`}
-                    >
-                      <Pencil size={12} />
-                    </motion.button>
-                  </div>
-                  
-                  {/* Video hook text editing */}
-                  {generation.type === 'video' && (
-                    <motion.div 
-                      initial={{ y: 4, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="space-y-1.5"
-                    >
-                      <label className="text-xs text-stone-600 dark:text-stone-400">Hook Text</label>
-                      {isEditing ? (
-                        <motion.textarea
-                          initial={{ scale: 0.99 }}
-                          animate={{ scale: 1 }}
-                          value={editedHookText}
-                          onChange={(e) => setEditedHookText(e.target.value)}
-                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all resize-none"
-                          rows={2}
-                          placeholder="Enter hook text..."
-                        />
-                      ) : (
-                        <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
-                          {generation.hookText || 'No hook text'}
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                  
-                  {/* Slideshow editing */}
-                  {generation.type === 'slideshow' && (
-                    <motion.div 
-                      initial={{ y: 4, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="space-y-3"
-                    >
-                      {/* Tab Navigation */}
-                      <div className="flex border-b border-stone-200 dark:border-stone-700">
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                          onClick={() => setActiveEditTab('text')}
-                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
-                            activeEditTab === 'text'
-                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
-                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
-                          }`}
-                        >
-                          Text Style
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                          onClick={() => setActiveEditTab('background')}
-                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
-                            activeEditTab === 'background'
-                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
-                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
-                          }`}
-                        >
-                          Background
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                          onClick={() => setActiveEditTab('texts')}
-                          className={`flex-1 py-2 px-2 text-xs font-medium transition-all ${
-                            activeEditTab === 'texts'
-                              ? 'text-stone-900 dark:text-stone-100 border-b-2 border-stone-900 dark:border-stone-100'
-                              : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
-                          }`}
-                        >
-                          Slides
-                        </motion.button>
-                      </div>
-
-                      {/* Tab Content */}
-                      <AnimatePresence mode="wait">
-                        {activeEditTab === 'text' && (
-                          <motion.div
-                            key="text-tab"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            transition={{ duration: 0.2 }}
-                            className="space-y-3"
-                          >
-                            {/* Text color selection */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Color</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="grid grid-cols-4 gap-1.5"
-                                >
-                                  {[
-                                    { value: 'white', label: 'White', bgClass: 'bg-white', borderClass: 'border-stone-300' },
-                                    { value: 'black', label: 'Black', bgClass: 'bg-black', borderClass: '' },
-                                    { value: 'red', label: 'Red', bgClass: 'bg-red-500', borderClass: '' },
-                                    { value: 'blue', label: 'Blue', bgClass: 'bg-blue-500', borderClass: '' },
-                                    { value: 'lime', label: 'lime', bgClass: 'bg-lime-500', borderClass: '' },
-                                    { value: 'yellow', label: 'Yellow', bgClass: 'bg-yellow-400', borderClass: '' },
-                                    { value: 'purple', label: 'Purple', bgClass: 'bg-purple-500', borderClass: '' },
-                                    { value: 'pink', label: 'Pink', bgClass: 'bg-pink-500', borderClass: '' }
-                                  ].map((color) => (
-                                    <motion.button
-                                      key={color.value}
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => setSelectedTextColor(color.value)}
-                                      className={`flex-1 p-2 rounded-md border transition-all ${
-                                        selectedTextColor === color.value
-                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100'
-                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600'
-                                      }`}
-                                    >
-                                      <div className="flex flex-col items-center gap-1">
-                                        <div className={`w-3 h-3 ${color.bgClass} ${color.borderClass} rounded-full`}></div>
-                                        <span className="text-xs text-stone-900 dark:text-stone-100">{color.label}</span>
-                                      </div>
-                                    </motion.button>
-                                  ))}
-                                </motion.div>
-                              ) : (
-                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
-                                  {selectedTextColor.charAt(0).toUpperCase() + selectedTextColor.slice(1)} text
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Text position selection */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Position</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="grid grid-cols-3 gap-1"
-                                >
-                                  {[
-                                    { value: 'top', label: 'Top' },
-                                    { value: 'center', label: 'Center' },
-                                    { value: 'bottom', label: 'Bottom' },
-                                    { value: 'left', label: 'Left' },
-                                    { value: 'right', label: 'Right' }
-                                  ].map((position) => (
-                                    <motion.button
-                                      key={position.value}
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => setTextPosition(position.value)}
-                                      className={`p-2 rounded-md border transition-all text-xs ${
-                                        textPosition === position.value
-                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100 text-stone-900 dark:text-stone-100'
-                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600 text-stone-600 dark:text-stone-400'
-                                      } ${position.value === 'center' ? 'col-span-1' : ''}`}
-                                    >
-                                      {position.label}
-                                    </motion.button>
-                                  ))}
-                                </motion.div>
-                              ) : (
-                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
-                                  {textPosition.charAt(0).toUpperCase() + textPosition.slice(1)} position
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Text size selection */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-stone-600 dark:text-stone-400">Text Size</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="flex gap-1.5"
-                                >
-                                  {[
-                                    { value: 'small', label: 'Small' },
-                                    { value: 'medium', label: 'Medium' },
-                                    { value: 'large', label: 'Large' }
-                                  ].map((size) => (
-                                    <motion.button
-                                      key={size.value}
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => setTextSize(size.value)}
-                                      className={`flex-1 p-2 rounded-md border transition-all text-xs ${
-                                        textSize === size.value
-                                          ? 'border-stone-900 dark:border-stone-100 bg-neutral-50 dark:bg-neutral-800 ring-1 ring-stone-900 dark:ring-stone-100 text-stone-900 dark:text-stone-100'
-                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600 text-stone-600 dark:text-stone-400'
-                                      }`}
-                                    >
-                                      {size.label}
-                                    </motion.button>
-                                  ))}
-                                </motion.div>
-                              ) : (
-                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
-                                  {textSize.charAt(0).toUpperCase() + textSize.slice(1)} size
-                                </p>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {activeEditTab === 'background' && (
-                          <motion.div
-                            key="background-tab"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            transition={{ duration: 0.2 }}
-                            className="space-y-3"
-                          >
-                            {/* Background selection */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-stone-600 dark:text-stone-400">Background</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto"
-                                >
-                                  {backgrounds.map((bg, index) => (
-                                    <motion.div
-                                      key={bg.id}
-                                      initial={{ opacity: 0, y: 4 }}
-                                      animate={{ opacity: 1, y: 0 }}
-                                      transition={{ delay: 0.03 * index }}
-                                      whileHover={{ scale: 1.02 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => {
-                                        setSelectedBackgroundId(bg.id);
-                                      }}
-                                      className={`relative cursor-pointer rounded-md overflow-hidden border transition-all ${
-                                        selectedBackgroundId === bg.id
-                                          ? 'border-stone-900 dark:border-stone-100 ring-1 ring-stone-900 dark:ring-stone-100'
-                                          : 'border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600'
-                                      }`}
-                                    >
-                                      <div className="aspect-[9/16]">
-                                        <img
-                                          src={bg.imageUrl}
-                                          alt={bg.name}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      </div>
-                                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-1">
-                                        <p className="text-white text-xs truncate">
-                                          {bg.name}
-                                        </p>
-                                      </div>
-                                      {selectedBackgroundId === bg.id && (
-                                        <motion.div 
-                                          initial={{ scale: 0 }}
-                                          animate={{ scale: 1 }}
-                                          className="absolute top-1 right-1 w-3 h-3 bg-neutral-900 dark:bg-neutral-100 rounded-full flex items-center justify-center"
-                                        >
-                                          <Check size={8} className="text-stone-100 dark:text-stone-900" />
-                                        </motion.div>
-                                      )}
-                                    </motion.div>
-                                  ))}
-                                </motion.div>
-                              ) : (
-                                <p className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700">
-                                  {(() => {
-                                    if (generation.selectedBackgroundId) {
-                                      const bgById = backgrounds.find(bg => bg.id === generation.selectedBackgroundId);
-                                      if (bgById) return bgById.name;
-                                    }
-                                    if (generation.selectedBackgroundUrl) {
-                                      const bgByUrl = backgrounds.find(bg => bg.imageUrl === generation.selectedBackgroundUrl);
-                                      if (bgByUrl) return bgByUrl.name;
-                                    }
-                                    return 'Background selected';
-                                  })()}
-                                </p>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {activeEditTab === 'texts' && (
-                          <motion.div
-                            key="texts-tab"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            transition={{ duration: 0.2 }}
-                            className="space-y-1.5"
-                          >
-                            {/* Slide texts editing */}
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-stone-600 dark:text-stone-400">Slide Texts</label>
-                              {isEditing ? (
-                                <motion.div 
-                                  initial={{ scale: 0.99 }}
-                                  animate={{ scale: 1 }}
-                                  className="space-y-2 max-h-64 overflow-y-auto"
-                                >
-                                  {editedSlideTexts.map((text, index) => (
-                                    <motion.textarea
-                                      key={index}
-                                      initial={{ opacity: 0, x: -4 }}
-                                      animate={{ opacity: 1, x: 0 }}
-                                      transition={{ delay: 0.03 * index }}
-                                      value={text}
-                                      onChange={(e) => {
-                                        const newTexts = [...editedSlideTexts];
-                                        newTexts[index] = e.target.value;
-                                        setEditedSlideTexts(newTexts);
-                                      }}
-                                      className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all resize-none"
-                                      rows={3}
-                                      placeholder={`Slide ${index + 1} text...`}
-                                    />
-                                  ))}
-                                </motion.div>
-                              ) : (
-                                <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {generation.slideTexts.map((text, index) => (
-                                    <motion.p 
-                                      key={index}
-                                      initial={{ opacity: 0, x: -4 }}
-                                      animate={{ opacity: 1, x: 0 }}
-                                      transition={{ delay: 0.03 * index }}
-                                      className="text-xs text-stone-600 dark:text-stone-400 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-md border border-stone-200 dark:border-stone-700"
-                                    >
-                                      {index + 1}. {text}
-                                    </motion.p>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                  )}
-                </motion.div>
-              )}
-              
-              {/* Save as Creator/Background Section */}
-              {generation.type === 'image' && generation.imageUrl && (generation.commandCode === 202 || generation.commandCode === 201) && (
-                <motion.div 
-                  initial={{ y: 8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.25 }}
-                  className="space-y-2 border-t border-stone-200 dark:border-stone-800 pt-3"
-                >
-                  <h4 className="text-xs font-medium text-stone-700 dark:text-stone-300">Save as Asset</h4>
-                  
-                  {/* Creator Section */}
-                  {generation.commandCode === 202 && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-stone-600 dark:text-stone-400">UGC Creator</label>
-                      {isAlreadySavedAsCreator ? (
-                        <motion.div 
-                          initial={{ scale: 0.99 }}
-                          animate={{ scale: 1 }}
-                          className="p-2 bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800 rounded-md flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <Check size={12} className="text-lime-600 dark:text-lime-400" />
-                            <span className="text-xs text-lime-700 dark:text-lime-300">
-                              Saved as "{existingCreator?.name}"
-                            </span>
-                          </div>
-                          <User size={12} className="text-lime-600 dark:text-lime-400" />
-                        </motion.div>
-                      ) : showSaveCreatorInput ? (
-                        <motion.div 
-                          initial={{ scale: 0.99, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="space-y-1.5"
-                        >
-                          <input
-                            type="text"
-                            value={creatorAssetName}
-                            onChange={(e) => setCreatorAssetName(e.target.value)}
-                            placeholder="Enter creator name..."
-                            className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && creatorAssetName.trim()) {
-                                handleSaveAsAsset('creator');
-                              }
-                            }}
-                          />
-                          <div className="flex gap-1.5">
-                            <motion.button
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => setShowSaveCreatorInput(false)}
-                              disabled={isSavingAsset}
-                              className="flex-1 py-1.5 px-2 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
-                            >
-                              Cancel
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => handleSaveAsAsset('creator')}
-                              disabled={isSavingAsset || !creatorAssetName.trim()}
-                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs rounded-md transition-all flex items-center justify-center"
-                            >
-                              {isSavingAsset ? <CircleNotch size={10} className="animate-spin" /> : 'Save'}
-                            </motion.button>
-                          </div>
-                        </motion.div>
-                      ) : (
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                          onClick={() => {
-                            setShowSaveCreatorInput(true);
-                            setShowSaveBackgroundInput(false);
-                            setCreatorAssetName('');
-                          }}
-                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-stone-900 dark:text-stone-100 transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <UserPlus size={12} />
-                          Save as Creator
-                        </motion.button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Background Section */}
-                  {generation.commandCode === 201 && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-stone-600 dark:text-stone-400">Background</label>
-                      {isAlreadySavedAsBackground ? (
-                        <motion.div 
-                          initial={{ scale: 0.99 }}
-                          animate={{ scale: 1 }}
-                          className="p-2 bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800 rounded-md flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <Check size={12} className="text-lime-600 dark:text-lime-400" />
-                            <span className="text-xs text-lime-700 dark:text-lime-300">
-                              Saved as "{existingBackground?.name}"
-                            </span>
-                          </div>
-                          <ImageSquare size={12} className="text-lime-600 dark:text-lime-400" />
-                        </motion.div>
-                      ) : showSaveBackgroundInput ? (
-                        <motion.div 
-                          initial={{ scale: 0.99, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="space-y-1.5"
-                        >
-                          <input
-                            type="text"
-                            value={backgroundAssetName}
-                            onChange={(e) => setBackgroundAssetName(e.target.value)}
-                            placeholder="Enter background name..."
-                            className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 text-xs text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-stone-400 focus:border-transparent transition-all"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && backgroundAssetName.trim()) {
-                                handleSaveAsAsset('background');
-                              }
-                            }}
-                          />
-                          <div className="flex gap-1.5">
-                            <motion.button
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => setShowSaveBackgroundInput(false)}
-                              disabled={isSavingAsset}
-                              className="flex-1 py-1.5 px-2 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 text-xs rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
-                            >
-                              Cancel
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => handleSaveAsAsset('background')}
-                              disabled={isSavingAsset || !backgroundAssetName.trim()}
-                              className="flex-1 py-1.5 px-2 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs rounded-md transition-all flex items-center justify-center"
-                            >
-                              {isSavingAsset ? <CircleNotch size={10} className="animate-spin" /> : 'Save'}
-                            </motion.button>
-                          </div>
-                        </motion.div>
-                      ) : (
-                        <motion.button
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                          onClick={() => {
-                            setShowSaveBackgroundInput(true);
-                            setShowSaveCreatorInput(false);
-                            setBackgroundAssetName('');
-                          }}
-                          className="w-full p-2 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-xs text-stone-900 dark:text-stone-100 transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <PlusSquare size={12} />
-                          Save as Background
-                        </motion.button>
-                      )}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </div>
-              
-            {/* Footer actions - Very compact */}
-            <motion.div 
-              initial={{ y: 16, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="p-3 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-neutral-900 flex-shrink-0"
-            >
-              {/* Save button for editing mode - ALWAYS show when editing and has changes */}
-              {isEditing && hasChanges && (
-                <motion.button 
-                  initial={{ scale: 0.99, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={handleSaveEdits}
-                  disabled={isSaving}
-                  className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5 mb-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <CircleNotch size={12} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={12} />
-                      Save Changes
-                    </>
-                  )}
-                </motion.button>
-              )}
-              
-              {/* Action buttons - only show when not in editing mode or no changes */}
-              {(!isEditing || !hasChanges) && (
-                <motion.div 
-                  initial={{ y: 8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  className="space-y-2"
-                >
-                  {/* Render button for videos and slideshows - only show if not rendered yet */}
-                  {(generation.type === 'video' && !generation.finalVideoUrl) && (
-                    <motion.button
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                      onClick={handleDownload}
-                      disabled={isDownloading}
-                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
-                    >
-                      {isDownloading ? (
-                        <>
-                          <CircleNotch size={12} className="animate-spin" />
-                          Rendering...
-                        </>
-                      ) : (
-                        <>
-                          <FilmSlate size={12} />
-                          Render with My Product Video
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                  
-                  {/* MODIFIED: Slideshow render button always visible */}
-                  {generation.type === 'slideshow' && (
-                    <motion.button
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                      onClick={handleDownload} // This now calls renderAndReplaceGenerationImage
-                      disabled={isDownloading}
-                      className="w-full py-2 px-3 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:bg-neutral-400 text-stone-100 dark:text-stone-900 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1.5"
-                >
-                      {isDownloading ? (
-                        <>
-                          <CircleNotch size={12} className="animate-spin" />
-                          Rendering Current Slide...
-                        </>
-                      ) : (
-                        <>
-                          <FilmSlate size={12} />
-                          Render Current Slide & Update
-                        </>
-                      )}
-                    </motion.button>
-                  )}
-                  
-                  {/* Action Buttons Section */}
-                  <div className="space-y-3 pt-4 border-t border-neutral-700">
-                    <h4 className="text-sm font-medium text-white">Actions</h4>
-                    
-                    <div className="grid grid-cols-1 gap-3">
-                      {/* Download Button */}
-                      {(generation.type === 'image' || 
-                        (generation.type === 'video' && generation.finalVideoUrl) || 
-                        (generation.type === 'slideshow' && generation.processedImageUrls && generation.processedImageUrls.length > 0)) && (
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={generation.type === 'image' ? handleDownload : () => handleGenerationDownload(generation)}
-                          disabled={isDownloading}
-                          className="py-3 px-4 bg-lime-500 hover:bg-lime-400 disabled:bg-neutral-600 text-black disabled:text-neutral-400 text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2"
-                        >
-                          {isDownloading ? (
-                            <CircleNotch size={16} className="animate-spin" />
-                          ) : (
-                            <>
-                              <DownloadSimple size={16} />
-                              Download
-                            </>
-                          )}
-                        </motion.button>
-                      )}
-                      
-                      {/* Favorite Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => onToggleFavorite(generation.id)}
-                        className={`py-3 px-4 ${
-                          generation.isFavorite 
-                            ? 'bg-red-500 hover:bg-red-400 text-white' 
-                            : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
-                        } text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2`}
-                      >
-                        <Heart size={16} weight={generation.isFavorite ? 'fill' : 'regular'} />
-                        {generation.isFavorite ? 'Unfavorite' : 'Favorite'}
-                      </motion.button>
-                      
-                      {/* Delete Button */}
-                      <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                        className="py-3 px-4 bg-red-600 hover:bg-red-500 disabled:bg-neutral-600 text-white disabled:text-neutral-400 text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2"
-                      >
-                        {isDeleting ? (
-                          <CircleNotch size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <Trash size={16} />
-                            Delete
-                          </>
-                        )}
-                      </motion.button>
-                    </div>
-                  </div>
-                  
-                  {/* Note about editing limitations after rendering */}
-                  {(generation.type === 'video' || generation.type === 'slideshow') && (
-                    <p className="text-xs text-stone-500 dark:text-stone-400 text-center mt-2">
-                      Note: Content cannot be edited after rendering
-                    </p>
-                  )}
-                </motion.div>
-              )}
-            </motion.div>
-          </motion.div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
-  );
-}
-// --- End Edit Popup Component ---
-
-// --- NEW: Video Preview Component for TikTok Videos ---
-function VideoPreview({ generation, className = "" }) {
-  const [currentPhase, setCurrentPhase] = useState('runway'); // 'runway' or 'product'
-  const [showText, setShowText] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const runwayVideoRef = useRef(null);
-  const productVideoRef = useRef(null);
-  const timeoutRef = useRef(null);
-
-  const hasProductVideo = generation.productToAppendUrl && generation.productToAppendType === 'video';
-
-  useEffect(() => {
-    setCurrentPhase('runway');
-    setShowText(true);
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-  }, [generation.id]);
-
-  const handlePlay = () => {
-    setIsPlaying(true);
-    if (currentPhase === 'runway' && runwayVideoRef.current) {
-      runwayVideoRef.current.play();
-      // Hide text after 5 seconds
-      timeoutRef.current = setTimeout(() => {
-        setShowText(false);
-        if (hasProductVideo) {
-          setTimeout(() => {
-            setCurrentPhase('product');
-            if (productVideoRef.current) {
-              productVideoRef.current.currentTime = 0;
-              productVideoRef.current.play();
-            }
-          }, 500);
-        }
-      }, 5000);
-    }
-  };
-
-  const handleVideoEnd = () => {
-    if (currentPhase === 'runway' && hasProductVideo) {
-      setShowText(false);
-      setTimeout(() => {
-        setCurrentPhase('product');
-        if (productVideoRef.current) {
-          productVideoRef.current.currentTime = 0;
-          productVideoRef.current.play();
-        }
-      }, 500);
-    } else if (currentPhase === 'product') {
-      setCurrentPhase('runway');
-      setShowText(true);
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(false);
-    }
-  };
-
-  return (
-    <div className={`relative w-full h-full ${className}`}>
-      {/* Runway Video */}
-      <video
-        ref={runwayVideoRef}
-        src={`${generation.runwayVideoUrl || generation.videoUrl}#t=0.1`}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-          currentPhase === 'runway' ? 'opacity-100' : 'opacity-0'
-        }`}
-        preload="metadata"
-        playsInline
-        muted
-        onEnded={handleVideoEnd}
-      />
-
-      {/* Product Video */}
-      {hasProductVideo && (
-        <video
-          ref={productVideoRef}
-          src={`${generation.productToAppendUrl}#t=0.1`}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-            currentPhase === 'product' ? 'opacity-100' : 'opacity-0'
-          }`}
-          preload="metadata"
-          playsInline
-          muted
-          onEnded={handleVideoEnd}
-        />
-      )}
-
-      {/* Text Overlay */}
-      {generation.hookText && currentPhase === 'runway' && (
-        <div
-          className={`absolute inset-0 flex items-center justify-start p-6 z-10 transition-opacity duration-500 ${
-            showText ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <p
-            className="text-white text-left font-normal text-lg max-w-[85%] leading-relaxed"
-            style={{ 
-              textShadow: '0 1px 3px rgba(0,0,0,0.8)' 
-            }}
-          >
-            {generation.hookText}
-          </p>
-        </div>
-      )}
-
-      {/* Play Button on Hover */}
-      {!isPlaying && (
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handlePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors group"
-        >
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play size={32} className="text-white/80" weight="fill" />
-      </div>
-        </motion.button>
-      )}
-    </div>
-  );
-}
-
-function GenerationCard({ generation, onClick, creators, backgrounds, onToggleFavorite }) {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState(1);
-
-  // --- NEW: Check if already saved as Creator or Background and get their names ---
-  const existingCreator = useMemo(() => {
-    if (generation.commandCode === 202 && generation.imageUrl && creators) {
-      return creators.find(creator => creator.imageUrl === generation.imageUrl);
-    }
-    return null;
-  }, [generation, creators]);
-
-  const existingBackground = useMemo(() => {
-    if (generation.commandCode === 201 && generation.imageUrl && backgrounds) {
-      return backgrounds.find(bg => bg.imageUrl === generation.imageUrl);
-    }
-    return null;
-  }, [generation, backgrounds]);
-  // --- END NEW ---
-
-  // For slideshows, we'll show a preview of the content
-  const getPreviewContent = () => {
-    if (generation.type === 'image' && generation.imageUrl) {
-      return (
-        <img 
-          src={generation.imageUrl} 
-          alt={generation.prompt || 'Generated image'} 
-          className="w-full h-full object-cover"
-        />
-      );
-    }
-    
-    if (generation.type === 'video') {
-      // Use initialImageUrl if available, with hookText overlay
-      if (generation.initialImageUrl && generation.hookText) {
-        return (
-          <div className="relative w-full h-full">
-            <img 
-              src={generation.initialImageUrl} 
-              alt={generation.prompt || 'Video preview'} 
-              className="w-full h-full object-cover"
-            />
-            <div
-              className="absolute inset-0 flex items-center justify-start p-6 z-10 bg-gradient-to-t from-black/30 to-transparent"
-            >
-              <p
-                className="text-white text-left font-normal text-lg max-w-[85%] leading-relaxed"
-                style={{ 
-                  textShadow: '0 1px 3px rgba(0,0,0,0.8)' 
-                }}
-              >
-                {generation.hookText}
-              </p>
-            </div>
-          </div>
-        );
-      }
-      // Fallback to initialImageUrl without text if no hookText
-      else if (generation.initialImageUrl) {
-        return (
-          <img 
-            src={generation.initialImageUrl} 
-            alt={generation.prompt || 'Video preview'} 
-            className="w-full h-full object-cover"
-          />
-        );
-      }
-      // Fallback to showing a thumbnail with a play icon and small hook text if available
-      else if (generation.imageUrl) {
-        return (
-          <div className="relative w-full h-full">
-            <img 
-              src={generation.imageUrl} 
-              alt="Video thumbnail" 
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-              <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
-                <Play size={24} className="text-black ml-1" weight="fill" />
-              </div>
-            </div>
-            {generation.hookText && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                <p className="text-white text-xs font-medium line-clamp-2">
-                  {generation.hookText}
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      } else {
-        return (
-          <div className="w-full h-full bg-black flex items-center justify-center">
-            <div className="text-center">
-              <FilmSlate size={32} className="text-white/60 mx-auto mb-2" />
-              <p className="text-white/80 text-xs">Video</p>
-            </div>
-          </div>
-        );
-      }
-    }
-    
-    
-    // Fallback
-    return (
-      <div className="w-full h-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
-        <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
-      </div>
+        )}
+      </motion.div>
     );
   };
 
-  // Determine selectedTextColor for slideshow preview (used in GenerationCard)
-  // This is a simplified assumption. For full accuracy, this logic might need to be passed down or
-  // the GenerationCard might need access to the 'backgrounds' prop if it needs to derive text color
-  // based on background properties. Here, we'll assume 'white' as a default if not specified.
-  const selectedTextColor = generation.textColor || 'white';
+  const ImageModal = () => {
+    if (!selectedGeneration) return null;
 
+    const isVideo = selectedGeneration.type === 'video' || selectedGeneration.commandCode === 101;
+    const mediaUrl = selectedGeneration.finalUrl || selectedGeneration.imageUrl || selectedGeneration.videoUrl;
 
-  // Get the main image URL for Pinterest-style display
-  const getMainImageUrl = () => {
-    if (generation.type === 'image' && generation.imageUrl) {
-      return generation.imageUrl;
-    }
-    if (generation.type === 'video' && generation.initialImageUrl) {
-      return generation.initialImageUrl;
-    }
-    if (generation.type === 'video' && generation.imageUrl) {
-      return generation.imageUrl;
-    }
-    return null;
-  };
-
-  const imageUrl = getMainImageUrl();
-  
-  // Handle image load to calculate aspect ratio
-  const handleImageLoad = (e) => {
-    const img = e.target;
-    setAspectRatio(img.naturalHeight / img.naturalWidth);
-    setImageLoaded(true);
-  };
-
-  const handleToggleFavorite = (e) => {
-    e.stopPropagation();
-    onToggleFavorite && onToggleFavorite(generation.id, !generation.isFavorite);
-  };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="group cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="relative rounded-xl overflow-hidden bg-white dark:bg-neutral-800 shadow-sm hover:shadow-md transition-all duration-200">
-        {imageUrl ? (
-          <div className="relative">
-            <img 
-              src={imageUrl} 
-              alt={generation.prompt || 'Generated content'} 
-              className="w-full h-auto rounded-[5px] object-cover"
-              onLoad={handleImageLoad}
-            />
-            
-            {/* Video play button overlay */}
-            {generation.type === 'video' && (
-              <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
-                  <Play size={20} className="text-black ml-0.5" weight="fill" />
-                </div>
-              </div>
-            )}
-            
-            {/* Video hook text overlay */}
-            {generation.type === 'video' && generation.hookText && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                <p className="text-white text-sm font-medium line-clamp-2">
-                  {generation.hookText}
-                </p>
-              </div>
-            )}
-            
-            {/* Action buttons overlay */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <div className="flex gap-1">
-                {/* Favorite button */}
-                <button
-                  onClick={handleToggleFavorite}
-                  className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-1.5 transition-all duration-200 hover:scale-110"
-                  title={generation.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <Heart 
-                    size={14} 
-                    className={generation.isFavorite ? "text-red-500" : "text-stone-600"}
-                    weight={generation.isFavorite ? "fill" : "regular"} 
-                  />
-                </button>
-                
-                {/* Download button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleGenerationDownload(generation);
-                  }}
-                  className="bg-white/90 hover:bg-white backdrop-blur-sm rounded-full p-1.5 transition-all duration-200 hover:scale-110"
-                  title="Download"
-                >
-                  <DownloadSimple size={14} className="text-stone-600" weight="bold" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : generation.type === 'video' && (generation.videoUrl || generation.runwayVideoUrl || generation.finalVideoUrl) ? (
-          <div className="relative w-full aspect-square bg-black overflow-hidden">
-            <video 
-              src={`${generation.finalVideoUrl || generation.runwayVideoUrl || generation.videoUrl}#t=0.1`}
-              className="w-full h-full object-cover"
-              preload="metadata"
-              muted
-              poster={generation.thumbnailUrl}
-            />
-            {/* Video play button overlay */}
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
-                <Play size={20} className="text-black ml-0.5" weight="fill" />
-              </div>
-            </div>
-            {/* Hook text overlay */}
-            {generation.hookText && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                <p className="text-white text-sm font-medium line-clamp-2">
-                  {generation.hookText}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="relative w-full aspect-square bg-neutral-800 flex items-center justify-center">
-            {generation.type === 'video' ? (
-              <div className="text-center">
-                <FilmSlate size={32} className="text-white/60 mx-auto mb-2" />
-                <p className="text-white/80 text-xs">Video</p>
-                {generation.hookText && (
-                  <p className="text-white/60 text-xs mt-1 px-2 line-clamp-2">
-                    {generation.hookText}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <ImageSquare size={32} className="text-stone-400 dark:text-stone-500" />
-            )}
-          </div>
-        )}
-        
-      </div>
-    </motion.div>
-  );
-}
-// --- End Simplified Generation Card Component ---
-
-function Dashboard() {
-  const user = auth.currentUser;
-  const [generations, setGenerations] = useState([]);
-  const [isLoadingGenerations, setIsLoadingGenerations] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [selectedGeneration, setSelectedGeneration] = useState(null);
-
-  const {
-    dashboardRefreshKey,
-    generatingItem,
-    isDarkMode,
-    user: contextUser, 
-    creators,
-    backgrounds,
-    products,
-    refreshLayoutData,
-    notifyGenerationComplete,
-    refreshDashboardGenerations
-  } = useOutletContext() || {
-    dashboardRefreshKey: 0,
-    generatingItem: null,
-    isDarkMode: false,
-    user: null,
-    creators: [],
-    backgrounds: [],
-    products: [],
-    refreshLayoutData: () => {},
-    notifyGenerationComplete: () => {},
-    refreshDashboardGenerations: () => {},
-  };
-
-
-
-  const [lastTimestampForPagination, setLastTimestampForPagination] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [generationToDeleteId, setGenerationToDeleteId] = useState(null);
-  const [isDeletingGeneration, setIsDeletingGeneration] = useState(false);
-  const [imagePollingIntervalId, setImagePollingIntervalId] = useState(null);
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [successModalMessage, setSuccessModalMessage] = useState('');
-
-  const showSuccessNotification = (message) => {
-    setSuccessModalMessage(message);
-    setIsSuccessModalOpen(true);
-    setTimeout(() => {
-      if (setIsSuccessModalOpen) { // Check if component is still mounted or setter is available
-        setIsSuccessModalOpen(false);
-      }
-    }, 3000);
-  };
-
-  const handleCloseSuccessModal = () => {
-    setIsSuccessModalOpen(false);
-  };
-
-  const handleToggleFavorite = async (generationId, isFavorite) => {
-    if (!user) return;
-    
-    try {
-      // Update Firestore
-      const generationRef = doc(db, 'users', user.uid, 'generations', generationId);
-      await updateDoc(generationRef, {
-        isFavorite: isFavorite
-      });
-      
-      // Update local state
-      setGenerations(prevGenerations =>
-        prevGenerations.map(gen =>
-          gen.id === generationId ? { ...gen, isFavorite } : gen
-        )
-      );
-      
-      showSuccessNotification(isFavorite ? 'Added to favorites' : 'Removed from favorites');
-    } catch (error) {
-      console.error('Error toggling favorite:', error);
-      showSuccessNotification('Error updating favorite');
-    }
-  };
-
-  useEffect(() => {
-    if (!user) {
-      setIsLoadingGenerations(false);
-      return;
-    }
-
-    const fetchGenerations = async () => {
-      setIsLoadingGenerations(true);
-      setHasMore(true);
-      setLastTimestampForPagination(null);
-      const fetchLimit = 12;
-
-      try {
-        const generationsColRef = collection(db, 'users', user.uid, 'generations');
-        
-        let processedGenerations = [];
-        
-        // Fetch based on filter - server-side filtering for better performance
-        if (activeFilter === 'image') {
-          const imageQuery = query(
-            generationsColRef, 
-            where('type', '==', 'image'), 
-            orderBy('timestamp', 'desc'), 
-            limit(fetchLimit)
-          );
-          const imageSnapshot = await getDocs(imageQuery);
-          processedGenerations = imageSnapshot.docs.map(docSnapshot => {
-            const data = docSnapshot.data();
-            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
-            return { id: docSnapshot.id, ...data, timestamp };
-          });
-        } else if (activeFilter === 'favorites') {
-          const favoritesQuery = query(
-            generationsColRef, 
-            where('isFavorite', '==', true), 
-            orderBy('timestamp', 'desc'), 
-            limit(fetchLimit)
-          );
-          const favoritesSnapshot = await getDocs(favoritesQuery);
-          processedGenerations = favoritesSnapshot.docs.map(docSnapshot => {
-            const data = docSnapshot.data();
-            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
-            return { id: docSnapshot.id, ...data, timestamp };
-          });
-        } else {
-          // For 'all', fetch all generations
-          const allGenerationsQuery = query(generationsColRef, orderBy('timestamp', 'desc'), limit(fetchLimit));
-          const allGenerationsSnapshot = await getDocs(allGenerationsQuery);
-          processedGenerations = allGenerationsSnapshot.docs.map(docSnapshot => {
-            const data = docSnapshot.data();
-            const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
-            return { id: docSnapshot.id, ...data, timestamp };
-          });
-        }
-
-        setGenerations(processedGenerations);
-
-        if (processedGenerations.length > 0) {
-          const lastItem = processedGenerations[processedGenerations.length - 1];
-          setLastTimestampForPagination(lastItem.timestamp);
-        }
-        setHasMore(processedGenerations.length === fetchLimit);
-
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        setHasMore(false);
-      } finally {
-        setIsLoadingGenerations(false);
+    const handleDownload = async () => {
+      if (mediaUrl) {
+        const link = document.createElement('a');
+        link.href = mediaUrl;
+        link.download = `generation-${selectedGeneration.id}.${isVideo ? 'mp4' : 'jpg'}`;
+        link.click();
       }
     };
 
-    fetchGenerations();
-  }, [user, dashboardRefreshKey, activeFilter]);
-
-  useEffect(() => {
-    const itemToPoll = generatingItem;
-    const shouldPollItem = itemToPoll && contextUser &&
-      (itemToPoll.type === 'image') &&
-      (itemToPoll.status === 'generating_direct' || itemToPoll.status === 'generating_firestore') &&
-      itemToPoll.firestoreDocId;
-
-    if (shouldPollItem && imagePollingIntervalId === null) {
-      const intervalId = setInterval(async () => {
-        if (!itemToPoll || !itemToPoll.firestoreDocId || !contextUser) {
-          clearInterval(intervalId);
-          return;
-        }
-        try {
-          const docRef = doc(db, 'users', contextUser.uid, 'generations', itemToPoll.firestoreDocId);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            let isReady = false;
-            if (itemToPoll.type === 'image' && data.imageUrl) isReady = true;
-            
-            if (isReady) {
-              clearInterval(intervalId);
-              if (notifyGenerationComplete) notifyGenerationComplete(itemToPoll.type, itemToPoll.firestoreDocId); 
-            }
-          } else {
-            clearInterval(intervalId);
-          }
-        } catch (error) {
-          console.error(`Polling error for ${itemToPoll.type} ID ${itemToPoll.firestoreDocId}:`, error);
-        }
-      }, 7000);
-      setImagePollingIntervalId(intervalId);
-    }
-    return () => {
-      if (imagePollingIntervalId !== null) {
-        clearInterval(imagePollingIntervalId);
-        setImagePollingIntervalId(null);
-      }
+    const handleDelete = () => {
+      // TODO: Implement delete functionality
+      console.log('Delete generation:', selectedGeneration.id);
+      setSelectedGeneration(null);
     };
-  }, [generatingItem, imagePollingIntervalId, contextUser, notifyGenerationComplete, refreshDashboardGenerations]);
 
-  const fetchMoreGenerations = async () => {
-    if (!user || !lastTimestampForPagination || !hasMore) return;
-    setIsLoadingMore(true);
-    const fetchLimit = 12;
-    try {
-      const generationsColRef = collection(db, 'users', user.uid, 'generations');
-      
-      let newGenerations = [];
-      
-      // Fetch more based on current filter
-      if (activeFilter === 'image') {
-        const imageQuery = query(
-          generationsColRef,
-          where('type', '==', 'image'),
-          orderBy('timestamp', 'desc'),
-          startAfter(lastTimestampForPagination),
-          limit(fetchLimit)
-        );
-        const imageSnapshot = await getDocs(imageQuery);
-        newGenerations = imageSnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
-        });
-      } else if (activeFilter === 'favorites') {
-        const favoritesQuery = query(
-          generationsColRef,
-          where('isFavorite', '==', true),
-          orderBy('timestamp', 'desc'),
-          startAfter(lastTimestampForPagination),
-          limit(fetchLimit)
-        );
-        const favoritesSnapshot = await getDocs(favoritesQuery);
-        newGenerations = favoritesSnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
-        });
-      } else {
-        // For 'all', fetch all generations
-        const allQuery = query(
-          generationsColRef,
-          orderBy('timestamp', 'desc'),
-          startAfter(lastTimestampForPagination),
-          limit(fetchLimit)
-        );
-        const allSnapshot = await getDocs(allQuery);
-        newGenerations = allSnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          return { id: docSnapshot.id, ...data, timestamp: data.timestamp.toDate() };
-        });
-      }
-
-      setGenerations(prev => [...prev, ...newGenerations]);
-      if (newGenerations.length > 0) {
-        const lastItem = newGenerations[newGenerations.length - 1];
-        setLastTimestampForPagination(lastItem.timestamp);
-      }
-      setHasMore(newGenerations.length === fetchLimit);
-    } catch (error) {
-      console.error("Error fetching more generations:", error);
-      setHasMore(false);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    if (generatingItem) window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [generatingItem]);
-
-  const handleOpenDeleteModal = (genId) => {
-    setGenerationToDeleteId(genId);
-    setIsDeleteModalOpen(true);
-  };
-  const handleCloseDeleteModal = () => {
-    setIsDeleteModalOpen(false);
-    setGenerationToDeleteId(null);
-  };
-  const handleConfirmDelete = async () => {
-    if (!generationToDeleteId || !user) return;
-    setIsDeletingGeneration(true);
-    try {
-      const generationToDelete = generations.find(gen => gen.id === generationToDeleteId);
-      if (!generationToDelete) throw new Error("Generation not found.");
-      const collectionPath = generationToDelete.type === 'video' ? 'tiktok-posts' : 'generations';
-      await deleteDoc(doc(db, 'users', user.uid, collectionPath, generationToDeleteId));
-      setGenerations(prev => prev.filter(gen => gen.id !== generationToDeleteId));
-      handleCloseDeleteModal();
-    } catch (error) {
-      console.error('Error deleting generation:', error);
-      window.alert("Error deleting. Try again.");
-    } finally {
-      setIsDeletingGeneration(false);
-    }
-  };
-
-  const handleScheduleGenerationSubmit = async (generationId, generationType, scheduledDateTime) => {
-    if (!user || !scheduledDateTime) {
-      throw new Error("Missing info for scheduling.");
-    }
-    const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
-    const collectionName = generationType === 'video' ? 'tiktok-posts' : 'generations';
-    const docRef = doc(db, 'users', user.uid, collectionName, generationId);
-    try {
-      await updateDoc(docRef, { scheduledAt: scheduledTimestamp });
-      showSuccessNotification("Generation scheduled!");
-      refreshDashboardGenerations(); 
-    } catch (error) {
-      console.error("Error scheduling:", error);
-      window.alert(`Failed to schedule: ${error.message}`);
-      throw error;
-    }
-  };
-
-
-  // Since we now filter at fetch level, displayed generations are just the generations
-  const displayedGenerations = generations;
-
-  return (
-    <div className="font-sans min-h-screen bg-neutral-950 relative">
-      {/* Image Background */}
-      <div className="fixed inset-0 w-full h-full z-0">
-        <img 
-          src="/Glowing Abstract Flower.png" 
-          alt="Background" 
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/30" />
-      </div>
-      
-      {/* Header Component */}
-      <Header />
-      
-      <div className="max-w-6xl mx-auto relative z-10 pt-20">
-      {/* Recent generations section */}
-      <section className="mb-8">
-            {isLoadingGenerations && displayedGenerations.length === 0 ? (
-              <div className="w-full h-48 rounded-xl border border-stone-100 dark:border-stone-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center">
-                <div className="animate-pulse flex space-x-4 w-3/4">
-                  <div className="flex-1 space-y-4 py-1">
-                    <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4"></div>
-                    <div className="space-y-3">
-                      <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
-                      <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-5/6"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : displayedGenerations.length === 0 && !generatingItem ? (
-              <div className="w-full h-48 rounded-xl border border-stone-100 dark:border-stone-800 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm flex flex-col items-center justify-center text-center p-6">
-                <p className="text-stone-500 dark:text-stone-400">No {activeFilter !== 'all' ? activeFilter : ''} generations found.</p>
-              </div>
-            ) : (
-              <>
-                <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-4 space-y-4">
-                  {displayedGenerations.map((gen) => (
-                    <div key={gen.id} className="break-inside-avoid">
-                      <GenerationCard 
-                        generation={gen} 
-                        onClick={() => setSelectedGeneration(gen)}
-                        creators={creators} // Pass creators
-                        backgrounds={backgrounds} // Pass backgrounds
-                        onToggleFavorite={handleToggleFavorite}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {hasMore && (
-                  <div className="mt-8 flex justify-center">
-                    <button
-                      onClick={fetchMoreGenerations}
-                      disabled={isLoadingMore}
-                      className={`px-6 py-2 rounded-full text-sm font-medium transition-colors duration-200 flex items-center justify-center ${isLoadingMore
-                        ? 'bg-neutral-200 dark:bg-neutral-700 text-stone-500 dark:text-stone-400 cursor-not-allowed'
-                        : 'bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-stone-700 dark:text-stone-200'
-                      }`}
-                    >
-                      {isLoadingMore ? (<> <CircleNotch size={16} className="animate-spin mr-2" /> Loading...</> ) : ( 'Load More' )}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-      </section>
-
-      {/* Modals (Delete, Success) */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-neutral-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-stone-900 dark:text-stone-100">Confirm Deletion</h3>
-                <button onClick={handleCloseDeleteModal} className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300">
-                  <CloseIcon size={20} />
-                </button>
-              </div>
-              <p className="text-sm text-stone-600 dark:text-stone-300 mb-6">
-                Are you sure you want to delete this generation? This action cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button 
-                  onClick={handleCloseDeleteModal}
-                  disabled={isDeletingGeneration}
-                  className="px-4 py-2 text-sm rounded-md border border-stone-300 dark:border-stone-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-stone-700 dark:text-stone-200 transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleConfirmDelete}
-                  disabled={isDeletingGeneration}
-                  className="px-4 py-2 text-sm rounded-md bg-red-600 hover:bg-red-500/90 text-white transition-colors flex items-center justify-center disabled:opacity-50"
-                >
-                  {isDeletingGeneration ? ( <><CircleNotch size={18} className="animate-spin mr-2" />Deleting...</> ) : ( 'Delete' )}
-                </button>
-              </div>
-            </div>
-        </div>
-      )}
-      {isSuccessModalOpen && (
-        <div 
-          className="fixed top-5 right-5 z-[100] p-4 max-w-sm w-full transition-all duration-300 ease-in-out"
-          style={{ transform: isSuccessModalOpen ? 'transtoneX(0)' : 'transtoneX(100%)' }}
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedGeneration(null)}
         >
-            <div 
-              className={`rounded-md shadow-lg p-3 flex items-start space-x-3 ${isDarkMode ? 'bg-neutral-800 text-white border border-stone-700' : 'bg-white text-stone-900 border border-stone-200'}`}
-            >
-              <div className={`flex-shrink-0 p-1.5 rounded-full ${isDarkMode ? 'bg-lime-600/30' : 'bg-lime-100'}`}>
-                  <svg className={`w-4 h-4 ${isDarkMode ? 'text-lime-400' : 'text-lime-600'}`} fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-              </div>
-              <div className="flex-1 pt-0.5">
-                <p className="text-sm font-medium">
-                  {successModalMessage}
-                </p>
-              </div>
-              <button 
-                onClick={handleCloseSuccessModal}
-                className={`p-1 rounded-full ${isDarkMode ? 'hover:bg-neutral-700' : 'hover:bg-neutral-100'} text-stone-400 dark:text-stone-500`}
-                aria-label="Close notification"
+          {/* Blurred background */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-md" />
+          
+          {/* Modal content */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            className="relative z-10 max-w-4xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Action buttons */}
+            <div className="flex justify-end gap-2 mb-4">
+              <button
+                onClick={handleDownload}
+                className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white p-3 rounded-full transition-colors"
               >
-                <CloseIcon size={14} />
+                <Download size={20} />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-red-500/20 backdrop-blur-sm hover:bg-red-500/30 text-red-400 p-3 rounded-full transition-colors"
+              >
+                <Trash size={20} />
+              </button>
+              <button
+                onClick={() => setSelectedGeneration(null)}
+                className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white p-3 rounded-full transition-colors"
+              >
+                <X size={20} />
               </button>
             </div>
+            
+            {/* Media content */}
+            <div className="flex-1 flex items-center justify-center">
+              {isVideo ? (
+                <video
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                  poster={selectedGeneration.thumbnailUrl}
+                  controls
+                  autoPlay
+                >
+                  <source src={mediaUrl} type="video/mp4" />
+                </video>
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt="Generated content"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                />
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-white">
+      <Header />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-16">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Recent Generations</h1>
+          <p className="text-neutral-400">Your latest AI-generated content</p>
         </div>
-      )}
 
-
-      {/* Simple Image/Video Modal */}
-      {selectedGeneration && (
-        <SimpleImageModal
-          generation={selectedGeneration}
-          onClose={() => setSelectedGeneration(null)}
-          onToggleFavorite={handleToggleFavorite}
-          onShowSuccessNotification={showSuccessNotification}
-          onGenerationDeleted={(deletedId) => {
-            setGenerations(prevGenerations =>
-              prevGenerations.filter(gen => gen.id !== deletedId)
-            );
-            setSelectedGeneration(null);
-          }}
-        />
-      )}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        ) : generations.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-neutral-400">No generations found.</p>
+          </div>
+        ) : (
+          <>
+            <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {columns.map((column, columnIndex) => (
+                <div key={columnIndex} className="flex flex-col gap-6">
+                  {column.map((gen) => (
+                    <GenerationCard key={gen.id} generation={gen} />
+                  ))}
+                </div>
+              ))}
+            </div>
+            
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="px-6 py-3 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Loading...
+                    </div>
+                  ) : (
+                    'Load More'
+                  )}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* Image Modal */}
+      {selectedGeneration && <ImageModal />}
     </div>
   );
-}
+};
 
-const CustomStyles = () => (
-  <style jsx="true">{` 
-    @keyframes fade-in-out {
-      0% { opacity: 0; }     
-      50% { opacity: 1; }     
-      100% { opacity: 0; }    
-    }
-  `}</style>
-);
-
-export default function DashboardWithStyles() {
-  return (
-    <>
-      <CustomStyles />
-      <Dashboard />
-    </>
-  );
-} 
+export default Dashboard;

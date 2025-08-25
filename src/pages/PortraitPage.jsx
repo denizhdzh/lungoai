@@ -490,11 +490,11 @@ const PortraitPage = () => {
         })() ? (
           /* Generated Result Display */
           <div className="relative bg-transparent p-4 w-full max-w-3xl flex items-center justify-center">
-            <div className="w-full max-w-lg max-h-[500px] rounded-[60px] overflow-hidden bg-neutral-900 shadow-2xl relative group" style={{ aspectRatio: '3/4' }}>
+            <div className="max-w-2xl max-h-[70vh] rounded-[60px] overflow-hidden bg-neutral-900 shadow-2xl relative group inline-block">
               <img 
                 src={generatedImage.url} 
                 alt={generatedImage.prompt}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                className="max-w-full max-h-full block transition-transform duration-300 group-hover:scale-105"
               />
               
               {/* Generated image overlay */}

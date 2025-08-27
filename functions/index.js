@@ -940,9 +940,9 @@ function getImageModelCredits(model) {
         'google/imagen-4-ultra': 2,
         'imagen/imagen-4-fast': 1,
         'ideogram-ai/ideogram-v3-balanced': 2,
-        'minimax/image-01': 0.25,
-        'black-forest-labs/flux-1.1-pro': 1,
-        'black-forest-labs/flux-kontext-max': 2
+        'black-forest-labs/flux-kontext-max': 2,
+        'black-forest-labs/flux-kontext-pro': 1,
+        'fofr/face-swap-with-ideogram': 3
     };
     
     return modelCosts[model] || 1; // Default fallback

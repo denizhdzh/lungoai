@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-route
 import './index.css'
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from './firebase';
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 
 // Loading component for lazy routes
@@ -12,7 +12,6 @@ const LoadingFallback = () => null;
 
 // Lazy load components to reduce initial bundle size
 const SignUp = lazy(() => import('./components/SignUp.jsx'));
-const Onboarding = lazy(() => import('./components/Onboarding.jsx'));
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'));
 const Settings = lazy(() => import('./components/Settings.jsx'));
 const PricingSection = lazy(() => import('./components/PricingSection.jsx'));
@@ -237,8 +236,8 @@ console.log("[main.jsx] Dark mode forced.");
 })();
 // --- END ENHANCED NAVIGATION PROTECTION ---
 
-// Protected Route Component (Updated to use userData)
-function ProtectedRoute({ user, userData, userDataFetched, children, requireAuth = true }) {
+// Protected Route Component (Updated to remove onboarding)
+function ProtectedRoute({ user, userDataFetched, children, requireAuth = true }) {
 
   // Wait until auth is checked and user data is fetched
   if (!userDataFetched) {
@@ -253,10 +252,7 @@ function ProtectedRoute({ user, userData, userDataFetched, children, requireAuth
   if (!user) {
     return <Navigate to="/signup" replace />;
   }
-  // Check Firestore data
-  if (!userData?.onboardingCompleted) {
-    return <Navigate to="/onboarding" replace />;
-  }
+  
   return children;
 }
 
@@ -264,23 +260,10 @@ function ProtectedRoute({ user, userData, userDataFetched, children, requireAuth
 function AppRouter() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [userData, setUserData] = useState(null); // State for Firestore user data
+  const [, setUserData] = useState(null); // State for Firestore user data
   const [userDataFetched, setUserDataFetched] = useState(false); // Track fetch status
-  const [logoAnimationComplete, setLogoAnimationComplete] = useState(false); // Track logo animation
-  const navigate = useNavigate(); // Initialize navigate hook
-  
   // Canvas preload hook
-  const { canvasData, preloadForCurrentUser } = useCanvasPreload();
-
-  // Fallback: Force animation complete after 4 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log('[AppRouter] Animation fallback timeout triggered');
-      setLogoAnimationComplete(true);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
+  const { preloadForCurrentUser } = useCanvasPreload();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => { // Make async
@@ -322,23 +305,6 @@ function AppRouter() {
   return () => unsubscribe();
   }, []); // Keep dependency array empty
 
-  // Update handler to set Firestore AND navigate
-  const handleSetOnboardingComplete = async () => {
-    if (user) {
-      const userDocRef = doc(db, "users", user.uid);
-      try {
-        console.log(`[AppRouter Onboarding] Setting onboardingCompleted for user ${user.uid}`);
-        await setDoc(userDocRef, { onboardingCompleted: true }, { merge: true });
-        // Update local state immediately for faster UI response
-        setUserData(prevData => ({ ...prevData, onboardingCompleted: true })); 
-        console.log(`[AppRouter Onboarding] Firestore updated. Navigating to /`);
-        navigate('/'); // Navigate to dashboard immediately after setting
-      } catch (error) {
-         console.error("[AppRouter Onboarding] Error setting onboarding complete in Firestore:", error);
-         // Optionally show an error to the user
-      }
-    }
-  };
 
   // No loading screen, just render when ready
   if (!authChecked || !userDataFetched) {
@@ -362,32 +328,11 @@ function AppRouter() {
         path="/signup" 
         element={
           user ? (
-            userData?.onboardingCompleted ? (
-              <Navigate to="/" replace />
-            ) : (
-              <Navigate to="/onboarding" replace />
-            )
+            <Navigate to="/" replace />
           ) : (
             <Suspense fallback={<LoadingFallback />}>
               <SignUp />
             </Suspense>
-          )
-        }
-      />
-      
-      <Route 
-        path="/onboarding" 
-        element={
-          user ? (
-            userData?.onboardingCompleted ? (
-              <Navigate to="/" replace />
-            ) : (
-              <Suspense fallback={<LoadingFallback />}>
-                <Onboarding setOnboardingComplete={handleSetOnboardingComplete} />
-              </Suspense>
-            )
-          ) : (
-            <Navigate to="/signup" replace />
           )
         }
       />
@@ -396,7 +341,7 @@ function AppRouter() {
       <Route 
         path="/history" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <Dashboard />
             </Suspense>
@@ -407,7 +352,7 @@ function AppRouter() {
       <Route 
         path="/settings" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <Settings />
             </Suspense>
@@ -419,7 +364,7 @@ function AppRouter() {
       <Route 
         path="/studio" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <GenerationPage/>
             </Suspense>
@@ -468,7 +413,7 @@ function AppRouter() {
       <Route 
         path="/admin" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <AdminPage />
             </Suspense>
@@ -479,7 +424,7 @@ function AppRouter() {
       <Route 
         path="/portrait" 
         element={
-          <ProtectedRoute user={user} userData={userData} userDataFetched={userDataFetched}>
+          <ProtectedRoute user={user} userDataFetched={userDataFetched}>
             <Suspense fallback={<LoadingFallback />}>
               <PortraitPage />
             </Suspense>

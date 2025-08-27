@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import app from '../firebase'; // Assuming firebase.js is in src folder
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, listAll, getDownloadURL } from 'firebase/storage';
+import app, { db, storage } from '../firebase'; // Import db and storage
 import { useNavigate, useLocation } from 'react-router-dom'; // Import useNavigate and useLocation
 import Header from './Header';
 
@@ -14,10 +16,63 @@ function SignUp() {
   // Get the intended type from URL parameters
   const intendedType = new URLSearchParams(location.search).get('type');
 
+  // Function to get random profile picture from storage
+  const getRandomProfilePicture = async () => {
+    try {
+      const profilePicturesRef = ref(storage, 'profile-pictures');
+      const listResult = await listAll(profilePicturesRef);
+      
+      if (listResult.items.length > 0) {
+        const randomIndex = Math.floor(Math.random() * listResult.items.length);
+        const randomImageRef = listResult.items[randomIndex];
+        const downloadURL = await getDownloadURL(randomImageRef);
+        return downloadURL;
+      } else {
+        // Fallback to default image if no profile pictures found
+        return "https://firebasestorage.googleapis.com/v0/b/ugcai-f429e.firebasestorage.app/o/pp-placeholder.jpeg?alt=media";
+      }
+    } catch (error) {
+      console.error('Error getting random profile picture:', error);
+      // Return default image on error
+      return "https://firebasestorage.googleapis.com/v0/b/ugcai-f429e.firebasestorage.app/o/pp-placeholder.jpeg?alt=media";
+    }
+  };
+
   const handleGoogleSignUp = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+
+      console.log('Google Sign-Up successful:', user.uid);
+      
+      // Create user document in Firestore with Google data and random profile picture
+      try {
+        const randomProfilePictureURL = await getRandomProfilePicture();
+        
+        // Extract first and last name from display name or email
+        const displayName = user.displayName || '';
+        const nameParts = displayName.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userDataToSave = {
+          firstName: firstName,
+          lastName: lastName,
+          email: user.email,
+          uid: user.uid,
+          photoURL: randomProfilePictureURL,
+          general_credits: 0, // Starting credits
+          createdAt: serverTimestamp(),
+        };
+
+        await setDoc(userDocRef, userDataToSave, { merge: true });
+        console.log('User document created successfully with random profile picture');
+        
+      } catch (firestoreError) {
+        console.error('Error creating user document:', firestoreError);
+        // Continue with navigation even if Firestore fails
+      }
 
       // Navigate based on intended type or default to dashboard
       if (intendedType) {

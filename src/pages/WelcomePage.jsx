@@ -12,20 +12,6 @@ const WelcomePage = () => {
     const fetchFeatures = async () => {
       const startTime = performance.now();
       
-      // Check cache first
-      const cacheKey = 'lungo_features_cache';
-      const cached = localStorage.getItem(cacheKey);
-      
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        // Use cache if less than 10 minutes old
-        if (Date.now() - timestamp < 10 * 60 * 1000) {
-          setFeatures(data);
-          console.log(`⚡ Features loaded from cache: ${data.length} items`);
-          return;
-        }
-      }
-      
       try {
         const featuresRef = collection(db, 'system', 'features', 'items');
         const q = query(featuresRef, orderBy('createdAt', 'desc'));
@@ -34,12 +20,6 @@ const WelcomePage = () => {
         const featuresData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        }));
-        
-        // Cache the data
-        localStorage.setItem(cacheKey, JSON.stringify({
-          data: featuresData,
-          timestamp: Date.now()
         }));
         
         setFeatures(featuresData);
@@ -73,7 +53,7 @@ const WelcomePage = () => {
           setTimeout(loadNextImage, 200); // Small delay between loads
         };
         img.onerror = () => {
-          console.log(`❌ Failed to preload:`, feature.featureName);
+          console.error(`❌ Failed to preload "${feature.featureName}":`, feature.imageUrl);
           currentIndex++;
           setTimeout(loadNextImage, 100);
         };
@@ -93,10 +73,10 @@ const WelcomePage = () => {
       <Header />
       
       {/* Hero Section */}
-      <div className="py-6 px-4 md:px-10 mt-4">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-6xl font-light text-white mb-4 mt-24 font-['Oswald']">
-            Easiest way to generate with AI
+      <div className="py-6 px-4 md:px-10 mt-2 md:mt-4">
+        <div className="text-center mb-8 md:mb-12">
+          <h1 className="text-4xl md:text-6xl font-light text-white mb-3 md:mb-4 mt-12 md:mt-24 font-['Oswald']">
+            Generate stunning AI visuals
           </h1>
           <div className="flex items-center justify-center gap-2">
             <a href="/signup" className="text-sm text-white/60 hover:text-white transition-colors cursor-pointer">
@@ -116,6 +96,148 @@ const WelcomePage = () => {
           options={{ loop: true, dragFree: true }}
         />
       ) : null}
+
+      {/* How It Works - Balanced Minimal */}
+      <div className="py-24 px-4 md:px-10">
+        <div className="max-w-6xl mx-auto">
+          
+          {/* Section header */}
+          <div className="mb-20">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-8 h-px bg-white/20"></div>
+              <h2 className="text-3xl md:text-5xl font-light text-white">How it works</h2>
+            </div>
+            <p className="text-white/50 text-lg max-w-2xl">
+              Create stunning images and videos in seconds with our premium AI models
+            </p>
+          </div>
+          
+          {/* Steps grid */}
+          <div className="grid md:grid-cols-3 gap-12 md:gap-16">
+            
+            {/* Step 1 */}
+            <div className="group">
+              <div className="mb-6">
+                <div className="text-6xl font-thin text-white/10 mb-4">01</div>
+                <h3 className="text-2xl font-light text-white mb-4">Choose Your Creation Type</h3>
+                <p className="text-white/60 leading-relaxed">
+                  Text-to-image, text-to-video, image-to-video, or face swapping. Upload your content or describe your vision in plain text.
+                </p>
+              </div>
+              <div className="w-full h-px bg-white/5 group-hover:bg-white/20 transition-colors duration-300"></div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="group">
+              <div className="mb-6">
+                <div className="text-6xl font-thin text-white/10 mb-4">02</div>
+                <h3 className="text-2xl font-light text-white mb-4">Select Premium AI Model</h3>
+                <p className="text-white/60 leading-relaxed">
+                  Choose from Google Imagen 4, Flux, Ideogram V3, Google Veo for video, and 20+ other cutting-edge models. Each optimized for different styles and outputs.
+                </p>
+              </div>
+              <div className="w-full h-px bg-white/5 group-hover:bg-white/20 transition-colors duration-300"></div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="group">
+              <div className="mb-6">
+                <div className="text-6xl font-thin text-white/10 mb-4">03</div>
+                <h3 className="text-2xl font-light text-white mb-4">Generate & Export</h3>
+                <p className="text-white/60 leading-relaxed">
+                  Get 4K images or 1080p videos in multiple aspect ratios. Cost: 1-3 credits for images, varies for videos. Download instantly or iterate with variations.
+                </p>
+              </div>
+              <div className="w-full h-px bg-white/5 group-hover:bg-white/20 transition-colors duration-300"></div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+
+      {/* FAQ Section - Balanced */}
+      <div className="py-24 px-4 md:px-10">
+        <div className="max-w-4xl mx-auto">
+          
+          {/* Section header */}
+          <div className="mb-16">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-8 h-px bg-white/20"></div>
+              <h2 className="text-3xl md:text-5xl font-light text-white">Frequently asked</h2>
+            </div>
+          </div>
+          
+          {/* FAQ Grid */}
+          <div className="grid md:grid-cols-2 gap-8 md:gap-12">
+            
+            <div className="space-y-8">
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  What subscription plans do you offer?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  Starter ($14/month, 200 credits), Creator ($30/month, 500 credits), and Pro ($150/month, 3000 credits). All plans include premium AI models.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  Which AI models are available?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  20+ premium models including Google Imagen 4, Flux, Ideogram V3, Google Veo for video, and specialized face swap models.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  Can I buy credits without a subscription?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  Yes! One-time credit packages from 200-2000 credits. Credits never expire and subscribers get discounts.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  How much do generations cost?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  Images: 1-3 credits depending on model. Videos: varies by duration and quality. Face swaps: 3 credits each.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  What can I create?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  Text-to-image, text-to-video, image-to-video, face swapping. Output in 4K images and 1080p videos with multiple aspect ratios.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+
+              <div className="group">
+                <h4 className="text-xl font-light text-white mb-3 cursor-pointer group-hover:text-white/70 transition-colors">
+                  Is there a free trial?
+                </h4>
+                <p className="text-white/50 leading-relaxed">
+                  Sign up for free to explore the platform. No credit card required to get started.
+                </p>
+                <div className="w-full h-px bg-white/5 mt-4"></div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+
 
     </div>
   );

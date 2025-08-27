@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import {
   PrevButton,
   NextButton,
@@ -11,7 +11,58 @@ import useEmblaCarousel from 'embla-carousel-react'
 const EmblaCarousel = (props) => {
   const { slides, options } = props
   const [emblaRef, emblaApi] = useEmblaCarousel(options, [Autoplay({ delay: 8000, stopOnInteraction: false })])
-  const [loadedImages, setLoadedImages] = React.useState(new Set())
+  const [loadedImages, setLoadedImages] = useState(new Set())
+  const [connectionType, setConnectionType] = useState('fast')
+  const [isLowBandwidth, setIsLowBandwidth] = useState(false)
+
+  // Detect connection speed
+  useEffect(() => {
+    if ('connection' in navigator) {
+      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (connection) {
+        const updateConnection = () => {
+          const effectiveType = connection.effectiveType;
+          const isSlowConnection = effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g';
+          setConnectionType(effectiveType);
+          setIsLowBandwidth(isSlowConnection);
+        };
+        
+        updateConnection();
+        connection.addEventListener('change', updateConnection);
+        return () => connection.removeEventListener('change', updateConnection);
+      }
+    }
+    
+    // Fallback: detect based on loading time
+    const startTime = Date.now();
+    const testImg = new Image();
+    testImg.onload = () => {
+      const loadTime = Date.now() - startTime;
+      setIsLowBandwidth(loadTime > 2000); // If test image takes >2s, assume slow connection
+    };
+    testImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==';
+  }, [])
+
+  // Get optimized image URL based on connection and device
+  const getOptimizedImageUrl = (originalUrl, isMobile = false) => {
+    if (!originalUrl) return originalUrl;
+    
+    let quality = 85; // Default quality
+    let width = null;
+    
+    if (isLowBandwidth) {
+      quality = isMobile ? 60 : 70; // Lower quality for slow connections
+    } else {
+      quality = isMobile ? 75 : 85; // Normal quality
+    }
+    
+    // If using a service that supports URL parameters (like Firebase, Cloudinary, etc.)
+    if (originalUrl.includes('firebasestorage.googleapis.com')) {
+      return originalUrl; // Firebase doesn't support on-the-fly optimization
+    }
+    
+    return originalUrl; // Return original if no optimization service
+  }
 
   const onNavButtonClick = useCallback((emblaApi) => {
     const autoplay = emblaApi?.plugins()?.autoplay
@@ -42,8 +93,16 @@ const EmblaCarousel = (props) => {
                 {/* Render based on type */}
                 {slide.type === 'edit_demo' && slide.beforeImage && slide.afterImage ? (
                   <EditTransition 
-                    beforeImage={window.innerWidth < 1024 && slide.mobileBeforeImage ? slide.mobileBeforeImage : slide.beforeImage} 
-                    afterImage={window.innerWidth < 1024 && slide.mobileAfterImage ? slide.mobileAfterImage : slide.afterImage}
+                    beforeImage={(() => {
+                      const isMobile = window.innerWidth < 1024;
+                      const baseImage = isMobile && slide.mobileBeforeImage ? slide.mobileBeforeImage : slide.beforeImage;
+                      return getOptimizedImageUrl(baseImage, isMobile);
+                    })()} 
+                    afterImage={(() => {
+                      const isMobile = window.innerWidth < 1024;
+                      const baseImage = isMobile && slide.mobileAfterImage ? slide.mobileAfterImage : slide.afterImage;
+                      return getOptimizedImageUrl(baseImage, isMobile);
+                    })()}
                     featureName={slide.featureName}
                     aiModel={slide.aiModel}
                     link={slide.link}
@@ -78,22 +137,31 @@ const EmblaCarousel = (props) => {
                   <>
                     {(() => {
                       const isMobile = window.innerWidth < 1024;
-                      const imageSrc = isMobile && slide.mobileImageUrl ? slide.mobileImageUrl : slide.imageUrl;
+                      const baseImageSrc = isMobile && slide.mobileImageUrl ? slide.mobileImageUrl : slide.imageUrl;
+                      const optimizedImageSrc = getOptimizedImageUrl(baseImageSrc, isMobile);
                       return (
                         <>
-                          {/* Loading placeholder */}
-                          {imageSrc && !loadedImages.has(imageSrc) && (
-                            <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
+                          {/* Enhanced loading placeholder with connection info */}
+                          {optimizedImageSrc && !loadedImages.has(optimizedImageSrc) && (
+                            <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse">
+                              {isLowBandwidth && (
+                                <div className="absolute bottom-4 left-4 text-white/60 text-xs bg-black/50 px-2 py-1 rounded">
+                                  Optimizing for slow connection...
+                                </div>
+                              )}
+                            </div>
                           )}
                           
-                          {/* Static Image */}
-                          {imageSrc && (
+                          {/* Static Image with lazy loading */}
+                          {optimizedImageSrc && (
                             <img
-                              src={imageSrc}
+                              src={optimizedImageSrc}
                               alt={slide.featureName}
                               className="absolute inset-0 w-full h-full object-cover"
-                              onLoad={() => setLoadedImages(prev => new Set([...prev, imageSrc]))}
-                              style={{ display: loadedImages.has(imageSrc) ? 'block' : 'none' }}
+                              loading="eager"
+                              decoding="async"
+                              onLoad={() => setLoadedImages(prev => new Set([...prev, optimizedImageSrc]))}
+                              style={{ display: loadedImages.has(optimizedImageSrc) ? 'block' : 'none' }}
                             />
                           )}
                         </>

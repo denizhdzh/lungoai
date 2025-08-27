@@ -1,39 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const EditTransition = ({ beforeImage, afterImage, featureName, aiModel, link, duration = 3000 }) => {
+const EditTransition = ({ beforeImage, afterImage, featureName, aiModel, link, duration = 4000 }) => {
   const [sliderValue, setSliderValue] = useState(0);
   const [beforeLoaded, setBeforeLoaded] = useState(false);
   const [afterLoaded, setAfterLoaded] = useState(false);
 
-  const handleSliderChange = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setSliderValue(Number(e.target.value));
-  };
+  // Automatic slider animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSliderValue(prev => {
+        // Smooth ping-pong animation: 0 -> 100 -> 0
+        const progress = (Date.now() % duration) / duration;
+        const pingPong = progress <= 0.5 
+          ? progress * 2 * 100  // 0 to 100
+          : (2 - progress * 2) * 100;  // 100 to 0
+        return pingPong;
+      });
+    }, 16); // ~60fps
 
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = (x / rect.width) * 100;
-    setSliderValue(Math.max(0, Math.min(100, percentage)));
-  };
+    return () => clearInterval(interval);
+  }, [duration]);
 
   return (
     <div 
-      className="relative w-full h-full overflow-hidden cursor-col-resize"
-      onMouseMove={handleMouseMove}
+      className="relative w-full h-full overflow-hidden cursor-pointer"
     >
       {/* Loading placeholder */}
       {(!beforeLoaded || !afterLoaded) && (
         <div className="absolute inset-0 bg-gradient-to-br from-neutral-800 via-neutral-700 to-neutral-600 animate-pulse" />
       )}
       
+
       {/* Before Image */}
       <img
         src={beforeImage}
         alt="Before edit"
         className="absolute inset-0 w-full h-full object-cover"
+        loading="eager"
+        decoding="async"
         onLoad={() => setBeforeLoaded(true)}
+        onError={() => console.error('Before image failed:', beforeImage)}
         style={{ display: beforeLoaded ? 'block' : 'none' }}
       />
       
@@ -42,7 +48,10 @@ const EditTransition = ({ beforeImage, afterImage, featureName, aiModel, link, d
         src={afterImage}
         alt="After edit"
         className="absolute inset-0 w-full h-full object-cover"
+        loading="eager"
+        decoding="async"
         onLoad={() => setAfterLoaded(true)}
+        onError={() => console.error('After image failed:', afterImage)}
         style={{ 
           display: afterLoaded ? 'block' : 'none',
           clipPath: `inset(0 ${100 - sliderValue}% 0 0)`
@@ -71,8 +80,6 @@ const EditTransition = ({ beforeImage, afterImage, featureName, aiModel, link, d
         After
       </div>
       
-      {/* Link overlay */}
-      <a href={link} className="absolute inset-0 z-10" aria-label={`View ${featureName}`} />
     </div>
   );
 };

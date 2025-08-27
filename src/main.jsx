@@ -5,7 +5,6 @@ import './index.css'
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from './firebase';
 import { doc, getDoc } from "firebase/firestore";
-import { useCanvasPreload } from './hooks/useCanvasPreload.js';
 
 // Loading component for lazy routes
 const LoadingFallback = () => null;
@@ -262,8 +261,6 @@ function AppRouter() {
   const [authChecked, setAuthChecked] = useState(false);
   const [, setUserData] = useState(null); // State for Firestore user data
   const [userDataFetched, setUserDataFetched] = useState(false); // Track fetch status
-  // Canvas preload hook
-  const { preloadForCurrentUser } = useCanvasPreload();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => { // Make async
@@ -279,7 +276,6 @@ function AppRouter() {
               // Start canvas preload and user data fetch in parallel
               const [userDocSnap, _] = await Promise.all([
                 getDoc(doc(db, "users", currentUser.uid)),
-                preloadForCurrentUser() // Preload canvas in background
               ]);
               
               if (userDocSnap.exists()) {
